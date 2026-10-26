@@ -10,15 +10,15 @@ export interface Milestone {
 }
 
 export const storyIntro = {
-  title: "We begin with roots.",
-  outro: "And we're still growing.",
+  title: "One client was just the beginning.",
+  outro: "The studio grows. The care stays personal.",
 } as const;
 
 export const milestones: readonly Milestone[] = [
-  { tag: "2023", text: "Started as a freelancer, with our very first client." },
-  { tag: "15+", text: "Brand identities crafted." },
-  { tag: "5–10", text: "Websites built, e-commerce stores included." },
-  { tag: "3", text: "Real-world apps shipped." },
-  { tag: "2", text: "More apps in the making right now." },
-  { tag: "Today", text: "A studio handling multiple projects at once." },
+  { tag: "2023", text: "One designer. One client. The start of Drimin." },
+  { tag: "15+ identities", text: "Helping businesses find a look people recognise and a character they remember." },
+  { tag: "Websites", text: "Bringing those identities to life, from the first impression to the final checkout." },
+  { tag: "3 apps shipped", text: "Taking ideas off the drawing board and into people’s hands." },
+  { tag: "2 in progress", text: "New products taking shape. New challenges making us better." },
+  { tag: "Today", text: "A team bringing brand, design and development together—with the same personal care that started it all." },
 ];

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { BackSide, Color, ShaderMaterial, Vector3 } from "three";
-import { stagePalette } from "./palette";
+import type { StagePalette } from "./palette";
 
 /*
  * The endless room's air: a large inverted sphere shaded by view direction. Darkest
@@ -50,7 +50,7 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
-export function HazeDome({ radius }: { radius: number }): React.ReactElement {
+export function HazeDome({ radius, palette }: { radius: number; palette: StagePalette }): React.ReactElement {
   const material = useMemo(
     () =>
       new ShaderMaterial({
@@ -60,15 +60,15 @@ export function HazeDome({ radius }: { radius: number }): React.ReactElement {
         depthWrite: false,
         fog: false,
         uniforms: {
-          uZenith: { value: new Color(stagePalette.zenith) },
-          uHorizon: { value: new Color(stagePalette.horizon) },
-          uGlow: { value: new Color(stagePalette.glow) },
+          uZenith: { value: new Color(palette.zenith) },
+          uHorizon: { value: new Color(palette.horizon) },
+          uGlow: { value: new Color(palette.glow) },
           uGlowDir: { value: new Vector3(0, 0.12, -1).normalize() },
           uGlowPower: { value: 3 },
-          uShade: { value: new Color(stagePalette.shade) },
+          uShade: { value: new Color(palette.shade) },
         },
       }),
-    [],
+    [palette],
   );
 
   useEffect(() => () => material.dispose(), [material]);

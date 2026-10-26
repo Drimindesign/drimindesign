@@ -13,7 +13,7 @@ export const PROJECT_IMAGE_WIDTHS = [700, 1000, 1400] as const;
 export type ProjectImageWidth = (typeof PROJECT_IMAGE_WIDTHS)[number];
 
 /** Filters on the Projects page. */
-export const DISCIPLINES = ["Branding", "Print", "Apps"] as const;
+export const DISCIPLINES = ["Branding", "Print", "Apps", "Web"] as const;
 export type Discipline = (typeof DISCIPLINES)[number];
 
 export interface Project {
@@ -61,6 +61,34 @@ export const projects: readonly Project[] = [
     category: "App onboarding · UX",
     alt: "Speakora onboarding screens: username, interests, English test, reading test and completion",
     disciplines: ["Apps"],
+  },
+  {
+    slug: "house-of-diams",
+    title: "House of Diams",
+    category: "Web design · E-commerce",
+    alt: "House of Diams luxury jewellery website open on a laptop beside a diamond ring in a velvet box",
+    disciplines: ["Web"],
+  },
+  {
+    slug: "packaging",
+    title: "Food Packaging",
+    category: "Packaging design",
+    alt: "Zamidar ghee, Penne Rigati pasta, tomato ketchup and Schezwan chutney packaging on a stone counter",
+    disciplines: ["Branding", "Print"],
+  },
+  {
+    slug: "beingle",
+    title: "Beingle",
+    category: "App design",
+    alt: "Three phones showing the Beingle communities, home and match room screens",
+    disciplines: ["Apps"],
+  },
+  {
+    slug: "tulsi",
+    title: "Tulsi",
+    category: "Web design · E-commerce",
+    alt: "The Tulsi online grocery store with product search open on a laptop beside fresh vegetables",
+    disciplines: ["Web"],
   },
 ];
 

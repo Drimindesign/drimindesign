@@ -18,8 +18,8 @@ export interface TeamMember {
 
 export const aboutIntro = {
   eyebrow: "About & team",
-  title: "A small studio with a big appetite for craft.",
-  body: "We're designers, developers and storytellers who treat every brand like our own. Pick up a pass and meet the people behind the work.",
+  title: "One idea. Considered from every angle.",
+  body: "Your brand, website and product should feel like they belong together. We bring design and development around the same table, keeping the idea clear from the first sketch to the final interaction.",
   hint: "Drag a card. Tap to flip it.",
 } as const;
 

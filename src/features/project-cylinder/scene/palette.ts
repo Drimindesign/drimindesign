@@ -1,47 +1,36 @@
-/*
- * Colours of the ring's room (DESIGN.md §9): a seamless studio backdrop (an "infinity cove")
- * in the hero's exact brand orange, lit like a real set. The backdrop at eye level is the
- * page's orange (and the fog, so the floor dissolves into it without an edge); a key light
- * makes a brighter, warmer hot spot behind the ring; light falls off toward the top, the
- * sides and the floor in front of the camera.
- */
-const brand = {
-  /** Backdrop overhead, just outside the light. */
-  zenith: "#e22900",
-  /** Backdrop at eye level: the brand orange, also the fog colour. */
-  horizon: "#fa2e00",
-  /** Hot spot of the key light on the backdrop behind the ring. */
-  glow: "#ff5b28",
-  /** Backdrop toward the sides, where the light falls off. */
-  shade: "#d42600",
-  /** Floor under and around the ring, in the key light. */
-  floorLit: "#f22d00",
-  /** Halfway between the lit floor and the floor near the camera. */
-  floorMid: "#df2900",
-  /** Floor near the camera, furthest from the light. */
-  floorDark: "#c92400",
-  /** Standing figures. */
-  figure: "#140402",
-} as const;
+"use client";
 
-/*
- * Small screens use a slightly milder orange (tokens.css: --color-orange-500 below 48rem):
- * every colour above mixed 12 % toward white, so the room still meets the page seamlessly.
- */
-const mild: Record<keyof typeof brand, string> = {
-  zenith: "#e6431f",
-  horizon: "#fb471f",
-  glow: "#ff6f42",
-  shade: "#d9401f",
-  floorLit: "#f3461f",
-  floorMid: "#e3431f",
-  floorDark: "#d03e1f",
-  figure: brand.figure,
-};
+import { useMemo } from "react";
 
-/** Must match the media query in tokens.css. */
-const SMALL_SCREEN = "(max-width: 47.99rem)";
+export interface StagePalette {
+  zenith: string;
+  horizon: string;
+  glow: string;
+  shade: string;
+  floorLit: string;
+  floorMid: string;
+  floorDark: string;
+  figure: string;
+}
 
-/* Chosen once when the scene loads (client only: the scene never renders on the server). */
-export const stagePalette: Record<keyof typeof brand, string> =
-  typeof window !== "undefined" && window.matchMedia(SMALL_SCREEN).matches ? mild : brand;
+function readPalette(): StagePalette {
+  const styles = typeof document === "undefined" ? null : getComputedStyle(document.documentElement);
+  // The scene is client-only; the base colour also provides a safe value before CSS is available.
+  const fallback = "#fa2e00";
+  const colour = (token: string): string => styles?.getPropertyValue(token).trim() || fallback;
+  return {
+    zenith: colour("--stage-zenith"),
+    horizon: colour("--color-orange-500"),
+    glow: colour("--stage-glow"),
+    shade: colour("--stage-shade"),
+    floorLit: colour("--stage-floor-lit"),
+    floorMid: colour("--stage-floor-mid"),
+    floorDark: colour("--stage-floor-dark"),
+    figure: styles?.getPropertyValue("--stage-figure").trim() || "#140402",
+  };
+}
+
+/** CSS is the colour source of truth; every screen uses the same desktop room palette. */
+export function useStagePalette(): StagePalette {
+  return useMemo(() => readPalette(), []);
+}

@@ -106,11 +106,18 @@
 
   .sections {
     display: grid;
+    /* A swipe strip's min-content width must not become the width of the whole story. */
+    grid-template-columns: minmax(0, 1fr);
     gap: clamp(4rem, 14svh, 9rem);
+  }
+
+  .sections > * {
+    min-inline-size: 0;
   }
 
   .frame {
     position: relative;
+    min-inline-size: 0;
     overflow: hidden;
     border-radius: 1rem;
     background: var(--color-ink-100);
@@ -123,6 +130,24 @@
   .caption {
     max-width: 60ch;
     margin-top: 1rem;
+  }
+
+  .desktopOnly {
+    display: none;
+  }
+
+  .mobileOnly {
+    display: block;
+  }
+
+  @media (min-width: 48rem) {
+    .desktopOnly {
+      display: block;
+    }
+
+    .mobileOnly {
+      display: none;
+    }
   }
 
   /* Two images side by side; the second sits lower, like a spread in a printed book. */
@@ -145,6 +170,8 @@
   /* App screens: a swipeable strip on phones, one row on wider screens. */
   .screens {
     display: grid;
+    inline-size: calc(100% + var(--gutter) * 2);
+    min-inline-size: 0;
     grid-auto-flow: column;
     grid-auto-columns: 62vw;
     gap: 1rem;
@@ -162,6 +189,7 @@
 
   @media (min-width: 48rem) {
     .screens {
+      inline-size: 100%;
       grid-auto-columns: minmax(0, 1fr);
       gap: clamp(1rem, 2vw, 2rem);
       margin-inline: 0;

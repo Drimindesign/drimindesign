@@ -1,0 +1,11 @@
+Use case: product-mockup. Create ONE high-quality portfolio photograph only, full frame, no collage or grid.
+Reference images are the actual client work; preserve their identity and artwork faithfully.
+
+- The attached screenshots are the real app. Show them on modern phones exactly as designed. Never redesign the screens or invent text. If small text can't be copied exactly, soft-focus it.
+- Modern, bright, friendly, realistic photography. One soft light, natural shadows, uncluttered. Faces cropped or turned away. No borders, no watermarks.
+- Palette: clean white, soft grey and the app's own accent colours.
+- Images 1 and 2: landscape 3:2, main subject in the exact centre, top-right corner calm and empty, bottom-left simple and darker.
+- Images 3 and 4: portrait 2:3, one close subject.
+
+Generate Image 1 ONLY: three phones side by side in the centre, slightly tilted, showing Communities Explore, Home and Match Room (Home in the middle, largest), bright soft studio background.
+Output aspect ratio: 3:2 landscape. Highest available quality, realistic materials and clean professional lighting.

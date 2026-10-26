@@ -36,7 +36,8 @@ export function ProjectCase({ project }: { project: Project }): React.ReactEleme
       <section data-surface="dark" data-project-hero className={styles.hero} aria-labelledby="project-title">
         <ViewTransition name={heroTransitionName(project.slug)} share="morph" default="none">
           <div className={styles.heroImage}>
-            <Image src={projectImageUrl(project, 1400)} alt={project.alt} fill preload sizes="100vw" />
+            {/* Cover-fitted landscape artwork on a portrait screen needs enough pixels for its height. */}
+            <Image src={projectImageUrl(project, 1400)} alt={project.alt} fill preload sizes="(max-aspect-ratio: 7/5) 140svh, 100vw" />
           </div>
         </ViewTransition>
         <div className={styles.heroScrim} />

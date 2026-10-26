@@ -1,0 +1,12 @@
+Use case: product-mockup. Create ONE high-quality portfolio photograph only, full frame, no collage or grid.
+Reference images are the actual client work; preserve their identity and artwork faithfully.
+
+- The attached files are the real work. Copy the logo, the name "Breeze and Grains", its colours and the website exactly. Never redesign, re-letter or invent text. If small text can't be copied exactly, leave it out or soft-focus it.
+- My photos are reference only: rebuild each scene cleanly.
+- Modern, calm, premium, realistic photography. One soft light, natural shadows, uncluttered, two or three tasteful props at most. No people facing the camera, no borders, no watermarks.
+- Palette: deep forest green, warm white, sunset gold.
+- Images 1 and 2: landscape 3:2, main subject in the exact centre, top-right corner calm and empty (plain sky or wall), bottom-left simple and darker.
+- Images 3 and 4: portrait 2:3, one close subject.
+
+Generate Image 4 ONLY: a hand holding a phone showing the attached booking page, soft green foliage behind.
+Output aspect ratio: 2:3 portrait. Highest available quality, realistic materials and clean professional lighting.

@@ -1,0 +1,11 @@
+Use case: product-mockup. Create ONE high-quality portfolio photograph only, full frame, no collage or grid.
+Reference images are the actual client work; preserve their identity and artwork faithfully.
+
+- The attached files are the real packaging. Copy every label, brand name, colour and illustration exactly. Never redesign, re-letter or invent text.
+- Modern, appetising, premium product photography. One soft light, natural shadows, uncluttered, two or three tasteful props at most. No borders, no watermarks.
+- Warm neutral sets that let each pack's own colours stand out.
+- Images 1 and 2: landscape 3:2, main subject in the exact centre, top-right corner calm and empty, bottom-left simple and darker.
+- Images 3 and 4: portrait 2:3, one close subject.
+
+Generate Image 2 ONLY: a sunny modern kitchen counter with the products in use: a bowl of penne, a spoon of ghee, a small dish of chutney, the packs arranged naturally behind.
+Output aspect ratio: 3:2 landscape. Highest available quality, realistic materials and clean professional lighting.

@@ -1,0 +1,181 @@
+@layer components {
+  .root {
+    position: relative;
+    display: inline-grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    vertical-align: baseline;
+  }
+
+  .field {
+    display: grid;
+    inline-size: 100%;
+  }
+
+  .control {
+    appearance: none;
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    min-block-size: 48px;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--color-ink-200);
+    border-radius: var(--radius-md);
+    background: var(--color-white);
+    color: var(--color-ink-950);
+    font: inherit;
+    font-size: var(--text-body);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: border-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .root .control {
+    padding-inline-end: 2.5rem;
+  }
+
+  .control:focus-visible {
+    outline: 2px solid var(--surface-focus, var(--color-orange-600));
+    outline-offset: 3px;
+  }
+
+  .control:has(option[value=""]:checked) {
+    color: var(--surface-fg-muted, var(--color-ink-500));
+  }
+
+  .control[aria-invalid="true"] {
+    border-color: var(--color-orange-700);
+  }
+
+  .control:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .chevron {
+    position: absolute;
+    inset-inline-end: 0.85rem;
+    inset-block-start: 50%;
+    translate: 0 -50%;
+    color: var(--color-ink-950);
+    pointer-events: none;
+    transition: rotate var(--duration-fast) var(--ease-standard);
+  }
+
+  .inline {
+    inline-size: fit-content;
+    max-inline-size: calc(100% - 0.3em);
+    margin-inline: 0.15em;
+  }
+
+  .inline .control {
+    field-sizing: content;
+    min-block-size: 44px;
+    padding-block: 0;
+    padding-inline-start: 0.1em;
+    border: 0;
+    border-block-end: 2px solid rgb(10 10 10 / 0.55);
+    border-radius: 0;
+    background: transparent;
+    font: inherit;
+    font-weight: 600;
+    line-height: 1.2;
+    vertical-align: baseline;
+  }
+
+  .inline .control:has(option[value=""]:checked) {
+    font-weight: 500;
+  }
+
+  .inline .control[aria-invalid="true"] {
+    border-block-end-style: dashed;
+    border-color: var(--color-ink-950);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .control:hover:not(:disabled) {
+      border-color: var(--color-ink-950);
+    }
+  }
+
+  /* Unsupported browsers retain their accessible native picker and the same trigger. */
+  @supports (appearance: base-select) {
+    .control,
+    .control::picker(select) {
+      appearance: base-select;
+    }
+
+    .control::picker-icon {
+      display: none;
+    }
+
+    .control:open + .chevron {
+      rotate: 180deg;
+    }
+
+    .control::picker(select) {
+      box-sizing: border-box;
+      min-inline-size: anchor-size(self-inline);
+      max-inline-size: calc(100dvw - 2rem);
+      max-block-size: min(22rem, 60dvh);
+      margin-block: 0.4rem;
+      padding: 0.4rem;
+      border: 1px solid var(--color-ink-200);
+      border-radius: var(--radius-lg);
+      background: var(--color-ink-50);
+      color: var(--color-ink-950);
+      font-family: var(--font-manrope), sans-serif;
+      font-size: var(--text-body);
+      font-weight: 500;
+      line-height: 1.4;
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+
+    .control option {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-block-size: 44px;
+      padding: 0.7rem 0.8rem;
+      border-radius: var(--radius-sm);
+      overflow-wrap: anywhere;
+      white-space: normal;
+      cursor: pointer;
+    }
+
+    .control option:checked,
+    .control option:focus-visible {
+      outline: none;
+      background: var(--color-ink-950);
+      color: var(--color-white);
+    }
+
+    .control option::checkmark {
+      order: 1;
+      margin-inline-start: auto;
+      color: var(--color-orange-400);
+    }
+
+    .control option:disabled {
+      color: var(--color-ink-500);
+      cursor: default;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .control option:hover:not(:disabled, :checked) {
+        background: var(--color-ink-100);
+      }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .control,
+    .chevron {
+      transition: none;
+    }
+  }
+}

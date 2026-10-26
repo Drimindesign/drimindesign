@@ -26,8 +26,18 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "assets" / "generated-projects"
 OUTPUT = ROOT / "public" / "projects"
 
-# The projects currently on the site (the other generated sets wait for their case studies).
-SLUGS = ("munsey-pharmacy", "breeze-and-mist", "breeze-and-grains", "shreeram-milks", "speakora-onboarding")
+# The projects on the site (one set of generated images each).
+SLUGS = (
+    "munsey-pharmacy",
+    "breeze-and-mist",
+    "breeze-and-grains",
+    "shreeram-milks",
+    "speakora-onboarding",
+    "house-of-diams",
+    "packaging",
+    "beingle",
+    "tulsi",
+)
 
 # In the panel file names, so a changed image is a new URL (the files are cached for a week).
 # Keep in sync with PROJECT_IMAGE_VERSION in src/content/projects.ts.

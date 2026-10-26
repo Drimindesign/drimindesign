@@ -10,6 +10,7 @@ import { CameraRig } from "./camera-rig";
 import { ringDimensions } from "./dimensions";
 import { Ring } from "./ring";
 import { Stage } from "./stage";
+import { useStagePalette } from "./palette";
 
 export interface CylinderSceneProps {
   projects: readonly Project[];
@@ -19,7 +20,8 @@ export interface CylinderSceneProps {
   onReady?: () => void;
 }
 
-const DPR: Record<DeviceTier, [number, number]> = { high: [1, 2], medium: [1, 2], low: [1, 1.5] };
+/* Modest supersampling preserves fine artwork on 1× displays; tier caps bound GPU fill cost. */
+const DPR: Record<DeviceTier, [number, number]> = { high: [1.5, 2], medium: [1.25, 2], low: [1, 1.5] };
 
 /*
  * Renders on demand: a frame is drawn only when scroll notifies or something is still moving.
@@ -41,6 +43,7 @@ function StoreInvalidator({ store }: { store: CylinderStore }): null {
  */
 export default function CylinderScene({ projects, tier, store, onReady }: CylinderSceneProps): React.ReactElement {
   const dimensions = useMemo(() => ringDimensions(projects.length), [projects.length]);
+  const palette = useStagePalette();
 
   return (
     <Canvas
@@ -55,7 +58,7 @@ export default function CylinderScene({ projects, tier, store, onReady }: Cylind
       aria-hidden="true"
     >
       <StoreInvalidator store={store} />
-      <Stage dimensions={dimensions} tier={tier} store={store} projects={projects.length} />
+      <Stage dimensions={dimensions} tier={tier} store={store} projects={projects.length} palette={palette} />
       <Ring projects={projects} dimensions={dimensions} tier={tier} store={store} />
       <CameraRig dimensions={dimensions} store={store} />
     </Canvas>

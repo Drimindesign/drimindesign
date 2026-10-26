@@ -7,7 +7,7 @@ import { damp } from "@/lib/motion/damp";
 import type { CylinderStore } from "../store";
 import { createFigureRig, createRigGeometries } from "./figure-rig";
 import { applyPose, faceCamera, idlePose, listen, lookUp, pocketArms, speakerWeight, talk, walk } from "./figure-motion";
-import { stagePalette } from "./palette";
+import type { StagePalette } from "./palette";
 import { Stroller } from "./stroller";
 import { createCastShadowTexture, createSoftShadowTexture } from "./textures";
 
@@ -16,6 +16,7 @@ interface FiguresProps {
   /** Number of distinct projects, to read the ring's turning speed from scroll. */
   projects: number;
   store: CylinderStore;
+  palette: StagePalette;
 }
 
 /*
@@ -35,14 +36,14 @@ const FRAME_MS = 1000 / 30;
 /** Seconds each of the pair talks before handing over. */
 const TURN = 7;
 
-export function Figures({ ringRadius, projects, store }: FiguresProps): React.ReactElement {
+export function Figures({ ringRadius, projects, store, palette }: FiguresProps): React.ReactElement {
   const invalidate = useThree((state) => state.invalidate);
   const strollRef = useRef<Group>(null);
   const castRef = useRef<Group>(null);
   const motion = useRef({ t: 0, watch: 0, lastRotate: store.rotate, timer: 0 });
 
   const geometries = useMemo(() => createRigGeometries(), []);
-  const material = useMemo(() => new MeshBasicMaterial({ color: new Color(stagePalette.figure) }), []);
+  const material = useMemo(() => new MeshBasicMaterial({ color: new Color(palette.figure) }), [palette.figure]);
   const rigs = useMemo(
     () => ({
       pair: PAIR.map((person) => createFigureRig(geometries, material, person.height)),

@@ -27,7 +27,7 @@ Rules for using this system in code are in [AGENTS.md](AGENTS.md). Product behav
 
 `#FA2E00` is the brand colour (`orange-500`). The scale is derived around it for states, gradients and illustration.
 
-**Small screens (< 48rem):** `orange-500` becomes `#FB471F`, the brand orange mixed 12 % toward white, because a full phone screen of `#FA2E00` reads too intense. The ring's 3D room uses the same milder palette (`scene/palette.ts`), and the browser theme colour follows it. Print artwork (ID cards, strap) always uses `#FA2E00`.
+**All screen sizes:** use the same `#FA2E00` brand orange and desktop room palette, including on phones. The ring's CSS loading background and WebGL backdrop/fog/floor share the `--stage-*` tokens in `tokens.css`, so resizing and rotation do not change the colours. The browser theme colour also stays `#FA2E00`. Print artwork (ID cards, strap) uses the same brand orange.
 
 | Token | Hex | Use |
 |---|---|---|
@@ -397,7 +397,7 @@ Modelled on a thin, upright panoramic ring in an endless hazy room (client refer
 | Parameter | Value |
 |---|---|
 | Ring | Thin, open band standing on the floor: no caps, no thickness. 8 panels at 7:5 (4 × 2.86 units), hairline seams; radius follows from the panel count. Turns about Y |
-| Panels | Unlit, true-colour images (no tone mapping): bright outside, dimmed and warmer inside so the far inner wall reads in shadow from above. Images: `public/projects/<slug>-{700,1000,1400}.webp` (7:5, one width per device tier), built from `assets/projects/` by `scripts/prepare-project-images.py` (crop to fill when close to 7:5, otherwise fitted whole on a plain or blurred backdrop). At least 8 panels; projects repeat around the ring |
+| Panels | Unlit, true-colour images, excluded from tone mapping and room fog: bright outside, dimmed and warmer inside so the far inner wall reads in shadow from above. The ring uses native 1400 px WebP on high/medium tiers and on canvases wider than 1000 physical pixels; smaller low-tier canvases use 1000 px (7:5, `public/projects/<slug>-v2-<width>.webp`), built from `assets/generated-projects/` by `scripts/prepare-generated-images.py`. Maximum supported anisotropy and a −0.5 mip bias preserve small print on the curve while keeping mipmaps to prevent shimmer. Repeated panels share one GPU texture per project. Canvas DPR: high 1.5–2, medium 1.25–2, low 1–1.5; geometry and reflections remain tiered. At least 8 panels; projects repeat around the ring |
 | Room | A lit studio backdrop (infinity cove) in the hero's exact brand orange, no walls or corners (`palette.ts`): `#FA2E00` at eye level (also the fog colour, so the floor dissolves seamlessly), a warmer key-light hot spot `#FF5B28` behind the ring, falloff toward the top (`#E22900`) and sides (`#D42600`). The section uses `data-surface="orange"`: small overlay text in ink, the project title in white |
 | Floor | Satin reflector: contact-hardening reflection (sharp at the band's foot, blurring with distance), lit orange under the ring (`#F22D00`) falling to `#C92400` near the camera, fog fade |
 | Grounding | No fake shadow decal. Each panel spills its own average colour onto the floor (`light-spill.ts`): zero at the contact line (a natural crease), peaking just outside, decaying with a soft tail that reaches exactly zero inside its patch. The spill is written in display (sRGB) values: the canvas blends additively in display space, where a faint linear tail turns into a visible band |

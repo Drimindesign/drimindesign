@@ -3,13 +3,10 @@
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import {
-  BackSide,
   type Camera,
   Color,
-  FrontSide,
   type Group,
   type Mesh,
-  MeshBasicMaterial,
   type Object3D,
   SRGBColorSpace,
   TextureLoader,
@@ -24,6 +21,7 @@ import { ringTurn } from "../choreography";
 import type { CylinderStore } from "../store";
 import { bentPanelGeometry, fogRange, RING_BASE, PANEL_HEIGHT, PANEL_WIDTH, type RingDimensions } from "./dimensions";
 import { averageColor, createSpillGeometry, createSpillMaterial } from "./light-spill";
+import { createPanelMaterial } from "./panel-material";
 
 interface RingProps {
   projects: readonly Project[];
@@ -32,14 +30,13 @@ interface RingProps {
   store: CylinderStore;
 }
 
-/* The ring is the first thing visitors see, so only the weakest devices get a smaller picture (five images, lazy-loaded). */
-const IMAGE_WIDTH: Record<DeviceTier, ProjectImageWidth> = { high: 1400, medium: 1400, low: 1000 };
+/** A small canvas can use the lighter image; wide desktops still need native detail on four-core CPUs. */
+const SMALL_IMAGE_WIDTH = 1000;
 const SEGMENTS: Record<DeviceTier, number> = { high: 48, medium: 32, low: 20 };
 /* Panels glow like screens: unlit and untinted (no tone mapping), so the photos show their true colours. */
 const OUTER_TINT = new Color(1, 1, 1);
 /* The inside of the band is in its own shade: same images, dimmer and slightly warm. */
 const INNER_TINT = new Color(0.42, 0.39, 0.37);
-const PLACEHOLDER = new Color("#d42600");
 /** Panels open only once the camera has landed (the descent is for looking, not clicking). */
 const CLICKABLE_FROM = 0.98;
 /** A press that travels further than this (px) was a drag, not a click. */
@@ -87,6 +84,9 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
   const invalidate = useThree((state) => state.invalidate);
   const get = useThree((state) => state.get);
   const anisotropy = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
+  const canvasWidth = useThree((state) => state.size.width);
+  const dpr = useThree((state) => state.viewport.dpr);
+  const imageWidth: ProjectImageWidth = tier === "low" && canvasWidth * dpr <= SMALL_IMAGE_WIDTH ? 1000 : 1400;
   const { radius, step, panels } = dimensions;
 
   const geometry = useMemo(() => bentPanelGeometry(radius, SEGMENTS[tier]), [radius, tier]);
@@ -94,8 +94,8 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
   const materials = useMemo(
     () =>
       Array.from({ length: panels }, () => ({
-        outer: new MeshBasicMaterial({ color: PLACEHOLDER, side: FrontSide }),
-        inner: new MeshBasicMaterial({ color: PLACEHOLDER, side: BackSide }),
+        outer: createPanelMaterial(false),
+        inner: createPanelMaterial(true),
         spill: createSpillMaterial({ radius, step, fog: fogRange(radius) }),
       })),
     [panels, radius, step],
@@ -106,31 +106,42 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
     const loader = new TextureLoader();
     let cancelled = false;
     const loaded: { dispose(): void }[] = [];
-    materials.forEach(({ outer, inner, spill }, index) => {
-      const project = projects[index % projects.length];
-      loader.load(projectImageUrl(project, IMAGE_WIDTH[tier]), (texture) => {
+    projects.forEach((project, projectIndex) => {
+      // Repeated panels share one GPU texture instead of uploading the same image again.
+      loader.load(projectImageUrl(project, imageWidth), (texture) => {
         if (cancelled) {
           texture.dispose();
           return;
         }
         texture.colorSpace = SRGBColorSpace;
         texture.anisotropy = anisotropy;
-        outer.map = texture;
-        outer.color.copy(OUTER_TINT);
-        inner.map = texture;
-        inner.color.copy(INNER_TINT);
-        outer.needsUpdate = true;
-        inner.needsUpdate = true;
-        (spill.uniforms.uColor.value as Color).copy(averageColor(texture));
+        const spillColor = averageColor(texture);
+        materials.forEach(({ outer, inner, spill }, index) => {
+          if (index % projects.length !== projectIndex) return;
+          outer.map = texture;
+          outer.color.copy(OUTER_TINT);
+          inner.map = texture;
+          inner.color.copy(INNER_TINT);
+          outer.needsUpdate = true;
+          inner.needsUpdate = true;
+          (spill.uniforms.uColor.value as Color).copy(spillColor);
+        });
         loaded.push(texture);
         invalidate();
       });
     });
     return () => {
       cancelled = true;
+      // Detach before disposal so a resize cannot make three.js re-upload a released texture.
+      materials.forEach(({ outer, inner }) => {
+        outer.map = null;
+        inner.map = null;
+        outer.needsUpdate = true;
+        inner.needsUpdate = true;
+      });
       loaded.forEach((texture) => texture.dispose());
     };
-  }, [materials, projects, tier, anisotropy, invalidate]);
+  }, [materials, projects, imageWidth, anisotropy, invalidate]);
 
   useEffect(
     () => () => {
@@ -159,7 +170,7 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
       const project = projects[index % projects.length];
       openProject({
         slug: project.slug,
-        image: projectImageUrl(project, IMAGE_WIDTH[tier]),
+        image: projectImageUrl(project, imageWidth),
         from: "/",
         ...panelOutline(panel, camera, rect, radius),
       });
@@ -184,7 +195,7 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
       },
     });
     return () => store.setPanels(null);
-  }, [store, get, projects, tier, radius]);
+  }, [store, get, projects, imageWidth, radius]);
 
   const open = (index: number) => (event: ThreeEvent<MouseEvent>): void => {
     if (store.enter < CLICKABLE_FROM || event.delta > CLICK_SLOP) return;

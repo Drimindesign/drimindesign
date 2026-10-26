@@ -35,11 +35,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Phones get the milder orange of tokens.css, so the browser bar matches the page.
-  themeColor: [
-    { media: "(max-width: 47.99rem)", color: site.themeColorSmall },
-    { color: site.themeColor },
-  ],
+  themeColor: site.themeColor,
   colorScheme: "light",
 };
 

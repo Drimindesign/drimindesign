@@ -7,7 +7,7 @@ import type { CylinderStore } from "../store";
 import { fogRange, type RingDimensions } from "./dimensions";
 import { Figures } from "./figures";
 import { HazeDome } from "./haze-dome";
-import { stagePalette } from "./palette";
+import type { StagePalette } from "./palette";
 import { createFloorGlowTexture, createFloorRoughnessTexture } from "./textures";
 
 interface StageProps {
@@ -15,6 +15,7 @@ interface StageProps {
   tier: DeviceTier;
   store: CylinderStore;
   projects: number;
+  palette: StagePalette;
 }
 
 const FLOOR_SIZE = 140;
@@ -26,24 +27,25 @@ const REFLECTION_RESOLUTION: Record<DeviceTier, number> = { high: 1024, medium: 
  * glow, a contact shadow and a soft reflection of it, and fog in the horizon colour that
  * dissolves the floor into the haze, so there are no walls, corners or edges anywhere.
  */
-export function Stage({ dimensions, tier, store, projects }: StageProps): React.ReactElement {
+export function Stage({ dimensions, tier, store, projects, palette }: StageProps): React.ReactElement {
   const { radius } = dimensions;
-  const glow = useMemo(() => createFloorGlowTexture((radius * 2) / FLOOR_SIZE), [radius]);
+  const glow = useMemo(() => createFloorGlowTexture((radius * 2) / FLOOR_SIZE, palette), [radius, palette]);
   const roughness = useMemo(() => createFloorRoughnessTexture(18), []);
 
   useEffect(
     () => () => {
       glow.dispose();
-      roughness.dispose();
     },
-    [glow, roughness],
+    [glow],
   );
+
+  useEffect(() => () => roughness.dispose(), [roughness]);
 
   return (
     <>
-      <color attach="background" args={[stagePalette.horizon]} />
-      <fog attach="fog" args={[stagePalette.horizon, ...fogRange(radius)]} />
-      <HazeDome radius={DOME_RADIUS} />
+      <color attach="background" args={[palette.horizon]} />
+      <fog attach="fog" args={[palette.horizon, ...fogRange(radius)]} />
+      <HazeDome radius={DOME_RADIUS} palette={palette} />
 
       <mesh rotation-x={-Math.PI / 2}>
         <planeGeometry args={[FLOOR_SIZE, FLOOR_SIZE]} />
@@ -75,7 +77,7 @@ export function Stage({ dimensions, tier, store, projects }: StageProps): React.
         )}
       </mesh>
 
-      <Figures ringRadius={radius} projects={projects} store={store} />
+      <Figures ringRadius={radius} projects={projects} store={store} palette={palette} />
     </>
   );
 }

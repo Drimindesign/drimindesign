@@ -1,5 +1,5 @@
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace } from "three";
-import { stagePalette } from "./palette";
+import type { StagePalette } from "./palette";
 
 /*
  * Procedural textures for the ring's room, drawn once on a canvas (no image downloads).
@@ -32,17 +32,17 @@ function addGrain(context: CanvasRenderingContext2D, width: number, height: numb
  * ring where the panels shine on it, falling off to near black. `ringFraction` is the ring's
  * radius as a fraction of the floor's half-size.
  */
-export function createFloorGlowTexture(ringFraction: number): CanvasTexture {
+export function createFloorGlowTexture(ringFraction: number, palette: StagePalette): CanvasTexture {
   const size = 1024;
   const [element, context] = canvas(size, size);
   const c = size / 2;
-  context.fillStyle = stagePalette.floorDark;
+  context.fillStyle = palette.floorDark;
   context.fillRect(0, 0, size, size);
   const glow = context.createRadialGradient(c, c, 0, c, c, c * ringFraction * 3.6);
-  glow.addColorStop(0, stagePalette.floorLit);
-  glow.addColorStop(0.3, stagePalette.floorLit);
-  glow.addColorStop(0.65, stagePalette.floorMid);
-  glow.addColorStop(1, stagePalette.floorDark);
+  glow.addColorStop(0, palette.floorLit);
+  glow.addColorStop(0.3, palette.floorLit);
+  glow.addColorStop(0.65, palette.floorMid);
+  glow.addColorStop(1, palette.floorDark);
   context.fillStyle = glow;
   context.fillRect(0, 0, size, size);
   addGrain(context, size, size, 4);

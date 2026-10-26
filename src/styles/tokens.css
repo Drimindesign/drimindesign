@@ -115,17 +115,15 @@
 
   --gradient-primary: linear-gradient(180deg, #ff6038 0%, #fa2e00 52%, #d62700 100%);
   --gradient-ink: linear-gradient(180deg, #2a2a2a 0%, #121212 55%, #0a0a0a 100%);
-}
 
-/*
- * Small screens: a slightly milder brand orange (12 % toward white). A phone's whole screen
- * is orange in the hero and the ring, so the full-strength colour reads too intense there.
- * The ring's 3D room switches with it (project-cylinder/scene/palette.ts, same breakpoint).
- */
-@media (max-width: 47.99rem) {
-  :root {
-    --color-orange-500: #fb471f;
-  }
+  /* Shared by the ring's CSS loading background and its WebGL room. */
+  --stage-zenith: #e22900;
+  --stage-glow: #ff5b28;
+  --stage-shade: #d42600;
+  --stage-floor-lit: #f22d00;
+  --stage-floor-mid: #df2900;
+  --stage-floor-dark: #c92400;
+  --stage-figure: #140402;
 }
 
 /*

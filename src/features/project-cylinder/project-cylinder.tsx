@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { CSSProperties } from "react";
 import { projects } from "@/content/projects";
 import { sectionHeightVh, snapOffsetsVh } from "./choreography";
@@ -32,7 +33,10 @@ export function ProjectCylinder(): React.ReactElement {
         <ol>
           {projects.map((project) => (
             <li key={project.slug}>
-              {project.title}: {project.category}. {project.alt}.
+              <Link href={`/projects/${project.slug}`}>
+                {project.title}: {project.category}
+              </Link>
+              . {project.alt}.
             </li>
           ))}
         </ol>

@@ -1,0 +1,17 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  /* Above the page, the header and the mobile menu; never catches the pointer. */
+  .layer {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-overlay) + 100);
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: none;
+  }
+
+  .layer[data-active] {
+    display: block;
+  }
+}

@@ -33,3 +33,31 @@ export function websiteSchema(): JsonLdObject {
     url: site.url,
   };
 }
+
+export function creativeWorkSchema(work: { name: string; description: string; url: string; image: string; client: string; year: string; keywords: readonly string[] }): JsonLdObject {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    name: work.name,
+    description: work.description,
+    url: new URL(work.url, site.url).toString(),
+    image: new URL(work.image, site.url).toString(),
+    dateCreated: work.year,
+    keywords: work.keywords.join(", "),
+    creator: { "@type": "Organization", name: site.name, url: site.url },
+    sourceOrganization: { "@type": "Organization", name: work.client },
+  };
+}
+
+export function breadcrumbSchema(items: readonly { name: string; path: string }[]): JsonLdObject {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: new URL(item.path, site.url).toString(),
+    })),
+  };
+}

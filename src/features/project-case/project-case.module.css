@@ -1,0 +1,283 @@
+/*
+ * Project case study. All motion is CSS: an entrance for the hero copy and scroll-driven
+ * reveals (animation-timeline: view()) that run on the compositor, so long pages scroll as
+ * lightly as plain HTML. Browsers without scroll-driven animations show everything in place.
+ */
+
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  /* ---------- Hero: full screen, exactly where the tissue pull lands ---------- */
+
+  .hero {
+    position: relative;
+    height: 100svh;
+    min-height: 32rem;
+    overflow: clip;
+    background: var(--color-ink-950);
+  }
+
+  .heroImage {
+    position: absolute;
+    inset: 0;
+  }
+
+  .heroImage img {
+    object-fit: cover;
+  }
+
+  /* Darkens the bottom for the title and the top for the header, nothing in between. */
+  .heroScrim {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(0deg, rgb(10 10 10 / 0.66) 0%, rgb(10 10 10 / 0.22) 42%, transparent 68%),
+      linear-gradient(180deg, rgb(10 10 10 / 0.32) 0%, transparent 22%);
+    pointer-events: none;
+  }
+
+  .close {
+    position: absolute;
+    top: var(--header-offset);
+    left: var(--gutter);
+    z-index: 2;
+  }
+
+  .heroCopy {
+    position: absolute;
+    inset: auto var(--gutter) clamp(1.5rem, 6svh, 4rem);
+    max-width: var(--container-max);
+    /* Rises in as the tissue sheet fades into the hero (or right after a direct load). */
+    animation: rise 900ms var(--ease-out-expo) 420ms both;
+  }
+
+  .title {
+    font-size: clamp(2.75rem, 8vw, 8rem);
+    line-height: 0.95;
+  }
+
+  /* ---------- Body ---------- */
+
+  .body {
+    padding: 0 var(--gutter) clamp(4rem, 10svh, 7rem);
+    background: var(--color-white);
+  }
+
+  .body > * {
+    max-width: var(--container-max);
+    margin-inline: auto;
+  }
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.75rem var(--gutter);
+    padding-block: clamp(2rem, 6svh, 3.5rem);
+    border-bottom: 1px solid var(--color-ink-100);
+  }
+
+  @media (min-width: 64rem) {
+    .facts {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .facts dt {
+    color: var(--color-ink-500);
+    font-size: var(--text-label);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .facts dd {
+    margin-top: 0.4rem;
+    font-size: var(--text-body-lg);
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .intro {
+    margin-block: clamp(4rem, 14svh, 10rem);
+  }
+
+  .intro p {
+    max-width: 24ch;
+  }
+
+  .sections {
+    display: grid;
+    gap: clamp(4rem, 14svh, 9rem);
+  }
+
+  .frame {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    background: var(--color-ink-100);
+  }
+
+  .image {
+    object-fit: cover;
+  }
+
+  .caption {
+    max-width: 60ch;
+    margin-top: 1rem;
+  }
+
+  /* Two images side by side; the second sits lower, like a spread in a printed book. */
+  .pair {
+    display: grid;
+    gap: var(--gutter);
+  }
+
+  @media (min-width: 48rem) {
+    .pair {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .pairOffset {
+      margin-top: clamp(4rem, 12svh, 9rem);
+    }
+  }
+
+  /* App screens: a swipeable strip on phones, one row on wider screens. */
+  .screens {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 62vw;
+    gap: 1rem;
+    margin-inline: calc(var(--gutter) * -1);
+    padding: 0.5rem var(--gutter) 2rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .screens::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (min-width: 48rem) {
+    .screens {
+      grid-auto-columns: minmax(0, 1fr);
+      gap: clamp(1rem, 2vw, 2rem);
+      margin-inline: 0;
+      padding-inline: 0;
+      overflow: visible;
+    }
+  }
+
+  .screen {
+    border-radius: 1.75rem;
+    background: var(--color-white);
+    box-shadow:
+      0 0 0 1px rgb(10 10 10 / 0.06),
+      0 30px 60px -32px rgb(10 10 10 / 0.35);
+    scroll-snap-align: center;
+  }
+
+  .chapter {
+    display: grid;
+    gap: 1rem var(--gutter);
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-ink-100);
+  }
+
+  @media (min-width: 48rem) {
+    .chapter {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    }
+  }
+
+  /* ---------- Next project ---------- */
+
+  .next {
+    display: grid;
+    gap: 1rem;
+    margin-top: clamp(5rem, 16svh, 11rem);
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-ink-100);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .nextTitle {
+    font-size: clamp(2.25rem, 6vw, 6rem);
+    line-height: 1;
+  }
+
+  .nextTitle span {
+    display: inline-block;
+    transition: transform var(--duration-base) var(--ease-out-expo);
+  }
+
+  .nextImage {
+    position: relative;
+    display: block;
+    aspect-ratio: 7 / 5;
+    max-height: 72svh;
+    overflow: hidden;
+    border-radius: 1rem;
+  }
+
+  .nextImage img {
+    object-fit: cover;
+    transition: scale var(--duration-slower) var(--ease-out-expo);
+  }
+
+  .next:focus-visible .nextTitle span,
+  .next:active .nextTitle span {
+    transform: translateX(0.25em);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .next:hover .nextTitle span {
+      transform: translateX(0.25em);
+    }
+
+    .next:hover .nextImage img {
+      scale: 1.03;
+    }
+  }
+
+  /* ---------- Scroll-driven reveals (compositor only) ---------- */
+
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .reveal {
+        animation: rise linear both;
+        animation-timeline: view();
+        animation-range: entry 5% entry 55%;
+      }
+
+      /* Images settle from a slight zoom as they cross the screen: weight, not spectacle. */
+      .image {
+        animation: settle linear both;
+        animation-timeline: view();
+        animation-range: entry 0% cover 55%;
+      }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .heroCopy {
+      animation: none;
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0.01;
+      transform: translateY(2.5rem);
+    }
+  }
+
+  @keyframes settle {
+    from {
+      scale: 1.08;
+    }
+  }
+}

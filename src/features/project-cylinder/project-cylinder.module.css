@@ -83,6 +83,18 @@
     animation: caption-in 700ms var(--ease-out-expo) both;
   }
 
+  /* The overlay ignores the pointer (the ring underneath is clickable); this link doesn't. */
+  .view {
+    display: inline-flex;
+    gap: 0.4em;
+    min-height: 44px;
+    align-items: center;
+    pointer-events: auto;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.35em;
+  }
+
   /* Snap markers read by Lenis Snap (cylinder-stage.tsx); invisible, zero-size. */
   .snap {
     position: absolute;

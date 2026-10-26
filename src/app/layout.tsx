@@ -7,6 +7,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { SmoothScroll } from "@/components/layout/smooth-scroll";
 import { LiquidGlassEnhancer } from "@/components/ui/liquid-glass-enhancer";
 import { IntroRevealScript } from "@/features/intro-reveal";
+import { TransitionLayer } from "@/features/tissue-transition";
 import { JsonLd, organizationSchema, websiteSchema } from "@/lib/seo/json-ld";
 import { manrope, outrun } from "./fonts/fonts";
 
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: LayoutProps<"/">): React.ReactE
           {children}
           <SiteFooter />
         </div>
+        <TransitionLayer />
         <LiquidGlassEnhancer />
         <SmoothScroll />
         <JsonLd data={organizationSchema()} />

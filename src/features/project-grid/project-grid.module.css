@@ -1,0 +1,121 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding-block: 1.25rem;
+    border-block: 1px solid var(--color-ink-100);
+  }
+
+  .chip {
+    min-height: 44px;
+    padding-inline: 1.1rem;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-ink-200);
+    background: transparent;
+    color: var(--color-ink-900);
+    font-size: var(--text-body-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) var(--ease-standard),
+      color var(--duration-fast) var(--ease-standard),
+      border-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .chip[aria-pressed="true"] {
+    border-color: var(--color-ink-950);
+    background: var(--color-ink-950);
+    color: var(--color-white);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .chip:not([aria-pressed="true"]):hover {
+      border-color: var(--color-ink-950);
+    }
+  }
+
+  /* Editorial grid: two columns, the second set lower, like a magazine spread. */
+  .grid {
+    display: grid;
+    gap: clamp(3rem, 8svh, 5rem) var(--gutter);
+    margin-top: clamp(2.5rem, 7svh, 4.5rem);
+  }
+
+  @media (min-width: 48rem) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding-bottom: clamp(4rem, 10vw, 9rem);
+    }
+
+    .item:nth-child(even) {
+      translate: 0 clamp(4rem, 10vw, 9rem);
+    }
+  }
+
+  .card {
+    display: grid;
+    gap: 1.1rem;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .media {
+    position: relative;
+    display: block;
+    aspect-ratio: 7 / 5;
+    overflow: hidden;
+    border-radius: 1rem;
+    background: var(--color-ink-100);
+  }
+
+  .media img {
+    object-fit: cover;
+    transition: scale var(--duration-slower) var(--ease-out-expo);
+  }
+
+  .meta {
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .arrow {
+    display: inline-block;
+    transition: transform var(--duration-base) var(--ease-out-expo);
+  }
+
+  .card:focus-visible .arrow,
+  .card:active .arrow {
+    transform: translateX(0.25em);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .card:hover .media img {
+      scale: 1.04;
+    }
+
+    .card:hover .arrow {
+      transform: translateX(0.25em);
+    }
+  }
+
+  /* Cards rise in as they reach the screen (scroll-driven, compositor only). */
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .card {
+        animation: rise linear both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 45%;
+      }
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0.01;
+      transform: translateY(2.5rem);
+    }
+  }
+}

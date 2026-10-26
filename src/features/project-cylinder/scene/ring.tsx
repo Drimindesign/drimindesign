@@ -1,15 +1,16 @@
 "use client";
 
-import { useFrame, useThree } from "@react-three/fiber";
+import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
-import { BackSide, Color, FrontSide, type Group, MeshBasicMaterial, SRGBColorSpace, TextureLoader } from "three";
+import { BackSide, Color, FrontSide, type Group, MeshBasicMaterial, SRGBColorSpace, TextureLoader, Vector3 } from "three";
 import { projectImageUrl, type Project, type ProjectImageWidth } from "@/content/projects";
+import { EDGE_SAMPLES, openProject } from "@/features/tissue-transition";
 import type { DeviceTier } from "@/lib/device/use-device-tier";
 import { cylinder } from "@/lib/motion/tokens";
 import { stepSpring, type SpringState } from "@/lib/motion/spring";
 import { ringTurn } from "../choreography";
 import type { CylinderStore } from "../store";
-import { bentPanelGeometry, fogRange, RING_BASE, PANEL_HEIGHT, type RingDimensions } from "./dimensions";
+import { bentPanelGeometry, fogRange, RING_BASE, PANEL_HEIGHT, PANEL_WIDTH, type RingDimensions } from "./dimensions";
 import { averageColor, createSpillGeometry, createSpillMaterial } from "./light-spill";
 
 interface RingProps {
@@ -26,6 +27,31 @@ const OUTER_TINT = new Color(0.94, 0.94, 0.94);
 /* The inside of the band is in its own shade: same images, dimmer and slightly warm. */
 const INNER_TINT = new Color(0.42, 0.39, 0.37);
 const PLACEHOLDER = new Color("#d42600");
+/** Panels open only once the camera has landed (the descent is for looking, not clicking). */
+const CLICKABLE_FROM = 0.98;
+/** A press that travels further than this (px) was a drag, not a click. */
+const CLICK_SLOP = 6;
+
+/*
+ * Where a panel's top and bottom edges are on screen: EDGE_SAMPLES points along each,
+ * following the curve of the band, for the tissue pull to start from.
+ */
+function panelOutline(event: ThreeEvent<MouseEvent>, radius: number): { top: Float32Array; bottom: Float32Array } {
+  const rect = (event.nativeEvent.target as HTMLElement).getBoundingClientRect();
+  const point = new Vector3();
+  const top = new Float32Array(EDGE_SAMPLES * 2);
+  const bottom = new Float32Array(EDGE_SAMPLES * 2);
+  for (let k = 0; k < EDGE_SAMPLES; k++) {
+    const angle = (k / (EDGE_SAMPLES - 1) - 0.5) * (PANEL_WIDTH / radius);
+    for (const [edge, y] of [[top, PANEL_HEIGHT / 2], [bottom, -PANEL_HEIGHT / 2]] as const) {
+      point.set(radius * Math.sin(angle), y, radius * Math.cos(angle));
+      event.object.localToWorld(point).project(event.camera);
+      edge[k * 2] = rect.left + ((point.x + 1) / 2) * rect.width;
+      edge[k * 2 + 1] = rect.top + ((1 - point.y) / 2) * rect.height;
+    }
+  }
+  return { top, bottom };
+}
 
 /*
  * The ring: a thin, open band of project panels standing upright, turning about Y. Each panel
@@ -97,6 +123,19 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
     [geometry, spillGeometry, materials],
   );
 
+  // Click a panel: it peels off the ring into its project page (features/tissue-transition).
+  const open = (index: number) => (event: ThreeEvent<MouseEvent>): void => {
+    if (store.enter < CLICKABLE_FROM || event.delta > CLICK_SLOP) return;
+    event.stopPropagation();
+    const project = projects[index % projects.length];
+    const pinch: [number, number] = event.uv ? [event.uv.x, event.uv.y] : [0.5, 0.5];
+    openProject({ slug: project.slug, image: projectImageUrl(project, IMAGE_WIDTH[tier]), pinch, ...panelOutline(event, radius) });
+  };
+  const hover = (over: boolean) => (event: ThreeEvent<PointerEvent>): void => {
+    const canvas = event.nativeEvent.target as HTMLElement | null;
+    if (canvas) canvas.style.cursor = over && store.enter >= CLICKABLE_FROM ? "pointer" : "";
+  };
+
   useFrame((_, delta) => {
     const group = groupRef.current;
     if (!group) return;
@@ -119,7 +158,7 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
       {materials.map(({ outer, inner, spill }, index) => (
         // Panel i sits i steps to the right; turning the ring by i·step brings it to the front.
         <group key={index} rotation-y={index * step}>
-          <mesh geometry={geometry} material={outer} />
+          <mesh geometry={geometry} material={outer} onClick={open(index)} onPointerOver={hover(true)} onPointerOut={hover(false)} />
           <mesh geometry={geometry} material={inner} />
           <mesh
             geometry={spillGeometry}

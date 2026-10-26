@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { projectImageUrl, type Project } from "@/content/projects";
 import { useDeviceTier } from "@/lib/device/use-device-tier";
@@ -38,6 +40,13 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
   const project = projects[index];
+  const router = useRouter();
+
+  // Project pages are prefetched (static shells) once the intro is over, so a click on a
+  // panel can navigate the moment the tissue pull covers the screen.
+  useEffect(() => {
+    warmUp(async () => projects.forEach((item) => router.prefetch(`/projects/${item.slug}`)));
+  }, [projects, router]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -149,6 +158,10 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
             <p className="mt-3 text-body-sm font-medium text-fg">
               {project.category}
             </p>
+            {/* Pointer shortcut; keyboard and screen readers use the section's real links. */}
+            <Link href={`/projects/${project.slug}`} tabIndex={-1} className={`${styles.view} mt-6 text-body-sm font-semibold text-fg`}>
+              View project <span aria-hidden="true">→</span>
+            </Link>
           </div>
         </div>
       </div>

@@ -188,3 +188,17 @@ export const lanyard = {
   sleepEpsilon: 0.00004,
   sleepAfterS: 0.8,
 } as const;
+
+/*
+ * Tissue pull (project open/close, features/tissue-transition). Progress follows a critically
+ * damped spring of angular frequency `omega` (1/s): ~1.2 s to settle, no overshoot.
+ */
+export const tissue = {
+  omega: 5.5,
+  /** Navigate once the sheet has nearly covered the screen (the new page renders beneath). */
+  navigateAt: 0.9,
+  /** The sheet fades into the real hero over this long once both are in place. */
+  fadeMs: 260,
+  /** Sheet subdivisions per side, by device tier. */
+  segments: { high: 96, medium: 64, low: 32 },
+} as const;

@@ -71,7 +71,7 @@ interface Pose {
 export function CameraRig({ dimensions, store }: CameraRigProps): null {
   const get = useThree((state) => state.get);
   const invalidate = useThree((state) => state.invalidate);
-  const spring = useRef<SpringState>({ value: 0, velocity: 0 });
+  const spring = useRef<SpringState | null>(null);
   const pointer = useRef({ x: 0, y: 0, smoothX: 0, smoothY: 0 });
   const target = useRef(new Vector3(0, LOOK_Y, 0));
   const { radius } = dimensions;
@@ -122,10 +122,11 @@ export function CameraRig({ dimensions, store }: CameraRigProps): null {
   };
 
   // Place the camera before the first frame so it never flashes from its default position.
+  // Back from a project page the scene remounts: the camera resumes exactly where it was.
   useLayoutEffect(() => {
     const start = store.reducedMotion ? 1 : descent(store.enter);
-    spring.current = { value: start, velocity: 0 };
-    place(get().camera as PerspectiveCamera, start);
+    spring.current = store.spring("camera", start);
+    place(get().camera as PerspectiveCamera, spring.current.value);
     invalidate();
     // Initial placement only; per-frame updates happen in useFrame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -145,6 +146,7 @@ export function CameraRig({ dimensions, store }: CameraRigProps): null {
   useFrame((frame, delta) => {
     const dt = Math.min(delta, 1 / 30);
     const goal = store.reducedMotion ? 1 : descent(store.enter);
+    spring.current ??= store.spring("camera", goal);
     const state = spring.current;
     if (store.reducedMotion) {
       state.value = goal;

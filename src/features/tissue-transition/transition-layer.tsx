@@ -10,20 +10,58 @@ import type { TissueRenderer } from "./tissue-renderer";
 import styles from "./transition-layer.module.css";
 
 const HERO_SELECTOR = "[data-project-hero] img";
-/** Give up waiting for the hero image after this long (the sheet fades anyway). */
-const HERO_TIMEOUT_MS = 1500;
+/** Last resort only (a navigation that never lands): the sheet stays up until then. */
+const HERO_TIMEOUT_MS = 8000;
 
-/* Resolves once the destination hero image is decoded, so the hand-off has no blank frame. */
-async function heroReady(): Promise<void> {
+const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+/*
+ * Resolves once `href` is the page on screen and its hero image is decoded and painted, so
+ * the sheet never lifts off the old page or an empty hero. Routes kept alive by <Activity>
+ * stay in the DOM, hidden: only a hero that is actually rendered counts.
+ */
+async function heroReady(href: string): Promise<void> {
   const deadline = performance.now() + HERO_TIMEOUT_MS;
   while (performance.now() < deadline) {
-    const image = document.querySelector<HTMLImageElement>(HERO_SELECTOR);
+    const image =
+      location.pathname === href
+        ? Array.from(document.querySelectorAll<HTMLImageElement>(HERO_SELECTOR)).find((img) => img.getClientRects().length > 0)
+        : undefined;
     if (image) {
       await image.decode().catch(() => undefined);
+      await nextFrame();
+      await nextFrame();
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
+}
+
+interface Engine {
+  renderer: TissueRenderer | null;
+  frame: number;
+  progress: number;
+  time: number;
+}
+
+/*
+ * Plays the progress from where it is to `to` over `ms`, linear in time: the shader eases
+ * each stage (the corner's lift, then each point's spread) on its own. `onFrame` returns
+ * whether to keep going; it is called once more when the progress arrives.
+ */
+function play(state: Engine, to: number, ms: number, onFrame: (progress: number, done: boolean) => boolean): void {
+  const from = state.progress;
+  const start = performance.now();
+  let last = start;
+  const step = (now: number): void => {
+    state.time += Math.min((now - last) / 1000, 1 / 30);
+    last = now;
+    const k = Math.min(1, (now - start) / ms);
+    state.progress = from + (to - from) * k;
+    state.renderer?.render(state.progress, state.time);
+    if (onFrame(state.progress, k >= 1) && k < 1) state.frame = requestAnimationFrame(step);
+  };
+  state.frame = requestAnimationFrame(step);
 }
 
 function canAnimate(): boolean {
@@ -33,8 +71,8 @@ function canAnimate(): boolean {
 
 /*
  * Plays the tissue pull over everything (mounted once in the root layout, above the page and
- * the header, never catching the pointer). Opening: the clicked ring panel peels off toward
- * the visitor and spreads to fill the screen; the project page is pushed underneath once
+ * the header, never catching the pointer). Opening: the clicked ring panel's top-right corner is
+ * pinched up off it, then the sheet is drawn out and spreads to fill the screen; the project page is pushed underneath once
  * the sheet nearly covers it, then the sheet fades into the page's real hero. Returning
  * (Close or the browser's Back) runs it backwards into the panel, which <Activity> has kept
  * exactly where it was. Without WebGL2 or with reduced motion it simply navigates.
@@ -43,13 +81,7 @@ export function TransitionLayer(): React.ReactElement {
   const router = useRouter();
   const pathname = usePathname();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const engine = useRef<{ renderer: TissueRenderer | null; frame: number; progress: number; velocity: number; time: number }>({
-    renderer: null,
-    frame: 0,
-    progress: 0,
-    velocity: 0,
-    time: 0,
-  });
+  const engine = useRef<Engine>({ renderer: null, frame: 0, progress: 0, time: 0 });
   const pathRef = useRef(pathname);
 
   useEffect(() => {
@@ -71,23 +103,6 @@ export function TransitionLayer(): React.ReactElement {
       state.renderer?.dispose();
       state.renderer = null;
       getLenis()?.start();
-    };
-
-    // Critically damped spring toward `target`; calls `onFrame` each frame until settled.
-    const animate = (target: number, onFrame: (progress: number) => boolean): void => {
-      let last = performance.now();
-      const omega = tune.omega;
-      const step = (now: number): void => {
-        const dt = Math.min((now - last) / 1000, 1 / 30);
-        last = now;
-        state.time += dt;
-        const acceleration = omega * omega * (target - state.progress) - 2 * omega * state.velocity;
-        state.velocity += acceleration * dt;
-        state.progress += state.velocity * dt;
-        state.renderer?.render(state.progress, state.time);
-        if (onFrame(state.progress)) state.frame = requestAnimationFrame(step);
-      };
-      state.frame = requestAnimationFrame(step);
     };
 
     const fadeOut = (onDone: () => void): void => {
@@ -124,18 +139,16 @@ export function TransitionLayer(): React.ReactElement {
         return;
       }
       state.progress = 0;
-      state.velocity = 0;
       renderer.render(0, 0);
       show(true);
       let navigated = false;
-      animate(1, (progress) => {
+      play(state, 1, tune.openMs, (progress, done) => {
         if (!navigated && progress >= tune.navigateAt) {
           navigated = true;
           router.push(href);
         }
-        if (progress < 0.996) return true;
-        state.progress = 1;
-        void heroReady().then(() =>
+        if (!done) return true;
+        void heroReady(href).then(() =>
           fadeOut(() => {
             show(false);
             getLenis()?.start();
@@ -151,7 +164,12 @@ export function TransitionLayer(): React.ReactElement {
       if (tissue.phase === "opening" && origin) void open(origin);
     });
 
-    const resize = (): void => state.renderer?.resize();
+    // Resizing clears the canvas: redraw the sheet where it is (it may be holding full screen
+    // while the route swaps, which can change the scrollbar or a phone's URL bar).
+    const resize = (): void => {
+      state.renderer?.resize();
+      if (canvas.hasAttribute("data-active")) state.renderer?.render(state.progress, state.time);
+    };
     window.addEventListener("resize", resize);
     return () => {
       unsubscribe();
@@ -160,13 +178,13 @@ export function TransitionLayer(): React.ReactElement {
     };
   }, [router]);
 
-  // Back on the home page from the project opened through the ring: cover the screen before
-  // the first paint, then pull the sheet back into its panel.
+  // Back on the page the pull started from (the ring, the Projects grid): cover the screen
+  // before the first paint, then pull the sheet back into its panel or card.
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
     const state = engine.current;
     if (!canvas || tissue.phase !== "open") return;
-    if (pathname !== "/") {
+    if (pathname !== tissue.origin?.from) {
       if (!pathname.startsWith("/projects/")) {
         state.renderer?.dispose();
         state.renderer = null;
@@ -183,30 +201,18 @@ export function TransitionLayer(): React.ReactElement {
     getLenis()?.stop();
     renderer.resize();
     state.progress = 1;
-    state.velocity = 0;
     renderer.render(1, state.time);
     canvas.toggleAttribute("data-active", true);
-    let last = performance.now();
-    const omega = tune.omega;
-    const step = (now: number): void => {
-      const dt = Math.min((now - last) / 1000, 1 / 30);
-      last = now;
-      state.time += dt;
-      const acceleration = omega * omega * (0 - state.progress) - 2 * omega * state.velocity;
-      state.velocity += acceleration * dt;
-      state.progress += state.velocity * dt;
-      renderer.render(Math.max(0, state.progress), state.time);
-      if (state.progress > 0.004) {
-        state.frame = requestAnimationFrame(step);
-        return;
-      }
+    // Backwards: the far corner lands first, the pinched corner last, then it lies down.
+    play(state, 0, tune.closeMs, (_, done) => {
+      if (!done) return true;
       canvas.toggleAttribute("data-active", false);
       renderer.dispose();
       state.renderer = null;
       getLenis()?.start();
       tissue.setPhase("idle");
-    };
-    state.frame = requestAnimationFrame(step);
+      return false;
+    });
   }, [pathname]);
 
   return <canvas ref={canvasRef} className={styles.layer} aria-hidden="true" />;

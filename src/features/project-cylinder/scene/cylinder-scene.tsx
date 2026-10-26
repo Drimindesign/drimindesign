@@ -21,10 +21,16 @@ export interface CylinderSceneProps {
 
 const DPR: Record<DeviceTier, [number, number]> = { high: [1, 2], medium: [1, 1.5], low: [1, 1] };
 
-/* Renders on demand: a frame is drawn only when scroll notifies or something is still moving. */
+/*
+ * Renders on demand: a frame is drawn only when scroll notifies or something is still moving.
+ * One frame on (re)mount too, so a change that landed before subscribing is never missed.
+ */
 function StoreInvalidator({ store }: { store: CylinderStore }): null {
   const invalidate = useThree((state) => state.invalidate);
-  useEffect(() => store.subscribe(() => invalidate()), [store, invalidate]);
+  useEffect(() => {
+    invalidate();
+    return store.subscribe(() => invalidate());
+  }, [store, invalidate]);
   return null;
 }
 

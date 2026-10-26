@@ -1,0 +1,89 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .page {
+    min-height: 100svh;
+    padding: calc(var(--header-offset) + var(--control-height) + clamp(3rem, 10svh, 7rem)) var(--gutter)
+      clamp(4rem, 12svh, 8rem);
+    background: var(--color-orange-500);
+    color: var(--color-ink-950);
+  }
+
+  .inner {
+    max-width: var(--container-max);
+    margin-inline: auto;
+  }
+
+  .title {
+    max-width: 16ch;
+    font-size: clamp(2.75rem, 7vw, 7rem);
+    line-height: 0.95;
+  }
+
+  /* Mobile: the form, then the direct lines. Wide: the lines take a narrow right column. */
+  .layout {
+    display: grid;
+    gap: clamp(3rem, 8svh, 5rem);
+  }
+
+  @media (min-width: 64rem) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+      align-items: start;
+    }
+
+    .aside {
+      position: sticky;
+      top: calc(var(--header-offset) + var(--control-height) + 2rem);
+      margin-top: clamp(2.5rem, 7svh, 4.5rem);
+    }
+  }
+
+  .channels {
+    display: grid;
+    border-top: 1px solid rgb(10 10 10 / 0.25);
+  }
+
+  .channel {
+    display: grid;
+    gap: 0.35rem;
+    min-height: 44px;
+    padding-block: 1.25rem;
+    border-bottom: 1px solid rgb(10 10 10 / 0.25);
+  }
+
+  .label {
+    font-size: var(--text-label);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgb(10 10 10 / 0.7);
+  }
+
+  .value {
+    font-size: var(--text-body-lg);
+    font-weight: 600;
+  }
+
+  .value span {
+    display: inline-block;
+    transition: transform var(--duration-base) var(--ease-out-expo);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .channel:hover .value span {
+      transform: translateX(0.25em);
+    }
+  }
+
+  .facts {
+    display: grid;
+    gap: 1.25rem;
+    margin-top: 2rem;
+    font-size: var(--text-body);
+    font-weight: 500;
+  }
+
+  .facts dd {
+    margin-top: 0.25rem;
+  }
+}

@@ -15,8 +15,20 @@ export interface TissueOrigin {
   /** Screen positions (CSS px, x/y pairs) along the panel's top and bottom edges, left to right. */
   top: Float32Array;
   bottom: Float32Array;
-  /** Where the panel was pinched, in its UV space (0…1, v up). */
-  pinch: [number, number];
+  /** The page the pull started on: returning to it plays the pull backwards. */
+  from: string;
+}
+
+/** Edge points of a flat on-screen rectangle (a card), for origins that aren't curved. */
+export function rectOutline(rect: DOMRect): { top: Float32Array; bottom: Float32Array } {
+  const top = new Float32Array(EDGE_SAMPLES * 2);
+  const bottom = new Float32Array(EDGE_SAMPLES * 2);
+  for (let k = 0; k < EDGE_SAMPLES; k++) {
+    const x = rect.left + (k / (EDGE_SAMPLES - 1)) * rect.width;
+    top.set([x, rect.top], k * 2);
+    bottom.set([x, rect.bottom], k * 2);
+  }
+  return { top, bottom };
 }
 
 export type TissuePhase = "idle" | "opening" | "open" | "closing";
@@ -51,7 +63,7 @@ export function openProject(origin: TissueOrigin): void {
   notify();
 }
 
-/** The slug the visitor arrived at through the ring (so Close can play the pull backwards). */
+/** The slug the visitor arrived at through a pull (so Close can play it backwards). */
 export function originSlug(): string | null {
   return state.phase === "open" ? (state.origin?.slug ?? null) : null;
 }

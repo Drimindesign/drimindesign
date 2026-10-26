@@ -49,6 +49,22 @@ export function creativeWorkSchema(work: { name: string; description: string; ur
   };
 }
 
+export function contactPageSchema(page: { path: string; description: string; email: string }): JsonLdObject {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    url: new URL(page.path, site.url).toString(),
+    description: page.description,
+    mainEntity: {
+      "@type": "Organization",
+      name: site.name,
+      url: site.url,
+      email: page.email,
+      contactPoint: { "@type": "ContactPoint", contactType: "customer service", email: page.email },
+    },
+  };
+}
+
 export function breadcrumbSchema(items: readonly { name: string; path: string }[]): JsonLdObject {
   return {
     "@context": "https://schema.org",

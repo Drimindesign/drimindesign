@@ -11,7 +11,7 @@ import {
   WebGLRenderer,
   type Texture,
 } from "three";
-import { fragmentShader, PEEL_LAG, vertexShader } from "./shaders";
+import { fragmentShader, LIFT_END, LIFT_REACH, LIFT_RISE, PEEL_LAG, PINCH, shadowFragmentShader, vertexShader } from "./shaders";
 import { EDGE_SAMPLES, type TissueOrigin } from "./store";
 
 /** Crease depth of the sheet mid-pull (height units of the shader). */
@@ -19,13 +19,15 @@ const WRINKLE = 0.22;
 
 /*
  * Draws the tissue sheet on the transition canvas (loaded lazily with the first pull; three
- * is already cached by the ring). One mesh, one draw call; nothing renders unless asked.
+ * is already cached by the ring). Two draws of one sheet: its shadow, then the sheet itself.
+ * Nothing renders unless asked.
  */
 export class TissueRenderer {
   private readonly renderer: WebGLRenderer;
   private readonly scene = new Scene();
   private readonly camera = new OrthographicCamera();
   private readonly material: ShaderMaterial;
+  private readonly shadow: ShaderMaterial;
   private readonly geometry: PlaneGeometry;
   private texture: Texture | null = null;
   private imageAspect = 7 / 5;
@@ -45,18 +47,35 @@ export class TissueRenderer {
         uTo: { value: new Vector4() },
         uViewport: { value: new Vector2() },
         uProgress: { value: 0 },
-        uPinch: { value: new Vector2(0.5, 0.5) },
+        uPinch: { value: new Vector2(PINCH[0], PINCH[1]) },
         uTime: { value: 0 },
         uWrinkle: { value: WRINKLE },
         uCover: { value: new Vector4(1, 1, 0, 0) },
+        uLiftEnd: { value: LIFT_END },
+        uReach: { value: LIFT_REACH },
+        uRise: { value: LIFT_RISE },
         uLag: { value: PEEL_LAG },
+        uShadow: { value: 0 },
         uTexture: { value: null },
         uOpacity: { value: 1 },
       },
     });
-    const mesh = new Mesh(this.geometry, this.material);
-    mesh.frustumCulled = false;
-    this.scene.add(mesh);
+    // The shadow shares every uniform object with the sheet, so one update moves both.
+    this.shadow = new ShaderMaterial({
+      vertexShader,
+      fragmentShader: shadowFragmentShader,
+      transparent: true,
+      depthTest: false,
+      uniforms: { ...this.material.uniforms, uShadow: { value: 1 } },
+    });
+    const shadow = new Mesh(this.geometry, this.shadow);
+    const sheet = new Mesh(this.geometry, this.material);
+    shadow.renderOrder = 0;
+    sheet.renderOrder = 1;
+    for (const mesh of [shadow, sheet]) {
+      mesh.frustumCulled = false;
+      this.scene.add(mesh);
+    }
   }
 
   async load(url: string): Promise<void> {
@@ -77,7 +96,6 @@ export class TissueRenderer {
       top[i].set(origin.top[i * 2], origin.top[i * 2 + 1]);
       bottom[i].set(origin.bottom[i * 2], origin.bottom[i * 2 + 1]);
     }
-    (this.material.uniforms.uPinch.value as Vector2).set(origin.pinch[0], origin.pinch[1]);
   }
 
   /** Sizes the canvas to the viewport; the destination is the full screen, image cover-fitted. */
@@ -110,6 +128,7 @@ export class TissueRenderer {
     this.texture?.dispose();
     this.geometry.dispose();
     this.material.dispose();
+    this.shadow.dispose();
     this.renderer.dispose();
   }
 }

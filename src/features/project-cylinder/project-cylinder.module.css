@@ -95,6 +95,11 @@
     text-underline-offset: 0.35em;
   }
 
+  /* Its own box, so the arrow can lift off the line and fly (arrow-flight.ts). */
+  .arrow {
+    display: inline-block;
+  }
+
   /* Snap markers read by Lenis Snap (cylinder-stage.tsx); invisible, zero-size. */
   .snap {
     position: absolute;

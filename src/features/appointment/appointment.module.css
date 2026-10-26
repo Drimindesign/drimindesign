@@ -1,0 +1,244 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .page {
+    min-height: 100svh;
+    padding: calc(var(--header-offset) + var(--control-height) + clamp(3rem, 10svh, 7rem)) var(--gutter)
+      clamp(4rem, 12svh, 8rem);
+    background: #fff;
+    color: var(--color-ink-950);
+  }
+
+  .inner {
+    max-width: 72rem;
+    margin-inline: auto;
+  }
+
+  .title {
+    max-width: 14ch;
+    font-size: clamp(2.75rem, 7vw, 7rem);
+    line-height: 0.95;
+  }
+
+  /* Holds the calendar's height while the open times stream in. */
+  .loading {
+    min-height: 22rem;
+    margin-top: clamp(2.5rem, 7svh, 4.5rem);
+    color: var(--color-ink-500);
+  }
+
+  .form {
+    display: grid;
+    gap: clamp(2.5rem, 6svh, 3.5rem);
+    margin-top: clamp(2.5rem, 7svh, 4.5rem);
+  }
+
+  .legend {
+    margin-bottom: 1rem;
+    font-size: var(--text-label);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-600);
+  }
+
+  .calendar {
+    display: grid;
+    gap: 2rem;
+  }
+
+  /* Days scroll sideways on phones; they wrap on wider screens. */
+  .days {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+    scrollbar-width: none;
+  }
+
+  @media (min-width: 48rem) {
+    .days {
+      flex-wrap: wrap;
+      overflow: visible;
+    }
+  }
+
+  .dayChip,
+  .timeChip {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--color-ink-200);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-body);
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--duration-base) var(--ease-out-expo),
+      color var(--duration-base) var(--ease-out-expo),
+      border-color var(--duration-base) var(--ease-out-expo);
+  }
+
+  .dayChip:has(input:checked),
+  .timeChip:has(input:checked) {
+    border-color: var(--color-ink-950);
+    background: var(--color-ink-950);
+    color: #fff;
+  }
+
+  .dayChip:has(input:focus-visible),
+  .timeChip:has(input:focus-visible) {
+    outline: 2px solid var(--color-orange-600);
+    outline-offset: 2px;
+  }
+
+  .timeChip:has(input:disabled) {
+    color: var(--color-ink-300);
+    text-decoration: line-through;
+    cursor: not-allowed;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .dayChip:hover:not(:has(input:checked)),
+    .timeChip:hover:not(:has(input:checked, input:disabled)) {
+      border-color: var(--color-ink-950);
+    }
+  }
+
+  .times {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+    gap: 0.5rem;
+  }
+
+  /*
+   * Only the picked day's times show, chosen by CSS alone (works before hydration and
+   * without JavaScript): the nth day radio checked shows the nth group. The calendar opens
+   * at most ten working days (content/appointment.ts).
+   */
+  .group {
+    display: none;
+  }
+
+  .calendar:has(.days > :nth-child(1) input:checked) .groups > :nth-child(1),
+  .calendar:has(.days > :nth-child(2) input:checked) .groups > :nth-child(2),
+  .calendar:has(.days > :nth-child(3) input:checked) .groups > :nth-child(3),
+  .calendar:has(.days > :nth-child(4) input:checked) .groups > :nth-child(4),
+  .calendar:has(.days > :nth-child(5) input:checked) .groups > :nth-child(5),
+  .calendar:has(.days > :nth-child(6) input:checked) .groups > :nth-child(6),
+  .calendar:has(.days > :nth-child(7) input:checked) .groups > :nth-child(7),
+  .calendar:has(.days > :nth-child(8) input:checked) .groups > :nth-child(8),
+  .calendar:has(.days > :nth-child(9) input:checked) .groups > :nth-child(9),
+  .calendar:has(.days > :nth-child(10) input:checked) .groups > :nth-child(10) {
+    display: block;
+  }
+
+  .details {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  @media (min-width: 48rem) {
+    .details {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .details > legend {
+      grid-column: 1 / -1;
+    }
+
+    .wide {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .field {
+    display: grid;
+    gap: 0.45rem;
+    font-size: var(--text-body-sm);
+    font-weight: 600;
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    min-height: 48px;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--color-ink-200);
+    border-radius: var(--radius-md);
+    background: #fff;
+    color: var(--color-ink-950);
+    font: inherit;
+    font-size: var(--text-body);
+    font-weight: 500;
+  }
+
+  .field textarea {
+    resize: vertical;
+  }
+
+  .field [aria-invalid="true"] {
+    border-color: var(--color-orange-700);
+  }
+
+  .errors {
+    font-size: var(--text-body);
+    font-weight: 600;
+    color: var(--color-orange-700);
+  }
+
+  .errors li::before {
+    content: "— ";
+  }
+
+  /* Booked: the note settles in and a tick draws itself. */
+  .success {
+    margin-top: clamp(2.5rem, 7svh, 4.5rem);
+    animation: settle var(--duration-slower) var(--ease-out-expo) both;
+  }
+
+  .check {
+    fill: none;
+    stroke: var(--color-orange-600);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .check circle {
+    stroke-dasharray: 139;
+    stroke-dashoffset: 139;
+    animation: draw 700ms var(--ease-out-expo) 120ms forwards;
+  }
+
+  .check path {
+    stroke-dasharray: 36;
+    stroke-dashoffset: 36;
+    animation: draw 420ms var(--ease-out-expo) 620ms forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .success,
+    .check circle,
+    .check path {
+      animation: none;
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes settle {
+    from {
+      opacity: 0.01;
+      transform: translateY(1rem);
+    }
+  }
+
+  @keyframes draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PagePlaceholder } from "@/components/layout/page-placeholder";
+import { AppointmentPage } from "@/features/appointment";
 
 export const metadata: Metadata = {
   title: "Appointment",
@@ -8,6 +8,6 @@ export const metadata: Metadata = {
   alternates: { canonical: "/appointment" },
 };
 
-export default function AppointmentPage(): React.ReactElement {
-  return <PagePlaceholder title="Appointment" />;
+export default function Appointment(): React.ReactElement {
+  return <AppointmentPage />;
 }

@@ -13,8 +13,8 @@ interface ProjectCloseProps {
 const serverSnapshot = (): null => null;
 
 /*
- * Arrived through the ring: "Close" goes back, and the tissue pull plays in reverse into the
- * panel. Arrived any other way (a link, a search result): "All work" opens the Projects page.
+ * Arrived through a pull (the ring or the Projects grid): "Close" goes back, and the tissue
+ * pull plays in reverse into the panel or card. Arrived any other way (a link, a search result): "All work" opens the Projects page.
  */
 export function ProjectClose({ slug, className }: ProjectCloseProps): React.ReactElement {
   const router = useRouter();

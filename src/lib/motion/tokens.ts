@@ -142,7 +142,7 @@ export const cylinder = {
  * into the generated tree data by scripts/generate-tree.ts.
  */
 export const storyTree = {
-  growVh: 3.6,
+  growVh: 4.5,
   tailVh: 0.6,
   /** Follow-through on scroll: growth eases after the scroll position, never jumps. */
   growthLambda: 5,
@@ -190,15 +190,35 @@ export const lanyard = {
 } as const;
 
 /*
- * Tissue pull (project open/close, features/tissue-transition). Progress follows a critically
- * damped spring of angular frequency `omega` (1/s): ~1.2 s to settle, no overshoot.
+ * Tissue pull (project open/close, features/tissue-transition). Played in time: the first
+ * third lifts the pinched corner, the rest draws the sheet out to full screen (the shader
+ * eases each stage; see LIFT_END in its shaders.ts).
  */
 export const tissue = {
-  omega: 5.5,
+  openMs: 1500,
+  closeMs: 1300,
   /** Navigate once the sheet has nearly covered the screen (the new page renders beneath). */
   navigateAt: 0.9,
   /** The sheet fades into the real hero over this long once both are in place. */
   fadeMs: 260,
   /** Sheet subdivisions per side, by device tier. */
   segments: { high: 96, medium: 64, low: 32 },
+} as const;
+
+/*
+ * View project (ring section): the link's arrow lifts off, floats over to the front panel
+ * along an arc and taps it where the tissue pull pinches (project-cylinder/arrow-flight.ts).
+ */
+export const viewArrow = {
+  /** Lift-off: the arrow rises off the line and grows a touch, as if nearer the eye. */
+  liftMs: 220,
+  liftPx: 16,
+  liftScale: 1.35,
+  /** The glide to the panel; the arc rises this share of the distance above the straight line. */
+  flightMs: 720,
+  arc: 0.32,
+  /** The tap: pressed in, then released as the panel starts to peel. */
+  tapMs: 300,
+  /** The link's own arrow fades back in this long after the tap (the pull covers it first). */
+  restoreMs: 1600,
 } as const;

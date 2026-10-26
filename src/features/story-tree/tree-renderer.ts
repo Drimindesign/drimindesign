@@ -59,6 +59,17 @@ function mix(a: number[], b: number[], t: number): string {
 
 const barkColors = Array.from({ length: BARK_STEPS }, (_, i) => mix(BARK_THIN, BARK_THICK, i / (BARK_STEPS - 1)));
 
+/* A pointed leaf `s` long at (x, y), turned by (cos, sin): two arcs meeting at the tips. */
+function leafShape(path: CanvasPath, x: number, y: number, s: number, cos: number, sin: number): void {
+  const ax = cos * s * 0.5;
+  const ay = sin * s * 0.5;
+  const bx = -sin * s * 0.36;
+  const by = cos * s * 0.36;
+  path.moveTo(x - ax, y - ay);
+  path.quadraticCurveTo(x - bx, y - by, x + ax, y + ay);
+  path.quadraticCurveTo(x + bx, y + by, x - ax, y - ay);
+}
+
 function easeOutBack(t: number): number {
   const c = 1.4;
   return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2;
@@ -199,28 +210,35 @@ export class TreeRenderer {
     const ctx = this.context;
     const leaves = this.model.leaves;
     const b = this.model.branches;
+    // Open leaves go into one path per colour (a handful of fills for the whole crown); only
+    // the ones still unfolding, which fade in, are filled one by one.
+    const open = LEAF_COLORS.map(() => new Path2D());
     for (let i = 0; i < leaves.count; i++) {
-      const open = stageOf(growth, leaves.bornAt[i], 0.05);
-      if (open <= 0) continue;
+      const unfold = stageOf(growth, leaves.bornAt[i], 0.05);
+      if (unfold <= 0) continue;
       const node = leaves.node[i];
-      const s = easeOutBack(open) * leaves.size[i];
+      const s = easeOutBack(unfold) * leaves.size[i];
       // Leaves flutter in the same breeze as the branches.
       const angle = leaves.angle[i] + 0.12 * Math.sin(time * 1.6 + i * 1.7);
       const x = b.x[node] + this.sway[node] + Math.cos(leaves.angle[i]) * s * 0.55;
       const y = b.y[node] + Math.sin(leaves.angle[i]) * s * 0.55;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(angle);
+      const fade = Math.min(1, unfold * 1.6);
+      if (fade >= 1) {
+        leafShape(open[leaves.color[i]], x, y, s, Math.cos(angle), Math.sin(angle));
+        continue;
+      }
+      ctx.globalAlpha = 0.94 * fade;
       ctx.fillStyle = LEAF_COLORS[leaves.color[i]];
-      ctx.globalAlpha = 0.94 * Math.min(1, open * 1.6);
-      // A pointed leaf: two arcs meeting at the tip, with a hint of a stalk.
       ctx.beginPath();
-      ctx.moveTo(-s * 0.5, 0);
-      ctx.quadraticCurveTo(0, -s * 0.36, s * 0.5, 0);
-      ctx.quadraticCurveTo(0, s * 0.36, -s * 0.5, 0);
+      leafShape(ctx, x, y, s, Math.cos(angle), Math.sin(angle));
       ctx.fill();
-      ctx.restore();
     }
+    ctx.globalAlpha = 0.94;
+    open.forEach((path, color) => {
+      ctx.fillStyle = LEAF_COLORS[color];
+      ctx.fill(path);
+    });
+    ctx.globalAlpha = 1;
   }
 
   private drawShimmer(tips: number[], growth: number, dt: number): void {

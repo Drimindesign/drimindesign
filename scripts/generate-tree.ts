@@ -256,30 +256,91 @@ branches.forEach((node, index) => {
 });
 
 /*
- * A rising growth front: within a tier, a node appears as the front passes its height
- * (and a little later the further it is from the centre, so limbs reach outward), never
- * before its parent. The pause between tiers is where the milestone lands.
+ * One branch at a time. A limb is a branch leaving the leader, with everything that grows
+ * from it (nodes are stored after their parents, so one pass finds each node's limb). In
+ * each tier the leader climbs, and the limbs' parts in that tier grow in turn, lowest
+ * first: each from where it enters the tier out to its farthest twig, the next starting
+ * only once this one is mostly grown, so the eye follows one branch, then the next.
+ * Schedules are in raw time (tree units of growth), then fitted to the tier's window.
+ * Never before its parent. The pause between tiers is where the milestone lands.
  */
-const births = branches.map(() => 0);
+/** Raw time for the leader to climb a whole tier's height before the first branch starts. */
+const CLIMB = 420;
+/** Raw time every branch takes on top of its length, so even a stub reads as its own beat. */
+const LIMB_BEAT = 30;
+/** The next branch starts once this share of the current one has grown. */
+const HANDOVER = 0.72;
+
+const limbOf = branches.map(() => -1);
 branches.forEach((node, index) => {
-  const k = tierOf[index];
-  const band = (heightOf(node) - TIER_EDGES[k]) / (TIER_EDGES[k + 1] - TIER_EDGES[k]);
-  const outward = Math.min(1, Math.abs(node.x - BASE_X) / CROWN_HALF_WIDTH);
-  const front = tiers[k][0] + Math.min(1, Math.max(0, band) * 0.65 + outward * 0.35) * GROW;
-  const afterParent = node.parent >= 0 ? births[node.parent] + 0.0015 : 0;
-  births[index] = Math.min(tiers[k][1], Math.max(front, afterParent));
+  if (!isLeader[index]) limbOf[index] = isLeader[node.parent] ? index : limbOf[node.parent];
+});
+
+const births = branches.map(() => 0);
+for (let k = 0; k < TIER_COUNT; k++) {
+  // Each limb's part in this tier: where it enters (path distance, height) and how far it reaches.
+  const parts = new Map<number, { from: number; to: number; height: number }>();
+  branches.forEach((node, index) => {
+    const limb = limbOf[index];
+    if (tierOf[index] !== k || limb < 0) return;
+    const from = branches[node.parent].dist;
+    const part = parts.get(limb) ?? { from, to: node.dist, height: heightOf(branches[node.parent]) };
+    if (from < part.from) Object.assign(part, { from, height: heightOf(branches[node.parent]) });
+    part.to = Math.max(part.to, node.dist);
+    parts.set(limb, part);
+  });
+  const order = [...parts.entries()].sort(([, a], [, b]) => a.height - b.height);
+  const lengthOf = (part: { from: number; to: number }): number => LIMB_BEAT + part.to - part.from;
+  // Leader keyframes: [height, raw time], from the tier's floor through each branch's start.
+  const floor = TIER_EDGES[k];
+  const keys: [number, number][] = [[floor, 0]];
+  const startOf = new Map<number, number>();
+  let clock = order.length > 0 ? CLIMB * Math.max(0, order[0][1].height - floor) : 0;
+  let end = clock;
+  for (const [limb, part] of order) {
+    startOf.set(limb, clock);
+    keys.push([Math.max(keys[keys.length - 1][0], part.height), clock]);
+    end = Math.max(end, clock + lengthOf(part));
+    clock += lengthOf(part) * HANDOVER;
+  }
+  if (order.length === 0) end = CLIMB * (TIER_EDGES[k + 1] - floor);
+  keys.push([Math.min(1, TIER_EDGES[k + 1]), end]);
+  const fit = (raw: number): number => tiers[k][0] + (raw / end) * GROW;
+
+  branches.forEach((node, index) => {
+    if (tierOf[index] !== k) return;
+    const limb = limbOf[index];
+    if (limb < 0) {
+      const h = heightOf(node);
+      let i = 1;
+      while (i < keys.length - 1 && keys[i][0] < h) i++;
+      const [h0, t0] = keys[i - 1];
+      const [h1, t1] = keys[i];
+      births[index] = fit(t0 + (t1 - t0) * Math.min(1, Math.max(0, (h - h0) / Math.max(1e-6, h1 - h0))));
+      return;
+    }
+    const part = parts.get(limb);
+    if (!part) return;
+    births[index] = fit((startOf.get(limb) ?? 0) + ((node.dist - part.from) / (part.to - part.from)) * lengthOf(part));
+  });
+}
+branches.forEach((node, index) => {
+  if (node.parent >= 0) births[index] = Math.max(births[index], births[node.parent] + 0.0005);
 });
 
 // Roots spread while the seed opens, before the trunk.
 const rootMaxDist = Math.max(...roots.map((node) => node.dist));
 const rootBirths = roots.map((node) => 0.02 + (node.dist / rootMaxDist) * 0.06);
 
-/* Leaves on thin twigs, opening shortly after their twig, before the next tier starts. */
+/*
+ * Leaves along the thinner wood and in clusters at the tips: a full crown. Each opens right
+ * behind its growing twig (so a branch leafs out as it grows), before the next tier starts.
+ */
 const leaves: number[] = [];
 branches.forEach((node, index) => {
   // Thin = only a few twigs' worth of wood beyond this point (tips have radius 1).
-  if (node.radius >= 2.6 || isLeader[index]) return;
-  const count = node.children.length === 0 ? 4 : rand() < 0.3 ? 1 : 0;
+  if (node.radius >= 3.4 || isLeader[index]) return;
+  const count = node.children.length === 0 ? 6 : rand() < 0.6 ? 1 + Math.floor(rand() * 2) : 0;
   const k = tierOf[index];
   const latest = k === TIER_COUNT - 1 ? 0.97 : tiers[k][1] + PAUSE * 0.6;
   for (let i = 0; i < count; i++) {
@@ -289,7 +350,7 @@ branches.forEach((node, index) => {
       round(between(-Math.PI, Math.PI), 2),
       round(between(8, 14)),
       orange ? 4 + Math.floor(rand() * 2) : Math.floor(rand() * 4),
-      round(Math.min(latest, births[index] + 0.015 + rand() * 0.03), 4),
+      round(Math.min(latest, births[index] + 0.006 + rand() * 0.022), 4),
     );
   }
 });

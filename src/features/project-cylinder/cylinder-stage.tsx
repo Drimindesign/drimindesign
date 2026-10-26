@@ -12,6 +12,7 @@ import { easeOutQuart, onLenis } from "@/lib/motion/smooth-scroll";
 import { scroll } from "@/lib/motion/tokens";
 import { warmUp } from "@/lib/motion/warm-up";
 import { retryImport } from "@/lib/utils/retry-import";
+import { flyArrow } from "./arrow-flight";
 import { computeProgress, exitProgress, frontIndex } from "./choreography";
 import styles from "./project-cylinder.module.css";
 import { createCylinderStore, type CylinderStore } from "./store";
@@ -41,6 +42,24 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
   const indexRef = useRef(0);
   const project = projects[index];
   const router = useRouter();
+  const arrowRef = useRef<HTMLSpanElement>(null);
+  const flying = useRef(false);
+
+  // View project: the arrow flies to the front panel and taps it, which opens it like a click.
+  // Without the ring (fallback, reduced motion, a modified click) the link simply navigates.
+  const viewProject = (event: React.MouseEvent<HTMLAnchorElement>): void => {
+    const front = store.panels?.front();
+    const arrow = arrowRef.current;
+    const plain = event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+    if (!front || !arrow || plain || store.reducedMotion) return;
+    if (projects[front.index % projects.length].slug !== project.slug) return;
+    event.preventDefault();
+    if (flying.current) return;
+    flying.current = true;
+    void flyArrow(arrow, front.corner)
+      .then(() => store.panels?.open(front.index))
+      .finally(() => (flying.current = false));
+  };
 
   // Project pages are prefetched (static shells) once the intro is over, so a click on a
   // panel can navigate the moment the tissue pull covers the screen.
@@ -113,7 +132,9 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
       });
     });
 
-    update();
+    // First read on the next frame: back from a project page this runs before the browser has
+    // restored the scroll position, and reading it now would send the camera back up.
+    schedule();
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule, { passive: true });
     return () => {
@@ -159,8 +180,16 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
               {project.category}
             </p>
             {/* Pointer shortcut; keyboard and screen readers use the section's real links. */}
-            <Link href={`/projects/${project.slug}`} tabIndex={-1} className={`${styles.view} mt-6 text-body-sm font-semibold text-fg`}>
-              View project <span aria-hidden="true">→</span>
+            <Link
+              href={`/projects/${project.slug}`}
+              tabIndex={-1}
+              onClick={viewProject}
+              className={`${styles.view} mt-6 text-body-sm font-semibold text-fg`}
+            >
+              View project{" "}
+              <span ref={arrowRef} aria-hidden="true" className={styles.arrow}>
+                →
+              </span>
             </Link>
           </div>
         </div>

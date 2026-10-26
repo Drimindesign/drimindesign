@@ -2,7 +2,19 @@
 
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
-import { BackSide, Color, FrontSide, type Group, MeshBasicMaterial, SRGBColorSpace, TextureLoader, Vector3 } from "three";
+import {
+  BackSide,
+  type Camera,
+  Color,
+  FrontSide,
+  type Group,
+  type Mesh,
+  MeshBasicMaterial,
+  type Object3D,
+  SRGBColorSpace,
+  TextureLoader,
+  Vector3,
+} from "three";
 import { projectImageUrl, type Project, type ProjectImageWidth } from "@/content/projects";
 import { EDGE_SAMPLES, openProject } from "@/features/tissue-transition";
 import type { DeviceTier } from "@/lib/device/use-device-tier";
@@ -31,23 +43,30 @@ const PLACEHOLDER = new Color("#d42600");
 const CLICKABLE_FROM = 0.98;
 /** A press that travels further than this (px) was a drag, not a click. */
 const CLICK_SLOP = 6;
+/** Where the View project arrow taps: just inside the top-right corner (share of half-width / half-height). */
+const TAP_POINT = [0.8, 0.78] as const;
+
+/* Screen position (CSS px) of a point on a panel: `u` across it (−1…1, left to right), `v` up it (−1…1). */
+function panelPoint(panel: Object3D, camera: Camera, rect: DOMRect, radius: number, u: number, v: number): [number, number] {
+  const angle = u * 0.5 * (PANEL_WIDTH / radius);
+  const point = new Vector3(radius * Math.sin(angle), (v * PANEL_HEIGHT) / 2, radius * Math.cos(angle));
+  panel.localToWorld(point).project(camera);
+  return [rect.left + ((point.x + 1) / 2) * rect.width, rect.top + ((1 - point.y) / 2) * rect.height];
+}
 
 /*
  * Where a panel's top and bottom edges are on screen: EDGE_SAMPLES points along each,
  * following the curve of the band, for the tissue pull to start from.
  */
-function panelOutline(event: ThreeEvent<MouseEvent>, radius: number): { top: Float32Array; bottom: Float32Array } {
-  const rect = (event.nativeEvent.target as HTMLElement).getBoundingClientRect();
-  const point = new Vector3();
+function panelOutline(panel: Object3D, camera: Camera, rect: DOMRect, radius: number): { top: Float32Array; bottom: Float32Array } {
   const top = new Float32Array(EDGE_SAMPLES * 2);
   const bottom = new Float32Array(EDGE_SAMPLES * 2);
   for (let k = 0; k < EDGE_SAMPLES; k++) {
-    const angle = (k / (EDGE_SAMPLES - 1) - 0.5) * (PANEL_WIDTH / radius);
-    for (const [edge, y] of [[top, PANEL_HEIGHT / 2], [bottom, -PANEL_HEIGHT / 2]] as const) {
-      point.set(radius * Math.sin(angle), y, radius * Math.cos(angle));
-      event.object.localToWorld(point).project(event.camera);
-      edge[k * 2] = rect.left + ((point.x + 1) / 2) * rect.width;
-      edge[k * 2 + 1] = rect.top + ((1 - point.y) / 2) * rect.height;
+    const u = (k / (EDGE_SAMPLES - 1)) * 2 - 1;
+    for (const [edge, v] of [[top, 1], [bottom, -1]] as const) {
+      const [x, y] = panelPoint(panel, camera, rect, radius, u, v);
+      edge[k * 2] = x;
+      edge[k * 2 + 1] = y;
     }
   }
   return { top, bottom };
@@ -63,7 +82,9 @@ function panelOutline(event: ThreeEvent<MouseEvent>, radius: number): { top: Flo
 export function Ring({ projects, dimensions, tier, store }: RingProps): React.ReactElement {
   const groupRef = useRef<Group>(null);
   const turn = useRef<SpringState | null>(null);
+  const panelRefs = useRef<(Mesh | null)[]>([]);
   const invalidate = useThree((state) => state.invalidate);
+  const get = useThree((state) => state.get);
   const anisotropy = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
   const { radius, step, panels } = dimensions;
 
@@ -123,13 +144,51 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
     [geometry, spillGeometry, materials],
   );
 
-  // Click a panel: it peels off the ring into its project page (features/tissue-transition).
+  // A panel peels off the ring into its project page (features/tissue-transition), on a
+  // click or when the View project arrow taps it (through the store's panel API).
+  useEffect(() => {
+    const view = (): { camera: Camera; rect: DOMRect } => {
+      const { camera, gl } = get();
+      return { camera, rect: gl.domElement.getBoundingClientRect() };
+    };
+    const openPanel = (index: number): void => {
+      const panel = panelRefs.current[index];
+      if (!panel) return;
+      const { camera, rect } = view();
+      const project = projects[index % projects.length];
+      openProject({
+        slug: project.slug,
+        image: projectImageUrl(project, IMAGE_WIDTH[tier]),
+        from: "/",
+        ...panelOutline(panel, camera, rect, radius),
+      });
+    };
+    store.setPanels({
+      open: openPanel,
+      front() {
+        const { camera, rect } = view();
+        const centre = new Vector3();
+        let best = -1;
+        let bestDistance = Infinity;
+        panelRefs.current.forEach((panel, index) => {
+          if (!panel) return;
+          const distance = panel.localToWorld(centre.set(0, 0, radius)).distanceTo(camera.position);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = index;
+          }
+        });
+        const panel = panelRefs.current[best];
+        return panel ? { index: best, corner: panelPoint(panel, camera, rect, radius, TAP_POINT[0], TAP_POINT[1]) } : null;
+      },
+    });
+    return () => store.setPanels(null);
+  }, [store, get, projects, tier, radius]);
+
   const open = (index: number) => (event: ThreeEvent<MouseEvent>): void => {
     if (store.enter < CLICKABLE_FROM || event.delta > CLICK_SLOP) return;
     event.stopPropagation();
-    const project = projects[index % projects.length];
-    const pinch: [number, number] = event.uv ? [event.uv.x, event.uv.y] : [0.5, 0.5];
-    openProject({ slug: project.slug, image: projectImageUrl(project, IMAGE_WIDTH[tier]), pinch, ...panelOutline(event, radius) });
+    store.panels?.open(index);
   };
   const hover = (over: boolean) => (event: ThreeEvent<PointerEvent>): void => {
     const canvas = event.nativeEvent.target as HTMLElement | null;
@@ -140,7 +199,7 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
     const group = groupRef.current;
     if (!group) return;
     const target = ringTurn(store.enter, store.rotate, projects.length) * step;
-    turn.current ??= { value: target, velocity: 0 };
+    turn.current ??= store.spring("ring", target);
     const spring = turn.current;
     if (store.reducedMotion) {
       spring.value = target;
@@ -158,7 +217,16 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
       {materials.map(({ outer, inner, spill }, index) => (
         // Panel i sits i steps to the right; turning the ring by i·step brings it to the front.
         <group key={index} rotation-y={index * step}>
-          <mesh geometry={geometry} material={outer} onClick={open(index)} onPointerOver={hover(true)} onPointerOut={hover(false)} />
+          <mesh
+            ref={(mesh) => {
+              panelRefs.current[index] = mesh;
+            }}
+            geometry={geometry}
+            material={outer}
+            onClick={open(index)}
+            onPointerOver={hover(true)}
+            onPointerOut={hover(false)}
+          />
           <mesh geometry={geometry} material={inner} />
           <mesh
             geometry={spillGeometry}

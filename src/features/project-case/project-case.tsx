@@ -7,7 +7,7 @@ import { CaseSections } from "./case-sections";
 import { ProjectClose } from "./project-close";
 import styles from "./project-case.module.css";
 
-/** Shared-element name: the Projects grid card morphs into this hero (React <ViewTransition>). */
+/** Shared-element name: the Next project card morphs into this hero (React <ViewTransition>). */
 export function heroTransitionName(slug: string): string {
   return `project-${slug}`;
 }

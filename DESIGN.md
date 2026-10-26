@@ -394,7 +394,7 @@ Form dropdowns share `components/ui/select.tsx`: boxed fields and conversational
 
 ### 8.12 Responsive case studies and booking
 
-Project case studies keep app-screen swiping inside a bounded strip; their story grid uses shrinkable tracks so it cannot expand the page. Mobile case images use the generated 800 px source through responsive `<picture>` selection; larger screens retain full-size sources. Appointment fieldsets and grid tracks also shrink within the viewport, with dates scrolling inside their own strip.
+Speakora and ShreeRam Milks use their generated portrait project photography on phones, stacked at the start of the story instead of the desktop app-screen row. The same portrait pair appears only once on each screen size. Other case studies retain their own responsive layouts. Story grids use shrinkable tracks so they cannot expand the page. Mobile case images use generated 800 px sources through responsive `<picture>` selection; larger screens retain full-size sources. Appointment fieldsets and grid tracks also shrink within the viewport, with dates scrolling inside their own strip.
 
 ---
 

@@ -11,6 +11,10 @@ function Caption({ text }: { text?: string }): React.ReactElement | null {
 
 /* The story: images and short chapters in the order the content lists them. */
 export function CaseSections({ sections }: { sections: readonly CaseSection[] }): React.ReactElement {
+  // App case studies use their generated portrait photography on phones, not a cropped desktop screen strip.
+  const mobilePair = sections.some((section) => section.kind === "screens")
+    ? sections.find((section) => section.kind === "pair")
+    : undefined;
   // Chapter numbers (01, 02…) counted over chapters only.
   const numbers = sections.map((_, index) => sections.slice(0, index + 1).filter((item) => item.kind === "chapter").length);
   return (
@@ -26,7 +30,7 @@ export function CaseSections({ sections }: { sections: readonly CaseSection[] })
             );
           case "pair":
             return (
-              <figure key={index} className={styles.reveal}>
+              <figure key={index} className={`${styles.reveal} ${section === mobilePair ? styles.desktopOnly : ""}`}>
                 <div className={styles.pair}>
                   <CaseImage image={section.images[0]} sizes={HALF} />
                   <CaseImage image={section.images[1]} sizes={HALF} className={styles.pairOffset} />
@@ -36,15 +40,25 @@ export function CaseSections({ sections }: { sections: readonly CaseSection[] })
             );
           case "screens":
             return (
-              <figure key={index} className={styles.reveal}>
-                {/* A swipeable strip on phones; one row on wider screens. */}
-                <div className={styles.screens}>
-                  {section.images.map((image) => (
-                    <CaseImage key={image.src} image={image} sizes="(min-width: 768px) 18vw, 62vw" className={styles.screen} />
-                  ))}
-                </div>
-                <Caption text={section.caption} />
-              </figure>
+              <div key={index}>
+                <figure className={`${styles.reveal} ${mobilePair ? styles.desktopOnly : ""}`}>
+                  <div className={styles.screens}>
+                    {section.images.map((image) => (
+                      <CaseImage key={image.src} image={image} sizes="(min-width: 768px) 18vw, 62vw" className={styles.screen} />
+                    ))}
+                  </div>
+                  <Caption text={section.caption} />
+                </figure>
+                {mobilePair && (
+                  <figure className={`${styles.mobileOnly} ${styles.reveal}`}>
+                    <div className={styles.pair}>
+                      <CaseImage image={mobilePair.images[0]} sizes={WIDE} />
+                      <CaseImage image={mobilePair.images[1]} sizes={WIDE} />
+                    </div>
+                    <Caption text={mobilePair.caption} />
+                  </figure>
+                )}
+              </div>
             );
           case "chapter":
             return (

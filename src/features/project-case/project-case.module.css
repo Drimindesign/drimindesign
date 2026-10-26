@@ -132,6 +132,24 @@
     margin-top: 1rem;
   }
 
+  .desktopOnly {
+    display: none;
+  }
+
+  .mobileOnly {
+    display: block;
+  }
+
+  @media (min-width: 48rem) {
+    .desktopOnly {
+      display: block;
+    }
+
+    .mobileOnly {
+      display: none;
+    }
+  }
+
   /* Two images side by side; the second sits lower, like a spread in a printed book. */
   .pair {
     display: grid;

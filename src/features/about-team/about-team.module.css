@@ -80,15 +80,16 @@
   }
 
   /*
-   * With scripts on, the HTML cards wait unseen until the stage knows whether the 3D cards
-   * will replace them (data-static: they won't), so they never flash before the drop.
+   * With scripts on, the HTML cards wait unseen while the 3D cards are on their way, so they
+   * never flash before the drop. They show when the 3D cards won't come (data-static) or
+   * aren't ready yet when the visitor arrives (data-waiting): the stage is never empty.
    */
-  :global(html[data-js]) .stage:not([data-static]) .cards {
+  :global(html[data-js]) .stage:not([data-static], [data-waiting], [data-ready]) .cards {
     visibility: hidden;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    :global(html[data-js]) .stage:not([data-static]) .cards {
+    :global(html[data-js]) .stage:not([data-static], [data-waiting], [data-ready]) .cards {
       visibility: visible;
     }
   }

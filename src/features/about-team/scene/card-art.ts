@@ -4,13 +4,13 @@ import { initialsOf, type TeamMember } from "@/content/team";
 
 /*
  * Print artwork for the ID cards and the strap, drawn once into canvas textures. Layout is
- * in a 640-wide design space, rendered at RESOLUTION× so the print stays sharp up close;
+ * in a 640-wide design space, rendered at `resolution`× (chosen by the scene so one texel
+ * lands on one screen pixel: sampled at full detail, never blurred by mipmapping);
  * the card texture has the card's CR80 aspect (1 : 1.586).
  */
 
 const W = 640;
 /** Texture pixels per design unit (1024 px wide cards). */
-const RESOLUTION = 1.6;
 const H = Math.round(W * 1.586);
 const ORANGE = "#fa2e00";
 const ORANGE_LIGHT = "#ff6a3d";
@@ -105,7 +105,7 @@ function barcode(ctx: CanvasRenderingContext2D, seed: string, x: number, y: numb
   }
 }
 
-function canvas(width: number, height: number, resolution = RESOLUTION): [HTMLCanvasElement, CanvasRenderingContext2D] {
+function canvas(width: number, height: number, resolution: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const element = document.createElement("canvas");
   element.width = Math.round(width * resolution);
   element.height = Math.round(height * resolution);
@@ -133,20 +133,20 @@ function texture(source: HTMLCanvasElement, anisotropy: number): CanvasTexture {
   return result;
 }
 
-function drawFront(member: TeamMember, index: number, fonts: Fonts, photo: HTMLImageElement | null): HTMLCanvasElement {
-  const [element, ctx] = canvas(W, H);
+function drawFront(member: TeamMember, index: number, fonts: Fonts, photo: HTMLImageElement | null, resolution: number): HTMLCanvasElement {
+  const [element, ctx] = canvas(W, H, resolution);
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, W, H);
   drawSlot(ctx);
 
   // Header: mark, studio name, pass label.
-  drawMark(ctx, 48, 96, 64, ORANGE);
+  drawMark(ctx, 48, 92, 76, ORANGE);
   ctx.fillStyle = INK;
   ctx.textBaseline = "middle";
-  ctx.font = `600 28px ${fonts.body}`;
-  ctx.fillText("DRIMINDESIGN", 128, 122);
+  ctx.font = `600 32px ${fonts.body}`;
+  ctx.fillText("DRIMINDESIGN", 140, 122);
   ctx.fillStyle = MUTED;
-  ctx.font = `600 22px ${fonts.body}`;
+  ctx.font = `600 24px ${fonts.body}`;
   ctx.textAlign = "right";
   ctx.fillText("STUDIO PASS", W - 48, 122);
   ctx.textAlign = "left";
@@ -180,7 +180,7 @@ function drawFront(member: TeamMember, index: number, fonts: Fonts, photo: HTMLI
   ctx.fillStyle = INK;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `600 22px ${fonts.body}`;
+  ctx.font = `600 26px ${fonts.body}`;
   ctx.fillText(String(index + 1).padStart(2, "0"), px + 58, py + ph - 26);
 
   // Name and role.
@@ -190,7 +190,7 @@ function drawFront(member: TeamMember, index: number, fonts: Fonts, photo: HTMLI
   fit(ctx, member.name, (size) => `600 ${size}px ${fonts.body}`, 52, W - 96);
   ctx.fillText(member.name, 48, py + ph + 72);
   ctx.fillStyle = MUTED;
-  ctx.font = `500 36px ${fonts.body}`;
+  ctx.font = `500 38px ${fonts.body}`;
   ctx.fillText(member.role, 48, py + ph + 118);
 
   // Footer: meta, divider, barcode.
@@ -198,7 +198,7 @@ function drawFront(member: TeamMember, index: number, fonts: Fonts, photo: HTMLI
   ctx.fillStyle = "#e5e5e5";
   ctx.fillRect(48, footY, W - 96, 2);
   ctx.fillStyle = MUTED;
-  ctx.font = `600 22px ${fonts.body}`;
+  ctx.font = `600 26px ${fonts.body}`;
   ctx.fillText(`SINCE ${member.since}`, 48, footY + 44);
   ctx.textAlign = "right";
   ctx.fillText(`ID ${String(index + 1).padStart(4, "0")}`, W - 48, footY + 44);
@@ -207,8 +207,8 @@ function drawFront(member: TeamMember, index: number, fonts: Fonts, photo: HTMLI
   return element;
 }
 
-function drawBack(member: TeamMember, fonts: Fonts): HTMLCanvasElement {
-  const [element, ctx] = canvas(W, H);
+function drawBack(member: TeamMember, fonts: Fonts, resolution: number): HTMLCanvasElement {
+  const [element, ctx] = canvas(W, H, resolution);
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, W, H);
   drawSlot(ctx);
@@ -216,25 +216,25 @@ function drawBack(member: TeamMember, fonts: Fonts): HTMLCanvasElement {
   ctx.fillStyle = ORANGE;
   ctx.fillRect(48, 112, 56, 6);
   ctx.fillStyle = MUTED;
-  ctx.font = `500 22px ${fonts.body}`;
+  ctx.font = `600 26px ${fonts.body}`;
   ctx.textBaseline = "alphabetic";
   ctx.fillText("ABOUT", 48, 168);
 
   ctx.fillStyle = INK;
   ctx.font = `600 40px ${fonts.body}`;
   ctx.fillText(member.name, 48, 230);
-  ctx.font = `500 34px ${fonts.body}`;
+  ctx.font = `500 36px ${fonts.body}`;
   const lines = wrap(ctx, member.bio, W - 96);
-  lines.forEach((line, k) => ctx.fillText(line, 48, 310 + k * 50));
+  lines.forEach((line, k) => ctx.fillText(line, 48, 310 + k * 54));
 
   ctx.fillStyle = "#e5e5e5";
   ctx.fillRect(48, H - 210, W - 96, 2);
   drawMark(ctx, 48, H - 168, 72, ORANGE);
   ctx.fillStyle = INK;
-  ctx.font = `600 24px ${fonts.body}`;
+  ctx.font = `600 28px ${fonts.body}`;
   ctx.fillText("drimindesign", 136, H - 128);
   ctx.fillStyle = MUTED;
-  ctx.font = `500 22px ${fonts.body}`;
+  ctx.font = `500 26px ${fonts.body}`;
   ctx.fillText("If found, say hello.", 136, H - 96);
   return element;
 }
@@ -244,8 +244,8 @@ function drawBack(member: TeamMember, fonts: Fonts): HTMLCanvasElement {
  * once per repeat, large (half the strap's width) and letter-spaced so it reads at a glance.
  * U runs across, V along; one repeat is 8 strap widths.
  */
-function drawStrap(fonts: Fonts): HTMLCanvasElement {
-  const [element, ctx] = canvas(64, 512, 2);
+function drawStrap(fonts: Fonts, resolution: number): HTMLCanvasElement {
+  const [element, ctx] = canvas(64, 512, resolution);
   ctx.fillStyle = ORANGE;
   ctx.fillRect(0, 0, 64, 512);
   ctx.fillStyle = "rgb(120 20 0 / 0.3)";
@@ -275,11 +275,15 @@ export interface CardArt {
   dispose: () => void;
 }
 
-export async function createCardArt(team: readonly TeamMember[], anisotropy: number): Promise<CardArt> {
+/**
+ * @param resolution texture pixels per design unit for the cards (the card is 640 units wide)
+ * @param strapResolution the same for the strap (64 units wide)
+ */
+export async function createCardArt(team: readonly TeamMember[], anisotropy: number, resolution: number, strapResolution: number): Promise<CardArt> {
   const [fonts, photos] = await Promise.all([loadFonts(), Promise.all(team.map((member) => loadImage(member.photo)))]);
-  const fronts = team.map((member, index) => texture(drawFront(member, index, fonts, photos[index]), anisotropy));
-  const backs = team.map((member) => texture(drawBack(member, fonts), anisotropy));
-  const strap = texture(drawStrap(fonts), anisotropy);
+  const fronts = team.map((member, index) => texture(drawFront(member, index, fonts, photos[index], resolution), anisotropy));
+  const backs = team.map((member) => texture(drawBack(member, fonts, resolution), anisotropy));
+  const strap = texture(drawStrap(fonts, strapResolution), anisotropy);
   strap.wrapS = RepeatWrapping;
   strap.wrapT = RepeatWrapping;
   return {

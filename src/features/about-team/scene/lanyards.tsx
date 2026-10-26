@@ -10,7 +10,7 @@ import type { LanyardControl } from "../store";
 import { createCardArt, type CardArt } from "./card-art";
 import { createCardGeometry } from "./card-geometry";
 import { CARD, LanyardBody, layoutLanyards } from "./lanyard-physics";
-import { StrapRibbon } from "./strap-ribbon";
+import { STRAP_WIDTH, StrapRibbon } from "./strap-ribbon";
 
 interface LanyardsProps {
   team: readonly TeamMember[];
@@ -23,7 +23,7 @@ interface LanyardsProps {
 function cardPixels(width: number, height: number): number {
   if (width >= 1024) return Math.min(250, width * 0.16, height * 0.3);
   if (width >= 640) return Math.min(190, height * 0.22);
-  return Math.min(width * 0.42, height * 0.19);
+  return Math.min(width * 0.44, height * 0.2);
 }
 
 /** A press that moves less than this (px) and lasts less than TAP_MS flips the card. */
@@ -34,35 +34,39 @@ const RAIL_INSET = 0.12;
 
 const TOWARDS_VIEWER = new Vector3(0, 0, 1);
 /*
- * Share of each printed surface's colour it shows on its own (as emissive), whatever the
- * light: the rest comes from the key light, so cards shade as they turn without the print
- * ever washing out or going muddy. Key + glow land the print at its true colour face-on.
+ * How the print is lit. Printed surfaces carry their exact colours (emissive, no diffuse
+ * term), so photos and type are never washed out or blown past white. Realism comes on top:
+ * each face dims a little as it turns away from the key light (PRINT_SHADE), and a soft
+ * clear coat (the laminate) catches the key light and the studio as a gentle sheen.
  */
-const PRINT_GLOW = 0.62;
-const KEY_LIGHT = 1.2;
-/** Studio reflections on the print: just enough for the laminate's glint, never a veil. */
-const PRINT_REFLECTION = 0.15;
-/*
- * Laminated print: a matte base with little sheen of its own (so photos keep their blacks)
- * under a thin, smooth clear coat that throws one tight glint as the card turns.
- */
-const PRINT = {
+const PRINT_SHADE = { lit: 1, away: 0.8 } as const;
+const KEY_LIGHT = 1.4;
+const LAMINATE = {
+  color: "#000000",
   emissive: "#ffffff",
-  emissiveIntensity: PRINT_GLOW,
-  roughness: 0.75,
-  specularIntensity: 0.25,
-  clearcoat: 0.45,
-  clearcoatRoughness: 0.08,
-  envMapIntensity: PRINT_REFLECTION,
+  emissiveIntensity: PRINT_SHADE.lit,
+  roughness: 1,
+  specularIntensity: 0,
+  clearcoat: 0.22,
+  clearcoatRoughness: 0.32,
+  envMapIntensity: 0.6,
 } as const;
+/** Direction the key light comes from (upper left, in front), for the per-frame face shading. */
+const KEY_DIRECTION = new Vector3(-0.3, 0.55, 1).normalize();
+
+/* One texel per screen pixel: the card's on-screen width x device pixel ratio, in steps. */
+function printResolution(widthPx: number, designWidth: number, dpr: number): number {
+  return Math.min(2.4, Math.max(0.5, Math.ceil(((widthPx * dpr) / designWidth) * 10) / 10));
+}
 
 function useMaterials(): { body: MeshPhysicalMaterial; metal: MeshStandardMaterial; strap: MeshStandardMaterial } {
   const [materials] = useState(() => ({
-    // White PVC edge and laminated print: a clear coat that catches the studio light as cards turn.
-    body: new MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.6, clearcoat: 0.4, clearcoatRoughness: 0.2, emissive: "#ffffff", emissiveIntensity: PRINT_GLOW, envMapIntensity: PRINT_REFLECTION }),
-    metal: new MeshStandardMaterial({ color: "#dcdcdc", metalness: 1, roughness: 0.26 }),
-    // Woven strap: matte, its print carries its own colour (PRINT_GLOW) so it never fades to salmon.
-    strap: new MeshStandardMaterial({ roughness: 0.9, side: DoubleSide, emissive: "#ffffff", emissiveIntensity: PRINT_GLOW, envMapIntensity: 0.1 }),
+    // White PVC edge: off-white so the card's thickness reads against its face.
+    body: new MeshPhysicalMaterial({ ...LAMINATE, emissive: "#e9e9e9" }),
+    // Polished steel: reflections from the studio do all the work.
+    metal: new MeshStandardMaterial({ color: "#e4e4e4", metalness: 1, roughness: 0.22, envMapIntensity: 2.2 }),
+    // Woven strap: matte fabric, its print in exact colours, slightly dimmer than the card.
+    strap: new MeshStandardMaterial({ color: "#000000", emissive: "#ffffff", emissiveIntensity: 0.94, roughness: 1, side: DoubleSide }),
   }));
   useEffect(() => () => Object.values(materials).forEach((material) => material.dispose()), [materials]);
   return materials;
@@ -84,6 +88,7 @@ export function Lanyards({ team, tier, control, onReady }: LanyardsProps): React
   const [ribbons] = useState(() => team.map(() => new StrapRibbon(tune.strapPoints + 2)));
   const [art, setArt] = useState<CardArt | null>(null);
   const cards = useRef<(Group | null)[]>([]);
+  const faces = useRef<(MeshPhysicalMaterial | null)[][]>([]);
   const bodies = useRef<LanyardBody[]>([]);
   const clock = useRef({ time: 0, accumulator: 0 });
   const scaleRef = useRef(1);
@@ -100,21 +105,27 @@ export function Lanyards({ team, tier, control, onReady }: LanyardsProps): React
     scaleRef.current = scale;
   }, [scale]);
 
-  // Re-hang the cards whenever the stage changes size: dropped in the first time, at rest after.
+  // Re-hang the cards when the stage changes size or the artwork arrives: they drop in if the
+  // visitor hasn't reached them yet; otherwise (the HTML cards are showing) they cross-fade
+  // in already hanging at rest.
+  const artReady = art !== null;
   useLayoutEffect(() => {
     const drop = !control.entered;
     bodies.current = layoutLanyards(team.length, stageWidth, stageHeight, railY, drop).map((spec) => new LanyardBody(spec, drop));
     invalidate();
-  }, [team.length, stageWidth, stageHeight, railY, control, invalidate]);
+  }, [team.length, stageWidth, stageHeight, railY, control, invalidate, artReady]);
 
+  // Print the cards at the size they are shown at (redrawn if the card size changes).
+  const dpr = useThree((state) => state.viewport.dpr);
+  const resolution = printResolution(cardPx, 640, dpr);
+  const strapResolution = printResolution(cardPx * STRAP_WIDTH, 64, dpr);
   useEffect(() => {
     let cancelled = false;
     let created: CardArt | null = null;
-    const anisotropy = Math.min(8, get().gl.capabilities.getMaxAnisotropy());
-    void createCardArt(team, anisotropy).then((result) => {
+    const anisotropy = get().gl.capabilities.getMaxAnisotropy();
+    void createCardArt(team, anisotropy, resolution, strapResolution).then((result) => {
       if (cancelled) return result.dispose();
       created = result;
-      materials.strap.map = result.strap;
       materials.strap.emissiveMap = result.strap;
       materials.strap.needsUpdate = true;
       setArt(result);
@@ -123,7 +134,7 @@ export function Lanyards({ team, tier, control, onReady }: LanyardsProps): React
       cancelled = true;
       created?.dispose();
     };
-  }, [team, get, materials]);
+  }, [team, get, materials, resolution, strapResolution]);
 
   useEffect(() => {
     if (!art) return;
@@ -184,6 +195,7 @@ export function Lanyards({ team, tier, control, onReady }: LanyardsProps): React
   const tilt = useRef(new Quaternion());
   const turn = useRef(new Quaternion());
   const basis = useRef({ matrix: new Matrix4(), right: new Vector3(), forward: new Vector3() });
+  const faceNormal = useRef(new Vector3());
   const up = useRef(new Vector3());
 
   useFrame((state, delta) => {
@@ -219,6 +231,12 @@ export function Lanyards({ team, tier, control, onReady }: LanyardsProps): React
       turn.current.setFromAxisAngle(up.current, body.twist);
       card.quaternion.multiplyQuaternions(turn.current, tilt.current);
       card.position.set(pos[centre * 3], pos[centre * 3 + 1], pos[centre * 3 + 2]);
+      // Each face dims a touch as it turns from the key light, like real print under one lamp.
+      const facing = faceNormal.current.copy(TOWARDS_VIEWER).applyQuaternion(card.quaternion).dot(KEY_DIRECTION);
+      const [front, back] = faces.current[index] ?? [];
+      const span = PRINT_SHADE.lit - PRINT_SHADE.away;
+      if (front) front.emissiveIntensity = PRINT_SHADE.away + span * Math.max(0, facing);
+      if (back) back.emissiveIntensity = PRINT_SHADE.away + span * Math.max(0, -facing);
       ribbons[index].update(pos, body.strands[0], body.twist);
     });
 
@@ -296,10 +314,22 @@ export function Lanyards({ team, tier, control, onReady }: LanyardsProps): React
             >
               <mesh geometry={geometry.body} material={materials.body} castShadow />
               <mesh geometry={geometry.face} position={[0, 0, geometry.faceOffset]}>
-                <meshPhysicalMaterial {...PRINT} map={art.fronts[index]} emissiveMap={art.fronts[index]} />
+                <meshPhysicalMaterial
+                  ref={(material: MeshPhysicalMaterial | null) => {
+                    (faces.current[index] ??= [null, null])[0] = material;
+                  }}
+                  {...LAMINATE}
+                  emissiveMap={art.fronts[index]}
+                />
               </mesh>
               <mesh geometry={geometry.face} position={[0, 0, -geometry.faceOffset]} rotation={[0, Math.PI, 0]}>
-                <meshPhysicalMaterial {...PRINT} map={art.backs[index]} emissiveMap={art.backs[index]} />
+                <meshPhysicalMaterial
+                  ref={(material: MeshPhysicalMaterial | null) => {
+                    (faces.current[index] ??= [null, null])[1] = material;
+                  }}
+                  {...LAMINATE}
+                  emissiveMap={art.backs[index]}
+                />
               </mesh>
               <mesh geometry={geometry.ring} material={materials.metal} position={[0, CARD.height / 2 - 0.01, 0]} rotation={[0, Math.PI / 2, 0]} castShadow />
               <mesh geometry={geometry.swivel} material={materials.metal} position={[0, CARD.height / 2 + 0.1025, 0]} castShadow />

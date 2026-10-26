@@ -1,5 +1,6 @@
 """
-Builds the case-study images for the project pages from the originals in assets/projects/.
+Builds the app-screen strips for the project pages from the originals in assets/projects/.
+(The photographic case images come from scripts/prepare-generated-images.py.)
 
 Each original is cut into the details a case study shows (the card and the flyer side by
 side, close-ups of a print, each screen of an app flow) and written as WebP at two widths:
@@ -26,19 +27,6 @@ QUALITY = 84
 
 # slug -> list of (name, source file, crop box as fractions: left, top, right, bottom)
 DETAILS = {
-    "munsey-pharmacy": [
-        ("card", "munsey-pharmacy.jpg", (0.0, 0.0, 0.5, 1.0)),
-        ("flyer", "munsey-pharmacy.jpg", (0.5, 0.0, 1.0, 1.0)),
-    ],
-    "breeze-and-mist": [
-        ("stack", "breeze-and-mist.webp", (0.0, 0.0, 1.0, 1.0)),
-        ("mark", "breeze-and-mist.webp", (0.36, 0.28, 0.96, 0.73)),
-        ("pattern", "breeze-and-mist.webp", (0.4, 0.55, 1.0, 1.0)),
-    ],
-    "breeze-and-grains": [
-        ("entrance", "breeze-and-grains.jpg", (0.0, 0.0, 1.0, 1.0)),
-        ("sign", "breeze-and-grains.jpg", (0.38, 0.24, 0.86, 0.56)),
-    ],
     "shreeram-milks": [
         ("welcome", "shreeram-milks.png", (0.0, 0.0, 0.225, 1.0)),
         ("sign-in", "shreeram-milks.png", (0.252, 0.0, 0.477, 1.0)),

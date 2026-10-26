@@ -16,7 +16,7 @@ interface CaseImageProps {
 export function CaseImage({ image, sizes, className }: CaseImageProps): React.ReactElement {
   return (
     <div className={`${styles.frame} ${className ?? ""}`} style={{ aspectRatio: image.ratio }}>
-      <Image src={caseImageSrc(image, 1600)} alt={image.alt} fill sizes={sizes} className={styles.image} />
+      <Image src={caseImageSrc(image, "full")} alt={image.alt} fill sizes={sizes} className={styles.image} />
     </div>
   );
 }

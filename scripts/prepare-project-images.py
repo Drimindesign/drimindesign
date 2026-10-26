@@ -1,4 +1,8 @@
 """
+NOTE: the panels in use now come from the generated display images (see
+scripts/prepare-generated-images.py). Running this script would overwrite them with the
+older ones built from assets/projects/.
+
 Builds the ring's project panels from the originals in assets/projects/.
 
 Every panel is 7:5 (the ring's panel shape, see src/features/project-cylinder/scene/dimensions.ts)

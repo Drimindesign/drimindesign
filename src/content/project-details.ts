@@ -1,7 +1,8 @@
 /*
- * Case-study content for /projects/[slug]. Images are cut from the originals by
- * scripts/prepare-project-details.py into public/projects/<slug>/<name>-{800,1600}.webp;
- * `ratio` (width / height) comes from the script's output.
+ * Case-study content for /projects/[slug]. App screens are cut from the originals by
+ * scripts/prepare-project-details.py, and the photographic images (showcase, detail-a/b)
+ * come from the generated set via scripts/prepare-generated-images.py, all into
+ * public/projects/<slug>/<name>-<width>.webp; `ratio` (width / height) is each file's own.
  *
  * PLACEHOLDER: years and the story copy are drafts written from the work itself, waiting on
  * the client's notes; more photos per project are still to come (PRD.md §9).
@@ -12,6 +13,8 @@ export interface CaseImage {
   src: string;
   ratio: number;
   alt: string;
+  /** Width of the largest file; the generated photos are written at their own size. */
+  full: number;
 }
 
 export type CaseSection =
@@ -33,11 +36,16 @@ export interface ProjectDetail {
   sections: readonly CaseSection[];
 }
 
-const image = (slug: string, name: string, ratio: number, alt: string): CaseImage => ({
+const image = (slug: string, name: string, ratio: number, alt: string, full = 1600): CaseImage => ({
   src: `/projects/${slug}/${name}`,
   ratio,
   alt,
+  full,
 });
+
+/* The generated photos (scripts/prepare-generated-images.py): 3:2 landscape and 2:3 portrait. */
+const showcase = (slug: string, alt: string): CaseImage => image(slug, "showcase", 1.5, alt, 1536);
+const detail = (slug: string, which: "a" | "b", alt: string): CaseImage => image(slug, `detail-${which}`, 2 / 3, alt, 1024);
 
 const SCREEN = 0.449;
 const SPEAKORA_SCREEN = 0.4401;
@@ -51,17 +59,22 @@ export const projectDetails: Record<string, ProjectDetail> = {
       "A neighbourhood pharmacy needed print that felt as trustworthy as its pharmacists: clear, calm and easy to keep.",
     sections: [
       {
-        kind: "pair",
-        images: [
-          image("munsey-pharmacy", "card", 0.994, "Munsey Pharmacy business card held in a hand, with a QR code and address"),
-          image("munsey-pharmacy", "flyer", 0.994, "Munsey Pharmacy flyer in purple listing its services and free local delivery"),
-        ],
-        caption: "The card and the flyer share one deep blue and a single, legible type voice.",
+        kind: "wide",
+        image: showcase("munsey-pharmacy", "The Munsey Pharmacy website open on a laptop on a bright pharmacy counter"),
+        caption: "The website carries the same calm blue and plain-spoken tone as the print.",
       },
       {
         kind: "chapter",
         title: "The brief",
         body: "Explain everything the pharmacy offers, from compounding to vaccinations, without turning a flyer into a wall of text.",
+      },
+      {
+        kind: "pair",
+        images: [
+          detail("munsey-pharmacy", "a", "A hand holding a phone showing the Munsey Pharmacy vaccination services post"),
+          detail("munsey-pharmacy", "b", "The Munsey Pharmacy business card with the pharmacist's portrait on dark slate"),
+        ],
+        caption: "The card and the social posts share one deep blue and a single, legible type voice.",
       },
       {
         kind: "chapter",
@@ -78,7 +91,7 @@ export const projectDetails: Record<string, ProjectDetail> = {
     sections: [
       {
         kind: "wide",
-        image: image("breeze-and-mist", "mark", 1.3333, "The Breeze and Mist leaf monogram printed on a cream business card"),
+        image: showcase("breeze-and-mist", "Breeze and Mist business cards, a folded t-shirt and a kraft envelope on cream linen"),
         caption: "The monogram: a leaf caught mid-turn, its stripes drawn like moving air.",
       },
       {
@@ -89,9 +102,10 @@ export const projectDetails: Record<string, ProjectDetail> = {
       {
         kind: "pair",
         images: [
-          image("breeze-and-mist", "pattern", 1.3333, "Back of the Breeze and Mist card with the wave pattern and contact details"),
-          image("breeze-and-mist", "stack", 1, "Stacks of Breeze and Mist business cards, front and back"),
+          detail("breeze-and-mist", "a", "A Breeze and Mist t-shirt with the leaf monogram hanging on a sage green wall"),
+          detail("breeze-and-mist", "b", "Close-up of the Breeze and Mist monogram embossed on thick cream card"),
         ],
+        caption: "On cloth and on card, the mark stays quiet and sure of itself.",
       },
     ],
   },
@@ -103,8 +117,8 @@ export const projectDetails: Record<string, ProjectDetail> = {
     sections: [
       {
         kind: "wide",
-        image: image("breeze-and-grains", "sign", 2.2239, "Close-up of the illuminated Breeze and Grains sign glowing warm against the roof"),
-        caption: "Backlit letters, sized to read from the road and warm enough to feel like an invitation.",
+        image: showcase("breeze-and-grains", "The Breeze and Grains website open on a laptop on a veranda table among palms"),
+        caption: "The website carries the sign's warm green and gold from the gate to the booking page.",
       },
       {
         kind: "chapter",
@@ -112,8 +126,12 @@ export const projectDetails: Record<string, ProjectDetail> = {
         body: "A sign has to work at dusk, at night and in daylight, from the gate and from the car park, without overpowering the architecture.",
       },
       {
-        kind: "wide",
-        image: image("breeze-and-grains", "entrance", 1.4824, "The Breeze and Grains resort entrance at dusk with lamps and the lit sign"),
+        kind: "pair",
+        images: [
+          detail("breeze-and-grains", "a", "A brass key tag and a white towel, both marked with the Breeze and Grains logo"),
+          detail("breeze-and-grains", "b", "A hand holding a phone showing the Breeze and Grains booking page"),
+        ],
+        caption: "The same mark on a key tag, a towel and a phone screen.",
       },
     ],
   },
@@ -137,6 +155,18 @@ export const projectDetails: Record<string, ProjectDetail> = {
         kind: "chapter",
         title: "The approach",
         body: "Phone number first, because that's how milk is ordered today. The delivery slot comes before payment, so customers see the promise before the price.",
+      },
+      {
+        kind: "wide",
+        image: showcase("shreeram-milks", "A phone showing the ShreeRam Milks home screen beside a glass bottle of milk on a doorstep"),
+        caption: "Made for the doorstep at dawn.",
+      },
+      {
+        kind: "pair",
+        images: [
+          detail("shreeram-milks", "a", "A phone showing the ShreeRam Milks cart screen beside a glass of milk"),
+          detail("shreeram-milks", "b", "A hand holding a phone showing the ShreeRam Milks profile screen"),
+        ],
       },
       {
         kind: "chapter",
@@ -168,6 +198,18 @@ export const projectDetails: Record<string, ProjectDetail> = {
         body: "Placement tests feel like exams. This one feels like practice: you pick your interests, speak a little, and finish with a reward.",
       },
       {
+        kind: "wide",
+        image: showcase("speakora-onboarding", "A learner wearing an earbud practises speaking with the Speakora app on a phone stand"),
+        caption: "Built for speaking out loud, anywhere there's a desk and a window.",
+      },
+      {
+        kind: "pair",
+        images: [
+          detail("speakora-onboarding", "a", "A hand holding a phone showing the Speakora Finding Partner screen"),
+          detail("speakora-onboarding", "b", "A phone on a desk showing the Speakora dashboard beside an earbuds case"),
+        ],
+      },
+      {
         kind: "chapter",
         title: "The result",
         body: "A calm, monochrome flow that keeps attention on the voice, with one clear action per screen.",
@@ -176,7 +218,7 @@ export const projectDetails: Record<string, ProjectDetail> = {
   },
 };
 
-/** Responsive sources for a case image (the script writes 800 and 1600 wide). */
-export function caseImageSrc(image: CaseImage, width: 800 | 1600): string {
-  return `${image.src}-${width}.webp`;
+/** The file for a case image: its small (800 wide) or its largest version. */
+export function caseImageSrc(image: CaseImage, size: "small" | "full"): string {
+  return `${image.src}-${size === "small" ? 800 : image.full}.webp`;
 }

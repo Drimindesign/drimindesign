@@ -63,8 +63,7 @@ export const hero = {
 export const footer = {
   eyebrow: "Have an idea?",
   title: "Let's make it real.",
-  /* PLACEHOLDER: confirm the studio inbox. */
-  email: "hello@drimindesign.com",
+  email: "hello@drimindesigns.co.in",
   action: { label: "Book a call", href: "/appointment" },
   navTitle: "Explore",
   contactTitle: "Say hello",

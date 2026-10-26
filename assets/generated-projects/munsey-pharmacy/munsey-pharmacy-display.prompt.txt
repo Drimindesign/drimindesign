@@ -1,0 +1,11 @@
+Use case: product-mockup. Create ONE high-quality portfolio photograph only, full frame, no collage or grid.
+Reference images are the actual client work; preserve their identity and artwork faithfully.
+
+- The attached files are the real work. Copy the logo, the name "Munsey Pharmacy", the card, flyer, posts and website exactly. Never redesign, re-letter or invent text, prices or details. If small text can't be copied exactly, soft-focus it.
+- Modern, clean, trustworthy, realistic photography. One soft light, natural shadows, uncluttered, two or three tasteful props at most. No borders, no watermarks.
+- Palette: royal blue, deep purple, clean white.
+- Images 1 and 2: landscape 3:2, main subject in the exact centre, top-right corner calm and empty, bottom-left simple and darker.
+- Images 3 and 4: portrait 2:3, one close subject.
+
+Generate Image 1 ONLY: top-down flat lay on a soft lilac-white surface: the business card front-facing and sharp in the centre, its back peeking beneath, the purple "Why choose us" flyer behind it partly cropped, a small white pharmacy bag and a sprig of green at the edges.
+Output aspect ratio: 3:2 landscape. Highest available quality, realistic materials and clean professional lighting.

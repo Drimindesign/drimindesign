@@ -216,6 +216,119 @@ export const projectDetails: Record<string, ProjectDetail> = {
       },
     ],
   },
+  "house-of-diams": {
+    client: "House of Diams",
+    year: "2025",
+    services: ["Web design", "E-commerce", "Admin dashboard"],
+    intro: "A jewellery store that sells the feeling of a forever moment: warm, unhurried, and as easy to run as it is to browse.",
+    sections: [
+      {
+        kind: "wide",
+        image: showcase("house-of-diams", "The House of Diams admin dashboard on a large monitor in a jewellery studio"),
+        caption: "Behind the shop window, a calm dashboard for orders, products and enquiries.",
+      },
+      {
+        kind: "chapter",
+        title: "The brief",
+        body: "A storefront with the quiet confidence of a high-street jeweller, and a back office the team can run without training.",
+      },
+      {
+        kind: "pair",
+        images: [
+          detail("house-of-diams", "a", "A hand holding a phone showing the House of Diams shop by category grid"),
+          detail("house-of-diams", "b", "A diamond ring on champagne silk beside a card with the House of Diams wordmark"),
+        ],
+        caption: "Rings first, everything else out of the way.",
+      },
+      {
+        kind: "chapter",
+        title: "The result",
+        body: "Espresso, ivory and gold set the tone; large product photography and generous space let each piece take its time.",
+      },
+    ],
+  },
+  packaging: {
+    client: "Zamidar and partner brands",
+    year: "2025",
+    services: ["Packaging design", "Label design", "Illustration"],
+    intro: "A pantry of products that need to look like one family on the shelf, and still be told apart at a glance.",
+    sections: [
+      {
+        kind: "wide",
+        image: showcase("packaging", "The ghee, pasta, ketchup and chutney packs in use on a sunny kitchen counter"),
+        caption: "Made to look right on a shelf and at home on the counter.",
+      },
+      {
+        kind: "chapter",
+        title: "The challenge",
+        body: "Ghee, pasta, ketchup and chutney have little in common, so each pack carries its own colour and picture while sharing one clear voice.",
+      },
+      {
+        kind: "pair",
+        images: [
+          detail("packaging", "a", "The Zamidar Desi Cow Ghee jar beside a brass spoon of golden ghee"),
+          detail("packaging", "b", "The green Penne Rigati pack with dry penne spilling onto linen"),
+        ],
+        caption: "A hand-drawn village scene on the ghee, bold type on the pasta.",
+      },
+    ],
+  },
+  beingle: {
+    client: "Beingle",
+    year: "2025",
+    services: ["App design", "UX", "UI"],
+    intro: "An app for finding your people: communities to explore, live rooms to join, and a match that feels like a hello.",
+    sections: [
+      {
+        kind: "wide",
+        image: showcase("beingle", "Two friends at a cafe table looking at the Beingle communities screen on a phone"),
+        caption: "Designed for the moment you show a friend what you found.",
+      },
+      {
+        kind: "chapter",
+        title: "The idea",
+        body: "Social apps often feel crowded. Beingle keeps the screen light, with one thing to do at a time and plenty of space around people.",
+      },
+      {
+        kind: "pair",
+        images: [
+          detail("beingle", "a", "A hand holding a phone showing the Beingle match room searching screen"),
+          detail("beingle", "b", "A phone on a desk beside earbuds showing the Beingle home screen"),
+        ],
+      },
+      {
+        kind: "chapter",
+        title: "The result",
+        body: "A bright, modern interface where finding a community, joining a live room and meeting a match all sit one tap apart.",
+      },
+    ],
+  },
+  tulsi: {
+    client: "Tulsi",
+    year: "2025",
+    services: ["Web design", "E-commerce", "Admin dashboard"],
+    intro: "An online grocery store that makes fresh feel fast: quick search for shoppers, a clear dashboard for the people who stock the shelves.",
+    sections: [
+      {
+        kind: "wide",
+        image: showcase("tulsi", "The Tulsi admin dashboard on a desktop monitor in a grocery warehouse office"),
+        caption: "Orders, stock and revenue on one calm screen.",
+      },
+      {
+        kind: "chapter",
+        title: "The approach",
+        body: "Shoppers type a letter and see products straight away. Behind the scenes, the same green and red keep the dashboard friendly and easy to scan.",
+      },
+      {
+        kind: "pair",
+        images: [
+          detail("tulsi", "a", "A tablet showing the Tulsi products page beside a basket of apples"),
+          detail("tulsi", "b", "A phone showing the Tulsi storefront among fresh tomatoes, apples and almonds"),
+        ],
+        caption: "Fresh produce, fresh interface.",
+      },
+    ],
+  },
 };
 
 /** The file for a case image: its small (800 wide) or its largest version. */

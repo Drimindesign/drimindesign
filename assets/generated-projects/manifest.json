@@ -1,0 +1,682 @@
+[
+  {
+    "project": "Breeze and Grains",
+    "slug": "breeze-and-grains",
+    "role": "display",
+    "references": [
+      "assets/all-projects/Bandg/Branding/display.PNG",
+      "assets/all-projects/Bandg/Branding/img1.jpg",
+      "assets/all-projects/Bandg/Web/Breeze & Grains - Kerala Homestay-1.jpg",
+      "assets/all-projects/Bandg/Web/Breeze & Grains - Kerala Homestay.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\breeze-and-grains/breeze-and-grains-display.prompt.txt",
+    "output": "assets\\generated-projects\\breeze-and-grains/breeze-and-grains-display.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 2791700,
+    "sha256": "BC67F832A68AA91BF78E68E3DA6998684F9137E053B7A9037B6140B37BC4A9C7",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Breeze and Grains",
+    "slug": "breeze-and-grains",
+    "role": "wide",
+    "references": [
+      "assets/all-projects/Bandg/Branding/display.PNG",
+      "assets/all-projects/Bandg/Branding/img1.jpg",
+      "assets/all-projects/Bandg/Web/Breeze & Grains - Kerala Homestay-1.jpg",
+      "assets/all-projects/Bandg/Web/Breeze & Grains - Kerala Homestay.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\breeze-and-grains/breeze-and-grains-wide.prompt.txt",
+    "output": "assets\\generated-projects\\breeze-and-grains/breeze-and-grains-wide.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 2078102,
+    "sha256": "B260B0A9A892865716B96E622CA50F6A82C45D81137D5E3ABE639857AC77A6AC",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Breeze and Grains",
+    "slug": "breeze-and-grains",
+    "role": "detail-a",
+    "references": [
+      "assets/all-projects/Bandg/Branding/display.PNG",
+      "assets/all-projects/Bandg/Branding/img1.jpg",
+      "assets/all-projects/Bandg/Web/Breeze & Grains - Kerala Homestay-1.jpg",
+      "assets/all-projects/Bandg/Web/Breeze & Grains - Kerala Homestay.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\breeze-and-grains/breeze-and-grains-detail-a.prompt.txt",
+    "output": "assets\\generated-projects\\breeze-and-grains/breeze-and-grains-detail-a.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2095472,
+    "sha256": "9C83C4A5D6481768D90C440F2A93421D4FE5A692E8611D7E9F9BCB046614494A",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Breeze and Grains",
+    "slug": "breeze-and-grains",
+    "role": "detail-b",
+    "references": [
+      "assets/all-projects/Bandg/Branding/display.PNG",
+      "assets/all-projects/Bandg/Branding/img1.jpg",
+      "assets/all-projects/Bandg/Web/Breeze & Grains - Kerala Homestay-1.jpg",
+      "assets/all-projects/Bandg/Web/Breeze & Grains - Kerala Homestay.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\breeze-and-grains/breeze-and-grains-detail-b.prompt.txt",
+    "output": "assets\\generated-projects\\breeze-and-grains/breeze-and-grains-detail-b.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2066001,
+    "sha256": "063D87E2F7213AD2DB36846AF548206EDF68CA70C95B58BFEE73394D271CCA12",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Breeze and Mist",
+    "slug": "breeze-and-mist",
+    "role": "display",
+    "references": [
+      "assets/all-projects/breezeandmist/img5.png",
+      "assets/all-projects/breezeandmist/img6.png",
+      "assets/all-projects/breezeandmist/img7.png"
+    ],
+    "prompt": "assets\\generated-projects\\breeze-and-mist/breeze-and-mist-display.prompt.txt",
+    "output": "assets\\generated-projects\\breeze-and-mist/breeze-and-mist-display.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 2628197,
+    "sha256": "034642998EF8958D3A29A25E826F3A894C84D9BEBB26825071846DBD2A3064CD",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Breeze and Mist",
+    "slug": "breeze-and-mist",
+    "role": "wide",
+    "references": [
+      "assets/all-projects/breezeandmist/img5.png",
+      "assets/all-projects/breezeandmist/img6.png",
+      "assets/all-projects/breezeandmist/img7.png"
+    ],
+    "prompt": "assets\\generated-projects\\breeze-and-mist/breeze-and-mist-wide.prompt.txt",
+    "output": "assets\\generated-projects\\breeze-and-mist/breeze-and-mist-wide.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 3652236,
+    "sha256": "07C272F92992279AC0191B6F6DAF3B802E5481E10AF22AE30C9C06D7BD22C24F",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Breeze and Mist",
+    "slug": "breeze-and-mist",
+    "role": "detail-a",
+    "references": [
+      "assets/all-projects/breezeandmist/img5.png",
+      "assets/all-projects/breezeandmist/img6.png",
+      "assets/all-projects/breezeandmist/img7.png"
+    ],
+    "prompt": "assets\\generated-projects\\breeze-and-mist/breeze-and-mist-detail-a.prompt.txt",
+    "output": "assets\\generated-projects\\breeze-and-mist/breeze-and-mist-detail-a.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2352246,
+    "sha256": "ED0702D6AE5FFACFB929E2178E854B0C08E335F1D4D0C4E713FFA3F625A96154",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Breeze and Mist",
+    "slug": "breeze-and-mist",
+    "role": "detail-b",
+    "references": [
+      "assets/all-projects/breezeandmist/img5.png",
+      "assets/all-projects/breezeandmist/img6.png",
+      "assets/all-projects/breezeandmist/img7.png"
+    ],
+    "prompt": "assets\\generated-projects\\breeze-and-mist/breeze-and-mist-detail-b.prompt.txt",
+    "output": "assets\\generated-projects\\breeze-and-mist/breeze-and-mist-detail-b.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2470674,
+    "sha256": "5C422E84AD1A3528378F70E195127A211527A77D2A4AD9524FA1ED348B15E121",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Munsey Pharmacy",
+    "slug": "munsey-pharmacy",
+    "role": "display",
+    "references": [
+      "assets/all-projects/Munsey/social/image1.jpg",
+      "assets/all-projects/Munsey/social/image2.jpg",
+      "assets/all-projects/Munsey/social/image4.jpg",
+      "assets/all-projects/Munsey/social/image5.jpg",
+      "assets/all-projects/Munsey/web/Munsey Pharmacy.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\munsey-pharmacy/munsey-pharmacy-display.prompt.txt",
+    "output": "assets\\generated-projects\\munsey-pharmacy/munsey-pharmacy-display.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 2350718,
+    "sha256": "5677B397043F9E3A029E648A7EB7D8C873F0D17F42F2F64D771CF9C1A84C8A8A",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Munsey Pharmacy",
+    "slug": "munsey-pharmacy",
+    "role": "wide",
+    "references": [
+      "assets/all-projects/Munsey/social/image1.jpg",
+      "assets/all-projects/Munsey/social/image2.jpg",
+      "assets/all-projects/Munsey/social/image4.jpg",
+      "assets/all-projects/Munsey/social/image5.jpg",
+      "assets/all-projects/Munsey/web/Munsey Pharmacy.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\munsey-pharmacy/munsey-pharmacy-wide.prompt.txt",
+    "output": "assets\\generated-projects\\munsey-pharmacy/munsey-pharmacy-wide.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1817415,
+    "sha256": "6B96A12D11BF9C5835DF7AA1CE26FBC5483BE6095C35CB0EA7A113239F8EA89D",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Munsey Pharmacy",
+    "slug": "munsey-pharmacy",
+    "role": "detail-a",
+    "references": [
+      "assets/all-projects/Munsey/social/image1.jpg",
+      "assets/all-projects/Munsey/social/image2.jpg",
+      "assets/all-projects/Munsey/social/image4.jpg",
+      "assets/all-projects/Munsey/social/image5.jpg",
+      "assets/all-projects/Munsey/web/Munsey Pharmacy.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\munsey-pharmacy/munsey-pharmacy-detail-a.prompt.txt",
+    "output": "assets\\generated-projects\\munsey-pharmacy/munsey-pharmacy-detail-a.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 1811829,
+    "sha256": "4072D7F4DAB453748284FBC4F4F2E5A21EAD889715155B1A91183478222C421C",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Munsey Pharmacy",
+    "slug": "munsey-pharmacy",
+    "role": "detail-b",
+    "references": [
+      "assets/all-projects/Munsey/social/image1.jpg",
+      "assets/all-projects/Munsey/social/image2.jpg",
+      "assets/all-projects/Munsey/social/image4.jpg",
+      "assets/all-projects/Munsey/social/image5.jpg",
+      "assets/all-projects/Munsey/web/Munsey Pharmacy.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\munsey-pharmacy/munsey-pharmacy-detail-b.prompt.txt",
+    "output": "assets\\generated-projects\\munsey-pharmacy/munsey-pharmacy-detail-b.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2184508,
+    "sha256": "7FC37F5ECF95A2DFD7032D549CF18E29D79920F8ECA6F2CE9E4A81685B6F64CF",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "ShreeRam Milks",
+    "slug": "shreeram-milks",
+    "role": "display",
+    "references": [
+      "assets/all-projects/ShreeRam mIlks App/055f261f-3734-4efb-93a1-900efffbdc7d.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/8d97bb44-9f27-4bd5-b11d-fd36784fc7d7.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/99dbffde-4213-4002-a502-d9e049e8fb5a.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/9f02abcb-1fc6-44a6-8f23-357721749f05.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/e7cc4cbb-7de1-44c0-9264-9b157e6f3d00.jpeg"
+    ],
+    "prompt": "assets\\generated-projects\\shreeram-milks/shreeram-milks-display.prompt.txt",
+    "output": "assets\\generated-projects\\shreeram-milks/shreeram-milks-display.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1846125,
+    "sha256": "D5C4AABF81786C0A33673B79AAD696462BF5D04BB36C01D3951D941295D6FC9C",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "ShreeRam Milks",
+    "slug": "shreeram-milks",
+    "role": "wide",
+    "references": [
+      "assets/all-projects/ShreeRam mIlks App/055f261f-3734-4efb-93a1-900efffbdc7d.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/8d97bb44-9f27-4bd5-b11d-fd36784fc7d7.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/99dbffde-4213-4002-a502-d9e049e8fb5a.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/9f02abcb-1fc6-44a6-8f23-357721749f05.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/e7cc4cbb-7de1-44c0-9264-9b157e6f3d00.jpeg"
+    ],
+    "prompt": "assets\\generated-projects\\shreeram-milks/shreeram-milks-wide.prompt.txt",
+    "output": "assets\\generated-projects\\shreeram-milks/shreeram-milks-wide.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 2068559,
+    "sha256": "5C51E74759C3A79D0842B1D3A26F5596A05FD44A27411E1B9082F9E9D8B74DB7",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "ShreeRam Milks",
+    "slug": "shreeram-milks",
+    "role": "detail-a",
+    "references": [
+      "assets/all-projects/ShreeRam mIlks App/055f261f-3734-4efb-93a1-900efffbdc7d.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/8d97bb44-9f27-4bd5-b11d-fd36784fc7d7.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/99dbffde-4213-4002-a502-d9e049e8fb5a.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/9f02abcb-1fc6-44a6-8f23-357721749f05.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/e7cc4cbb-7de1-44c0-9264-9b157e6f3d00.jpeg"
+    ],
+    "prompt": "assets\\generated-projects\\shreeram-milks/shreeram-milks-detail-a.prompt.txt",
+    "output": "assets\\generated-projects\\shreeram-milks/shreeram-milks-detail-a.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 1965652,
+    "sha256": "88E66583E0CC95C4F5A7047924729F2F4AA63BFF1295038AD0B96C171A0AAFA6",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "ShreeRam Milks",
+    "slug": "shreeram-milks",
+    "role": "detail-b",
+    "references": [
+      "assets/all-projects/ShreeRam mIlks App/055f261f-3734-4efb-93a1-900efffbdc7d.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/8d97bb44-9f27-4bd5-b11d-fd36784fc7d7.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/99dbffde-4213-4002-a502-d9e049e8fb5a.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/9f02abcb-1fc6-44a6-8f23-357721749f05.jpeg",
+      "assets/all-projects/ShreeRam mIlks App/e7cc4cbb-7de1-44c0-9264-9b157e6f3d00.jpeg"
+    ],
+    "prompt": "assets\\generated-projects\\shreeram-milks/shreeram-milks-detail-b.prompt.txt",
+    "output": "assets\\generated-projects\\shreeram-milks/shreeram-milks-detail-b.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 1821867,
+    "sha256": "D78FACEE9174268C9227B675B5D8FF914136A278EDC488D371DD9FEA309374AE",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Speakora",
+    "slug": "speakora-onboarding",
+    "role": "display",
+    "references": [
+      "assets/all-projects/Speakora/Home/Dashboard.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/finding partner.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/Room Craetion.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/speaking-room.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\speakora-onboarding/speakora-onboarding-display.prompt.txt",
+    "output": "assets\\generated-projects\\speakora-onboarding/speakora-onboarding-display.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1792125,
+    "sha256": "39AAF3370AB4CE20D0466EC4F09793EA51FF2FE0DCAFCD3502F08575999D718E",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Speakora",
+    "slug": "speakora-onboarding",
+    "role": "wide",
+    "references": [
+      "assets/all-projects/Speakora/Home/Dashboard.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/finding partner.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/Room Craetion.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/speaking-room.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\speakora-onboarding/speakora-onboarding-wide.prompt.txt",
+    "output": "assets\\generated-projects\\speakora-onboarding/speakora-onboarding-wide.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1686835,
+    "sha256": "A124F587BDE75643E8A2EF25B61502C932E799177A219B46C100743B823D71BF",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Speakora",
+    "slug": "speakora-onboarding",
+    "role": "detail-a",
+    "references": [
+      "assets/all-projects/Speakora/Home/Dashboard.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/finding partner.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/Room Craetion.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/speaking-room.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\speakora-onboarding/speakora-onboarding-detail-a.prompt.txt",
+    "output": "assets\\generated-projects\\speakora-onboarding/speakora-onboarding-detail-a.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 1735808,
+    "sha256": "B3C5749A603C6149D7AD875446AC16A582D86C1D9538558921B48BDDBB069D57",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Speakora",
+    "slug": "speakora-onboarding",
+    "role": "detail-b",
+    "references": [
+      "assets/all-projects/Speakora/Home/Dashboard.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/finding partner.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/Room Craetion.jpg",
+      "assets/all-projects/Speakora/Home/practice-session/speaking-room.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\speakora-onboarding/speakora-onboarding-detail-b.prompt.txt",
+    "output": "assets\\generated-projects\\speakora-onboarding/speakora-onboarding-detail-b.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 1749526,
+    "sha256": "422E6F3831D865D23580C0BFD1DE9E9CF9C8118CEDAE5E44BA3CAD4BDE655118",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "House of Diams",
+    "slug": "house-of-diams",
+    "role": "display",
+    "references": [
+      "assets/all-projects/Hod/House of Diams _ Luxury Diamond Jewelry & Bespoke Rings.jpg",
+      "assets/all-projects/Hod/House of Diams - Admin Dashboard.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\house-of-diams/house-of-diams-display.prompt.txt",
+    "output": "assets\\generated-projects\\house-of-diams/house-of-diams-display.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1840537,
+    "sha256": "39AD0BBDDCB02D61F52D29803A59D1BA89E736E36A6D27CD335FD8D70C31F33D",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "House of Diams",
+    "slug": "house-of-diams",
+    "role": "wide",
+    "references": [
+      "assets/all-projects/Hod/House of Diams _ Luxury Diamond Jewelry & Bespoke Rings.jpg",
+      "assets/all-projects/Hod/House of Diams - Admin Dashboard.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\house-of-diams/house-of-diams-wide.prompt.txt",
+    "output": "assets\\generated-projects\\house-of-diams/house-of-diams-wide.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1562620,
+    "sha256": "083F62F2E9B6FFFAB41699FAC800CA344A292A831B58A25B46F350809B2D192E",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "House of Diams",
+    "slug": "house-of-diams",
+    "role": "detail-a",
+    "references": [
+      "assets/all-projects/Hod/House of Diams _ Luxury Diamond Jewelry & Bespoke Rings.jpg",
+      "assets/all-projects/Hod/House of Diams - Admin Dashboard.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\house-of-diams/house-of-diams-detail-a.prompt.txt",
+    "output": "assets\\generated-projects\\house-of-diams/house-of-diams-detail-a.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 1998886,
+    "sha256": "5A119ABD61A0B1DE498FDD1A9C20B4F4FF029CB3676710A8D242FE94EE22A7D7",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "House of Diams",
+    "slug": "house-of-diams",
+    "role": "detail-b",
+    "references": [
+      "assets/all-projects/Hod/House of Diams _ Luxury Diamond Jewelry & Bespoke Rings.jpg",
+      "assets/all-projects/Hod/House of Diams - Admin Dashboard.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\house-of-diams/house-of-diams-detail-b.prompt.txt",
+    "output": "assets\\generated-projects\\house-of-diams/house-of-diams-detail-b.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2093356,
+    "sha256": "A8FDA69499829EDA394AB2153556C892E40456B160C0738642C524C1DE2CEAEE",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Packaging",
+    "slug": "packaging",
+    "role": "display",
+    "references": [
+      "assets/all-projects/packaging/image1.png",
+      "assets/all-projects/packaging/image3.png",
+      "assets/all-projects/packaging/image4.png"
+    ],
+    "prompt": "assets\\generated-projects\\packaging/packaging-display.prompt.txt",
+    "output": "assets\\generated-projects\\packaging/packaging-display.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 2128629,
+    "sha256": "3F8DB358D233E1DF27F61DBE07629B2115C3ECA02A4AA86758ACBCF1D6BF8335",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Packaging",
+    "slug": "packaging",
+    "role": "wide",
+    "references": [
+      "assets/all-projects/packaging/image1.png",
+      "assets/all-projects/packaging/image3.png",
+      "assets/all-projects/packaging/image4.png"
+    ],
+    "prompt": "assets\\generated-projects\\packaging/packaging-wide.prompt.txt",
+    "output": "assets\\generated-projects\\packaging/packaging-wide.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 2398411,
+    "sha256": "6BB0605774999293AE9AC97EBFB29545F812DB946896E4119D313AF4416A3214",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Packaging",
+    "slug": "packaging",
+    "role": "detail-a",
+    "references": [
+      "assets/all-projects/packaging/image1.png",
+      "assets/all-projects/packaging/image3.png",
+      "assets/all-projects/packaging/image4.png"
+    ],
+    "prompt": "assets\\generated-projects\\packaging/packaging-detail-a.prompt.txt",
+    "output": "assets\\generated-projects\\packaging/packaging-detail-a.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2016450,
+    "sha256": "1E54492DE3E0C4383AF891B804B87E69277C2E6E2587C8277D4895E117FCCE2A",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Packaging",
+    "slug": "packaging",
+    "role": "detail-b",
+    "references": [
+      "assets/all-projects/packaging/image1.png",
+      "assets/all-projects/packaging/image3.png",
+      "assets/all-projects/packaging/image4.png"
+    ],
+    "prompt": "assets\\generated-projects\\packaging/packaging-detail-b.prompt.txt",
+    "output": "assets\\generated-projects\\packaging/packaging-detail-b.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2037876,
+    "sha256": "47A442BFC1C4A8F50134B8F896DC0F8DEB8AFB5F4812FAA430D76F3A6560CCF9",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Beingle",
+    "slug": "beingle",
+    "role": "display",
+    "references": [
+      "assets/all-projects/beingle app/Communities Explore Screen - Modern Light Theme.jpg",
+      "assets/all-projects/beingle app/Home Screen - Modern Light Theme.jpg",
+      "assets/all-projects/beingle app/Match Room Screen - Modern Light Theme.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\beingle/beingle-display.prompt.txt",
+    "output": "assets\\generated-projects\\beingle/beingle-display.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1882549,
+    "sha256": "E642DA34451159A27192A513389D6D5C960A8C75BD3BE1EB99AA54A2A457207E",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Beingle",
+    "slug": "beingle",
+    "role": "wide",
+    "references": [
+      "assets/all-projects/beingle app/Communities Explore Screen - Modern Light Theme.jpg",
+      "assets/all-projects/beingle app/Home Screen - Modern Light Theme.jpg",
+      "assets/all-projects/beingle app/Match Room Screen - Modern Light Theme.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\beingle/beingle-wide.prompt.txt",
+    "output": "assets\\generated-projects\\beingle/beingle-wide.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 2089591,
+    "sha256": "97D33FBFEE583E3C60E3695CC2B2F488262EF7946104A0AE63F1D29D1EC14699",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Beingle",
+    "slug": "beingle",
+    "role": "detail-a",
+    "references": [
+      "assets/all-projects/beingle app/Communities Explore Screen - Modern Light Theme.jpg",
+      "assets/all-projects/beingle app/Home Screen - Modern Light Theme.jpg",
+      "assets/all-projects/beingle app/Match Room Screen - Modern Light Theme.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\beingle/beingle-detail-a.prompt.txt",
+    "output": "assets\\generated-projects\\beingle/beingle-detail-a.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 1725747,
+    "sha256": "61449E37CF846D2A2D5FD5B365B1631B1F524D065E6A377DEF895F4B5885D39C",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Beingle",
+    "slug": "beingle",
+    "role": "detail-b",
+    "references": [
+      "assets/all-projects/beingle app/Communities Explore Screen - Modern Light Theme.jpg",
+      "assets/all-projects/beingle app/Home Screen - Modern Light Theme.jpg",
+      "assets/all-projects/beingle app/Match Room Screen - Modern Light Theme.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\beingle/beingle-detail-b.prompt.txt",
+    "output": "assets\\generated-projects\\beingle/beingle-detail-b.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2086998,
+    "sha256": "B4CE9062779D4FBB6AAAEB1918BE527E20B9713467A64279C42DCF1B7AFC233B",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Tulsi",
+    "slug": "tulsi",
+    "role": "display",
+    "references": [
+      "assets/all-projects/Tulsi/Screenshot_1.jpg",
+      "assets/all-projects/Tulsi/Screenshot_10.jpg",
+      "assets/all-projects/Tulsi/Screenshot_2.jpg",
+      "assets/all-projects/Tulsi/Screenshot_6.jpg",
+      "assets/all-projects/Tulsi/Screenshot_7.jpg",
+      "assets/all-projects/Tulsi/Screenshot_9.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\tulsi/tulsi-display.prompt.txt",
+    "output": "assets\\generated-projects\\tulsi/tulsi-display.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1969740,
+    "sha256": "EC9B59D0BBB208723B555D263490D9ABEE926BE37E0C9A213D63445D5A43CF58",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Tulsi",
+    "slug": "tulsi",
+    "role": "wide",
+    "references": [
+      "assets/all-projects/Tulsi/Screenshot_1.jpg",
+      "assets/all-projects/Tulsi/Screenshot_10.jpg",
+      "assets/all-projects/Tulsi/Screenshot_2.jpg",
+      "assets/all-projects/Tulsi/Screenshot_6.jpg",
+      "assets/all-projects/Tulsi/Screenshot_7.jpg",
+      "assets/all-projects/Tulsi/Screenshot_9.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\tulsi/tulsi-wide.prompt.txt",
+    "output": "assets\\generated-projects\\tulsi/tulsi-wide.png",
+    "status": "generated",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1655579,
+    "sha256": "6A69BA5EF2F620CB6419D8FDC8D8FA7BF5F011124DADB3D2D67BCF529C1AD3CC",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Tulsi",
+    "slug": "tulsi",
+    "role": "detail-a",
+    "references": [
+      "assets/all-projects/Tulsi/Screenshot_1.jpg",
+      "assets/all-projects/Tulsi/Screenshot_10.jpg",
+      "assets/all-projects/Tulsi/Screenshot_2.jpg",
+      "assets/all-projects/Tulsi/Screenshot_6.jpg",
+      "assets/all-projects/Tulsi/Screenshot_7.jpg",
+      "assets/all-projects/Tulsi/Screenshot_9.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\tulsi/tulsi-detail-a.prompt.txt",
+    "output": "assets\\generated-projects\\tulsi/tulsi-detail-a.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 1967257,
+    "sha256": "8C24831D23DAB6F3454A64AB415DD2F007F02F7B7411F59878ADE677E8AD6E2B",
+    "generator": "built-in image_gen"
+  },
+  {
+    "project": "Tulsi",
+    "slug": "tulsi",
+    "role": "detail-b",
+    "references": [
+      "assets/all-projects/Tulsi/Screenshot_1.jpg",
+      "assets/all-projects/Tulsi/Screenshot_10.jpg",
+      "assets/all-projects/Tulsi/Screenshot_2.jpg",
+      "assets/all-projects/Tulsi/Screenshot_6.jpg",
+      "assets/all-projects/Tulsi/Screenshot_7.jpg",
+      "assets/all-projects/Tulsi/Screenshot_9.jpg"
+    ],
+    "prompt": "assets\\generated-projects\\tulsi/tulsi-detail-b.prompt.txt",
+    "output": "assets\\generated-projects\\tulsi/tulsi-detail-b.png",
+    "status": "generated",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2148459,
+    "sha256": "AD71D19EAC403BB3F3A8B912DFBE41D6E6A03629E744C6A6C9061A1694A1E026",
+    "generator": "built-in image_gen"
+  }
+]

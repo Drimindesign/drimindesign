@@ -28,7 +28,7 @@
   .blank {
     field-sizing: content;
     min-width: 5ch;
-    max-width: 100%;
+    max-width: calc(100% - 0.3em);
     margin-inline: 0.15em;
     padding: 0 0.1em;
     border: 0;
@@ -63,37 +63,6 @@
   .blank[aria-invalid="true"] {
     border-bottom-style: dashed;
     border-bottom-color: var(--color-ink-950);
-  }
-
-  .selectWrap {
-    position: relative;
-    display: inline-block;
-  }
-
-  .select {
-    appearance: none;
-    padding-right: 1.1em;
-    cursor: pointer;
-  }
-
-  /* An empty select shows its "choose" prompt in the placeholder colour. */
-  .select:has(option[value=""]:checked) {
-    color: rgb(10 10 10 / 0.42);
-    font-weight: 500;
-  }
-
-  .selectWrap::after {
-    content: "";
-    position: absolute;
-    right: 0.3em;
-    top: 50%;
-    width: 0.32em;
-    height: 0.32em;
-    border-right: 2px solid currentColor;
-    border-bottom: 2px solid currentColor;
-    rotate: 45deg;
-    translate: 0 -70%;
-    pointer-events: none;
   }
 
   .errors {

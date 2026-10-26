@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { BUDGETS, SERVICES, inquiryCopy } from "@/content/inquiry";
 import { Button } from "@/components/ui/button";
 import { ConsentCheckbox } from "@/components/ui/consent-checkbox";
+import { Select } from "@/components/ui/select";
 import { submitInquiry } from "./actions";
 import styles from "./inquiry.module.css";
 import type { InquiryField, InquiryResult } from "./schema";
@@ -60,18 +61,16 @@ function SelectBlank({ field, label, state, prefix, options }: BlankProps & { op
       <label htmlFor={`${prefix}-${field}`} className="sr-only">
         {label}
       </label>
-      <span className={styles.selectWrap}>
-        <select {...fieldProps({ field, state, prefix })} className={`${styles.blank} ${styles.select}`}>
-          <option value="" disabled>
-            choose
+      <Select {...fieldProps({ field, state, prefix })} variant="inline">
+        <option value="" disabled>
+          choose
+        </option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
           </option>
-          {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </span>
+        ))}
+      </Select>
     </>
   );
 }

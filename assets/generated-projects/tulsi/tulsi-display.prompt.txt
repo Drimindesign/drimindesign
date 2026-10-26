@@ -1,0 +1,11 @@
+Use case: product-mockup. Create ONE high-quality portfolio photograph only, full frame, no collage or grid.
+Reference images are the actual client work; preserve their identity and artwork faithfully.
+
+- The attached screenshots are the real work. Show the store and dashboard exactly as designed, and the Tulsi logo exactly. Never redesign or invent text or prices. If small text can't be copied exactly, soft-focus it.
+- Fresh, bright, modern, realistic photography. One soft daylight, natural shadows, uncluttered, two or three tasteful props at most. No borders, no watermarks.
+- Palette: fresh green, tomato red, white.
+- Images 1 and 2: landscape 3:2, main subject in the exact centre, top-right corner calm and empty, bottom-left simple and darker.
+- Images 3 and 4: portrait 2:3, one close subject.
+
+Generate Image 1 ONLY: the storefront with the product search open, on a laptop in the centre of a light wooden kitchen table, a crate of fresh vegetables and a bag of almonds beside it.
+Output aspect ratio: 3:2 landscape. Highest available quality, realistic materials and clean professional lighting.

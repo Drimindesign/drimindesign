@@ -370,7 +370,7 @@ States: hover → `brightness(1.12)` (fine pointers only) · active → `--inset
 ### 8.6 Sentence form (`InquiryForm`)
 - Inputs inline in a sentence, inheriting the sentence's font size (`clamp(1.5rem, 3.4vw, 3rem)`, Manrope medium, line-height 1.75), on the `orange` surface.
 - Input style: no box; `--inset-field` underline; placeholder in `--fg-muted`; width grows with content (`field-sizing: content` with `ch`-based fallback).
-- Native `<select>` styled as a blank with a chevron (empty state shows "choose" in the placeholder colour). Errors: dashed underline on the field plus an `aria-live` list below.
+- Shared `Select` in its inline variant, styled as a blank with a chevron (empty state shows "choose" in the placeholder colour). Errors: dashed underline on the field plus an `aria-live` list below.
 - Submit = `primary lg` button.
 
 ### 8.7 Milestone label (`Milestone`)
@@ -387,6 +387,14 @@ States: hover → `brightness(1.12)` (fine pointers only) · active → `--inset
 ### 8.9 Focus & selection
 - Focus ring: `2px solid var(--focus-ring)`, offset 3 px, `radius` matches element.
 - `::selection { background: var(--selection-bg); color: var(--bg) }`.
+
+### 8.11 Shared dropdown (`Select`)
+
+Form dropdowns share `components/ui/select.tsx`: boxed fields and conversational underlines use one native select with a rounded `ink-50` picker, ink selected rows, orange checkmarks and 44 px option targets. Customizable-select support enhances the picker; other browsers retain their native keyboard/touch picker. Menus and triggers stay within the viewport and honour reduced motion.
+
+### 8.12 Responsive case studies and booking
+
+Project case studies keep app-screen swiping inside a bounded strip; their story grid uses shrinkable tracks so it cannot expand the page. Mobile case images use the generated 800 px source through responsive `<picture>` selection; larger screens retain full-size sources. Appointment fieldsets and grid tracks also shrink within the viewport, with dates scrolling inside their own strip.
 
 ---
 

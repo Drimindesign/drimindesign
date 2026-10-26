@@ -1,0 +1,11 @@
+Use case: product-mockup. Create ONE high-quality portfolio photograph only, full frame, no collage or grid.
+Reference images are the actual client work; preserve their identity and artwork faithfully.
+
+- The attached screenshots are the real app. Show them on modern phones exactly as designed. Never redesign the screens or invent text. If small text can't be copied exactly, soft-focus it.
+- Modern, fresh, warm, realistic photography. One soft morning light, natural shadows, uncluttered. Faces never shown. No borders, no watermarks.
+- Palette: warm cream, burnt orange, fresh white.
+- Images 1 and 2: landscape 3:2, main subject in the exact centre, top-right corner calm and empty, bottom-left simple and darker.
+- Images 3 and 4: portrait 2:3, one close subject.
+
+Generate Image 4 ONLY: a phone held at a slight angle showing the Profile screen, soft cream background.
+Output aspect ratio: 2:3 portrait. Highest available quality, realistic materials and clean professional lighting.

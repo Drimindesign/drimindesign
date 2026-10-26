@@ -5,6 +5,7 @@ import { appointmentCopy, STUDIO_TIME_ZONE_LABEL } from "@/content/appointment";
 import { SERVICES } from "@/content/inquiry";
 import { Button } from "@/components/ui/button";
 import { ConsentCheckbox } from "@/components/ui/consent-checkbox";
+import { Select } from "@/components/ui/select";
 import { bookAppointment } from "../actions";
 import type { AppointmentField, AppointmentResult } from "../schema";
 import styles from "../appointment.module.css";
@@ -108,7 +109,7 @@ function Booking({ days, onBooked }: { days: BookingDay[]; onBooked: () => void 
         </label>
         <label className={styles.field}>
           <span>{LABELS.topic}</span>
-          <select name="topic" defaultValue={values.topic ?? ""} {...describedBy("topic", state)}>
+          <Select name="topic" defaultValue={values.topic ?? ""} {...describedBy("topic", state)}>
             <option value="" disabled>
               Choose
             </option>
@@ -117,7 +118,7 @@ function Booking({ days, onBooked }: { days: BookingDay[]; onBooked: () => void 
                 {service}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className={`${styles.field} ${styles.wide}`}>
           <span>{LABELS.note}</span>

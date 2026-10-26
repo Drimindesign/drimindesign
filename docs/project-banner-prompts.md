@@ -20,6 +20,27 @@ One **master image per project**. The same file is used everywhere a project app
    python scripts/prepare-project-images.py
    ```
 
+## What to attach
+
+Rough photos are fine: the prompt asks ChatGPT to **rebuild the scene** from scratch and keep only the brand (logo, colours, text, screens). What matters most is giving it the *clean artwork* to copy, because it copies what it sees, blur and glare included.
+
+Attach, in this order of importance:
+
+1. **The clean logo**: the original file (SVG, PDF, AI export or a large PNG on a plain background). If you only have a photo, crop tightly to the logo.
+2. **The flat artwork** of what's being shown: the print file or design export of the card/flyer/sign, or the app screens exported from Figma at full size. These are far better than photos of them.
+3. **Your rough photos**, only to show the real object or place (shape, material, setting). Say in the chat: *"The photos are for reference only; rebuild the scene cleanly."*
+4. **The brand colours**, if you know them, typed into the chat (e.g. "sage #8FA58A, off-white #F4F1EA").
+
+| Project | Must attach | Nice to have |
+|---|---|---|
+| Munsey Pharmacy | Logo; business card artwork (front and back); flyer artwork | Your photos of the printed card and flyer; brand purple hex |
+| Breeze and Mist | Logo and leaf monogram; business card artwork; the breeze pattern | Photos of the printed cards; sage green hex |
+| Breeze and Grains | Logo; one photo of the building entrance and the lit sign (the clearest you have) | A daytime photo of the facade; the sign's artwork file |
+| ShreeRam Milks | The four app screens as exports (welcome, sign-in, code, address); app logo/icon | Brand colours; a photo of their milk bottle or packaging |
+| Speakora | The five onboarding screens as exports (username, interests, English test, reading test, completion); app logo | Brand colours |
+
+If you have only rough photos for a print piece, generate in two steps: first ask *"Recreate this business card as clean, flat, front-facing artwork, exactly as designed"*, check the text and logo, then use that clean result as the reference for the hero shot.
+
 ## Why these framing rules
 
 - **7:5 landscape** is the shape of the ring panels and grid cards.

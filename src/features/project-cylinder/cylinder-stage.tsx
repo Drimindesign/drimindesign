@@ -160,9 +160,10 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
       )}
 
       {renderer === "fallback" && (
-        <div key={project.slug} className={`${styles.fallbackImage} ${styles.caption}`}>
+        // Opens the project like a ring panel; keyboard and screen readers use the section's real links.
+        <Link key={project.slug} href={`/projects/${project.slug}`} tabIndex={-1} className={`${styles.fallbackImage} ${styles.caption}`}>
           <Image src={projectImageUrl(project, 1400)} alt={project.alt} fill sizes="(min-width: 64rem) 64rem, 78vw" />
-        </div>
+        </Link>
       )}
 
       {/* Copy column: right of the ring on landscape screens, below it on portrait. */}

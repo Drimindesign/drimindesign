@@ -3,7 +3,7 @@ Builds the site's project images from the generated set in assets/generated-proj
 
 Per project (display, wide, detail-a, detail-b, all PNG):
   - display  -> the 7:5 panel used by the ring, the Projects grid, the tissue pull and the
-                case hero: public/projects/<slug>-<700|1000|1400>.webp (centre crop, never enlarged).
+                case hero: public/projects/<slug>-v2-<700|1000|1400>.webp (centre crop, never enlarged).
   - wide     -> public/projects/<slug>/showcase-<800|1536>.webp
   - detail-a -> public/projects/<slug>/detail-a-<800|1024>.webp
   - detail-b -> public/projects/<slug>/detail-b-<800|1024>.webp
@@ -29,6 +29,9 @@ OUTPUT = ROOT / "public" / "projects"
 # The projects currently on the site (the other generated sets wait for their case studies).
 SLUGS = ("munsey-pharmacy", "breeze-and-mist", "breeze-and-grains", "shreeram-milks", "speakora-onboarding")
 
+# In the panel file names, so a changed image is a new URL (the files are cached for a week).
+# Keep in sync with PROJECT_IMAGE_VERSION in src/content/projects.ts.
+VERSION = "v2"
 PANEL_ASPECT = 7 / 5  # the ring's panel shape (src/features/project-cylinder/scene/dimensions.ts)
 PANEL_WIDTHS = (1400, 1000, 700)  # keep in sync with PROJECT_IMAGE_WIDTHS in src/content/projects.ts
 CASE_SMALL = 800
@@ -66,7 +69,7 @@ def main() -> None:
 
         panel = centre_crop(Image.open(SOURCE / slug / f"{slug}-display.png").convert("RGB"), PANEL_ASPECT)
         for width in PANEL_WIDTHS:
-            save(resized(panel, width), OUTPUT / f"{slug}-{width}.webp", QUALITY_LARGE if width >= 1400 else QUALITY_SMALL)
+            save(resized(panel, width), OUTPUT / f"{slug}-{VERSION}-{width}.webp", QUALITY_LARGE if width >= 1400 else QUALITY_SMALL)
 
         for name, file in (("showcase", "wide"), ("detail-a", "detail-a"), ("detail-b", "detail-b")):
             image = Image.open(SOURCE / slug / f"{slug}-{file}.png").convert("RGB")

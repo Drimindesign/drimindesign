@@ -5,6 +5,9 @@
  * and images live in project-details.ts (read only by the project pages).
  */
 
+/** Part of the panel file names: raise it with the script's VERSION whenever the images change (they are cached for a week). */
+export const PROJECT_IMAGE_VERSION = "v2";
+
 /** Widths the image script generates; keep in sync with WIDTHS in the script. */
 export const PROJECT_IMAGE_WIDTHS = [700, 1000, 1400] as const;
 export type ProjectImageWidth = (typeof PROJECT_IMAGE_WIDTHS)[number];
@@ -73,5 +76,5 @@ export function nextProject(slug: string): Project {
 
 /** The project's 7:5 panel image at the given width. */
 export function projectImageUrl(project: Project, width: ProjectImageWidth): string {
-  return `/projects/${project.slug}-${width}.webp`;
+  return `/projects/${project.slug}-${PROJECT_IMAGE_VERSION}-${width}.webp`;
 }

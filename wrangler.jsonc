@@ -1,0 +1,36 @@
+/*
+ * Cloudflare Workers config for the OpenNext adapter (docs/deploy-cloudflare.md).
+ * Keep `name` and the self-reference `service` identical: that is the Worker's name and
+ * its URL (drimindesign.<your-subdomain>.workers.dev) until a custom domain is attached.
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "drimindesign",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": [
+    // Node.js APIs for the Next.js server (Server Actions, headers(), crypto).
+    "nodejs_compat",
+    // fetch() from the Worker may only reach public URLs.
+    "global_fetch_strictly_public"
+  ],
+  // Every page is prerendered: HTML, RSC payloads, /_next/static and /public are served
+  // straight from Cloudflare's edge as static assets.
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "drimindesign"
+    }
+  ],
+  // next/image optimisation through Cloudflare Images (its free tier covers this site).
+  "images": {
+    "binding": "IMAGES"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

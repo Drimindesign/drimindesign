@@ -1,0 +1,146 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .section {
+    position: relative;
+    background: var(--color-white);
+    padding-top: clamp(4rem, 12svh, 9rem);
+  }
+
+  .copy {
+    max-width: var(--container-max);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  /* Phones and tablets hang two rows, so their stage is taller (scene/lanyards.tsx). */
+  .stage {
+    position: relative;
+    height: max(44rem, 118svh);
+    margin-top: clamp(1.5rem, 5svh, 3rem);
+    overflow: clip;
+  }
+
+  @media (min-width: 1024px) {
+    .stage {
+      height: max(40rem, 100svh);
+    }
+  }
+
+  .canvas {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity var(--duration-slow) var(--ease-standard);
+  }
+
+  /* Vertical swipes still scroll the page; sideways drags swing the cards. */
+  .canvas canvas {
+    touch-action: pan-y;
+  }
+
+  .stage[data-ready] .canvas {
+    opacity: 1;
+  }
+
+  .hint {
+    position: absolute;
+    right: var(--gutter);
+    bottom: var(--gutter);
+    opacity: 0;
+    transition: opacity var(--duration-slow) var(--ease-standard) 600ms;
+  }
+
+  .stage[data-ready] .hint {
+    opacity: 1;
+  }
+
+  /* ---------- HTML cards (base layer and fallback) ---------- */
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2.5rem var(--gutter);
+    max-width: 64rem;
+    margin-inline: auto;
+    padding: 0 var(--gutter);
+    transition:
+      opacity var(--duration-base) var(--ease-standard),
+      visibility 0s linear var(--duration-base);
+  }
+
+  @media (min-width: 1024px) {
+    .cards {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .stage[data-ready] .cards {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  /*
+   * With scripts on, the HTML cards wait unseen until the stage knows whether the 3D cards
+   * will replace them (data-static: they won't), so they never flash before the drop.
+   */
+  :global(html[data-js]) .stage:not([data-static]) .cards {
+    visibility: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(html[data-js]) .stage:not([data-static]) .cards {
+      visibility: visible;
+    }
+  }
+
+  .hanger {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Real cards never hang perfectly square. */
+    rotate: calc((var(--i, 0) - 1.5) * 1.2deg);
+    transform-origin: 50% 0;
+  }
+
+  .strap {
+    width: 0.875rem;
+    height: clamp(3rem, 12svh, 7rem);
+    background: linear-gradient(90deg, rgb(0 0 0 / 0.12), transparent 30% 70%, rgb(0 0 0 / 0.12)), var(--color-orange-500);
+  }
+
+  .pass {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 15rem;
+    aspect-ratio: 1 / 1.586;
+    padding: 2rem 0.875rem 0.875rem;
+    border-radius: 0.75rem;
+    background: var(--color-white);
+    color: var(--color-ink-950);
+    box-shadow:
+      0 0 0 1px rgb(10 10 10 / 0.06),
+      0 18px 30px -18px rgb(10 10 10 / 0.35);
+  }
+
+  .slot {
+    position: absolute;
+    top: 0.625rem;
+    left: 50%;
+    width: 2.75rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--color-ink-200);
+    translate: -50% 0;
+  }
+
+  .portrait {
+    position: relative;
+    aspect-ratio: 1.04;
+    margin-top: 0.75rem;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    background: var(--color-ink-100);
+  }
+}

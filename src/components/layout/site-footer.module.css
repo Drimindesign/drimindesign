@@ -1,0 +1,66 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .footer {
+    position: relative;
+    padding: clamp(4rem, 12svh, 8rem) var(--gutter) max(var(--gutter), env(safe-area-inset-bottom));
+    overflow: clip;
+  }
+
+  .top {
+    display: grid;
+    gap: 3rem;
+    max-width: var(--container-max);
+    margin-inline: auto;
+  }
+
+  @media (min-width: 900px) {
+    .top {
+      grid-template-columns: 1.4fr 1fr;
+      align-items: end;
+    }
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2rem;
+  }
+
+  .link {
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.3em;
+    transition: text-decoration-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .link:focus-visible {
+    text-decoration-color: currentColor;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .link:hover {
+      text-decoration-color: currentColor;
+    }
+  }
+
+  /* The wordmark fills the footer's width; the container query unit sizes it. */
+  .word {
+    container-type: inline-size;
+    max-width: var(--container-max);
+    margin: clamp(4rem, 12svh, 8rem) auto 0;
+  }
+
+  .bottom {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.75rem 2rem;
+    max-width: var(--container-max);
+    margin: clamp(1.5rem, 4svh, 2.5rem) auto 0;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgb(255 255 255 / 0.14);
+    color: rgb(255 255 255 / 0.68);
+    font-size: var(--text-body-sm);
+  }
+}

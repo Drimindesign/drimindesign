@@ -1,0 +1,131 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .section {
+    position: relative;
+    z-index: 1;
+    background: var(--color-white);
+  }
+
+  /* The pinned screen: plain white, the tree centred on it. */
+  .stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    overflow: hidden;
+    background: var(--color-white);
+  }
+
+  /* Snap markers read by Lenis Snap (use-tree-scene.ts); invisible, zero-size. */
+  .snap {
+    position: absolute;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Title fades out as the story starts; the outro fades in once the tree is grown. */
+  .heading {
+    position: absolute;
+    inset: calc(var(--header-offset) + var(--control-height) + 1rem) var(--gutter) auto;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  /* Gone before the first milestone's caption takes its place (tier 1 ends at 0.175). */
+  .title {
+    opacity: calc(1 - clamp(0, (var(--growth, 0) - 0.11) * 16, 1));
+  }
+
+  .outro {
+    position: absolute;
+    inset: 0 0 auto;
+    /* Arrives only after the caption has stepped aside (gone by 0.945). */
+    opacity: clamp(0, (var(--growth, 0) - 0.95) * 20, 1);
+  }
+
+  .label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--label-width);
+    opacity: 0;
+    transform: translate(var(--x), calc(var(--y) + 0.6rem));
+    transition:
+      opacity 600ms var(--ease-standard),
+      transform 900ms var(--ease-out-expo);
+    pointer-events: none;
+  }
+
+  .label[data-side="right"] {
+    text-align: left;
+  }
+
+  .label[data-side="left"] {
+    text-align: right;
+  }
+
+  .label[data-shown] {
+    opacity: 1;
+    transform: translate(var(--x), var(--y));
+  }
+
+  /* The milestone lands with a short shudder, in step with the tree's tremor. */
+  @media (prefers-reduced-motion: no-preference) {
+    .label[data-shown] .tag,
+    .captionLine .tag {
+      animation: land 520ms var(--ease-standard) 120ms both;
+    }
+  }
+
+  /* Phones: one caption under the title, showing the milestone just reached. */
+  .caption {
+    position: absolute;
+    inset: calc(var(--header-offset) + var(--control-height) + 1rem) var(--gutter) auto;
+    text-align: center;
+    pointer-events: none;
+    /* Shares the title's spot: steps aside as the outro arrives. */
+    opacity: calc(1 - clamp(0, (var(--growth, 0) - 0.9) * 22, 1));
+  }
+
+  .captionLine {
+    animation: caption-in 700ms var(--ease-out-expo) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .label,
+    .captionLine {
+      transition: none;
+      animation: none;
+    }
+  }
+
+  @keyframes land {
+    20% {
+      translate: -3px 0;
+    }
+    40% {
+      translate: 3px 0;
+    }
+    60% {
+      translate: -2px 0;
+    }
+    80% {
+      translate: 1px 0;
+    }
+  }
+
+  @keyframes caption-in {
+    from {
+      opacity: 0.01;
+      transform: translateY(0.6rem);
+    }
+  }
+}

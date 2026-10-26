@@ -1,0 +1,188 @@
+/*
+ * Design tokens — source of truth is DESIGN.md. Keep the two in sync.
+ * `@theme` values become Tailwind utilities (bg-orange-500, text-label, ease-out-expo…)
+ * and CSS variables on :root.
+ */
+
+@theme {
+  /* Tight palette: drop Tailwind's defaults so only system colours exist. */
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  --color-orange-50: #fff2ee;
+  --color-orange-100: #ffe0d6;
+  --color-orange-200: #ffbfaa;
+  --color-orange-300: #ff9473;
+  --color-orange-400: #ff6038;
+  --color-orange-500: #fa2e00;
+  --color-orange-600: #d62700;
+  --color-orange-700: #ad1f00;
+  --color-orange-800: #851800;
+  --color-orange-900: #5c1100;
+  --color-orange-950: #330900;
+
+  --color-ink-50: #f7f7f7;
+  --color-ink-100: #efefef;
+  --color-ink-200: #dedede;
+  --color-ink-300: #bdbdbd;
+  --color-ink-400: #8f8f8f;
+  --color-ink-500: #6b6b6b;
+  --color-ink-600: #3d3d3d;
+  --color-ink-700: #2a2a2a;
+  --color-ink-800: #1c1c1c;
+  --color-ink-900: #121212;
+  --color-ink-950: #0a0a0a;
+
+  --breakpoint-3xl: 120rem;
+  --breakpoint-4xl: 160rem;
+
+  --text-display-xl: clamp(3.5rem, 10vw, 10rem);
+  --text-display-xl--line-height: 0.88;
+  --text-display-lg: clamp(2.5rem, 6vw, 6rem);
+  --text-display-lg--line-height: 0.92;
+  --text-heading-xl: clamp(2rem, 4vw, 3.75rem);
+  --text-heading-xl--line-height: 1;
+  --text-heading-lg: clamp(1.5rem, 2.4vw, 2.25rem);
+  --text-heading-lg--line-height: 1.1;
+  --text-heading-md: clamp(1.25rem, 1.6vw, 1.5rem);
+  --text-heading-md--line-height: 1.2;
+  --text-stat: clamp(1.75rem, 3vw, 3rem);
+  --text-stat--line-height: 1;
+  --text-body-lg: clamp(1.125rem, 1.2vw, 1.25rem);
+  --text-body-lg--line-height: 1.5;
+  --text-body: 1rem;
+  --text-body--line-height: 1.6;
+  --text-body-sm: 0.875rem;
+  --text-body-sm--line-height: 1.5;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1.2;
+  --text-label--letter-spacing: 0.04em;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 9999px;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.76, 0, 0.24, 1);
+  /* CSS stand-in for GSAP "settle": ~4% overshoot, then rest. */
+  --ease-settle: cubic-bezier(0.22, 1.12, 0.36, 1);
+}
+
+@theme inline {
+  /* next/font exposes --font-outrun / --font-manrope (with metric-matched fallbacks) on <html>. */
+  --font-display: var(--font-outrun), "Arial Narrow", Impact, sans-serif;
+  --font-body: var(--font-manrope), ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+
+  /* Semantic colours resolve per surface (see [data-surface] below). */
+  --color-bg: var(--surface-bg);
+  --color-fg: var(--surface-fg);
+  --color-fg-display: var(--surface-fg-display);
+  --color-fg-muted: var(--surface-fg-muted);
+  --color-accent: var(--surface-accent);
+  --color-border: var(--surface-border);
+  --color-glass-fg: var(--glass-fg);
+  --color-glass-fg-muted: var(--glass-fg-muted);
+  --color-glass-active: var(--glass-active-bg);
+  --color-glass-active-fg: var(--glass-active-fg);
+}
+
+:root {
+  --gutter: clamp(1rem, 3vw, 2.5rem);
+  --space-section: clamp(4rem, 10vw, 10rem);
+  --space-stack: clamp(1.5rem, 3vw, 3rem);
+  --container-max: 1760px;
+  --header-offset: max(1rem, env(safe-area-inset-top));
+  --control-height: 2.75rem;
+
+  --duration-instant: 100ms;
+  --duration-fast: 180ms;
+  --duration-base: 280ms;
+  --duration-slow: 480ms;
+  --duration-slower: 800ms;
+
+  --z-nav: 1000;
+  --z-overlay: 1100;
+
+  /* Depth: inner shadows only, never drop shadows on UI. */
+  --inset-raise: inset 0 1px 0 0 rgb(255 255 255 / 0.35), inset 0 -3px 0 0 rgb(0 0 0 / 0.22);
+  --inset-raise-dark: inset 0 1px 0 0 rgb(255 255 255 / 0.12), inset 0 -3px 0 0 rgb(0 0 0 / 0.5);
+  --inset-pressed: inset 0 2px 6px 0 rgb(0 0 0 / 0.3);
+
+  --gradient-primary: linear-gradient(180deg, #ff6038 0%, #fa2e00 52%, #d62700 100%);
+  --gradient-ink: linear-gradient(180deg, #2a2a2a 0%, #121212 55%, #0a0a0a 100%);
+}
+
+/*
+ * Surfaces — a section declares one; components only read semantic tokens.
+ * The fixed header isn't inside any section, so until HeaderSurface (JS) sets its own
+ * data-surface, it borrows the surface of the page's first section via :has().
+ */
+[data-surface="orange"],
+body:has(main > [data-surface="orange"]:first-child, main[data-surface="orange"]) > header:not([data-surface]) {
+  --surface-bg: var(--color-orange-500);
+  --surface-fg: var(--color-ink-950);
+  --surface-fg-display: var(--color-white);
+  --surface-fg-muted: rgb(10 10 10 / 0.72);
+  --surface-accent: var(--color-ink-950);
+  --surface-border: rgb(10 10 10 / 0.16);
+  --surface-focus: var(--color-ink-950);
+  --btn-primary-bg: var(--gradient-ink);
+  --btn-primary-fg: var(--color-white);
+  --btn-primary-inset: var(--inset-raise-dark);
+  /* Regular liquid glass over a bright, saturated surface reads light with dark labels. */
+  --glass-tint: rgb(255 255 255 / 0.14);
+  --glass-backdrop: blur(5px) saturate(165%) brightness(1.1);
+  --glass-solid: #ff7a52;
+  --glass-fg: var(--color-ink-950);
+  --glass-fg-muted: rgb(10 10 10 / 0.8);
+  --glass-active-bg: var(--color-ink-950);
+  --glass-active-fg: var(--color-white);
+}
+
+[data-surface="dark"],
+body:has(main > [data-surface="dark"]:first-child, main[data-surface="dark"]) > header:not([data-surface]) {
+  --surface-bg: var(--color-ink-950);
+  --surface-fg: var(--color-white);
+  --surface-fg-display: var(--color-white);
+  --surface-fg-muted: var(--color-ink-400);
+  --surface-accent: var(--color-orange-500);
+  --surface-border: var(--color-ink-700);
+  --surface-focus: var(--color-orange-400);
+  --btn-primary-bg: var(--gradient-primary);
+  --btn-primary-fg: var(--color-ink-950);
+  --btn-primary-inset: var(--inset-raise);
+  /* Over dark content the glass darkens and keeps light labels. */
+  --glass-tint: rgb(40 40 40 / 0.32);
+  --glass-backdrop: blur(8px) saturate(160%) brightness(0.92);
+  --glass-solid: #222222;
+  --glass-fg: var(--color-white);
+  --glass-fg-muted: rgb(255 255 255 / 0.72);
+  --glass-active-bg: rgb(255 255 255 / 0.16);
+  --glass-active-fg: var(--color-white);
+}
+
+[data-surface="light"],
+body:has(main > [data-surface="light"]:first-child, main[data-surface="light"]) > header:not([data-surface]) {
+  --surface-bg: var(--color-white);
+  --surface-fg: var(--color-ink-950);
+  --surface-fg-display: var(--color-ink-950);
+  --surface-fg-muted: var(--color-ink-500);
+  --surface-accent: var(--color-orange-600);
+  --surface-border: var(--color-ink-200);
+  --surface-focus: var(--color-orange-600);
+  --btn-primary-bg: var(--gradient-primary);
+  --btn-primary-fg: var(--color-ink-950);
+  --btn-primary-inset: var(--inset-raise);
+  --glass-tint: rgb(255 255 255 / 0.42);
+  --glass-backdrop: blur(8px) saturate(180%) brightness(1.04);
+  --glass-solid: #f2f2f2;
+  --glass-fg: var(--color-ink-950);
+  --glass-fg-muted: rgb(10 10 10 / 0.72);
+  --glass-active-bg: var(--color-ink-950);
+  --glass-active-fg: var(--color-white);
+}

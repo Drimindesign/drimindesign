@@ -1,0 +1,89 @@
+/*
+ * Outrun metrics (upm 1000): ascender 750, descender 250, cap height 680.
+ * line-height 0.86 puts the top of the line box exactly on the cap height
+ * (0.75 - (1 - 0.86) / 2 = 0.68), so the clip edge hugs the letters.
+ */
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .wordmark {
+    /* Fill the row exactly (--wordmark-em = advance width of the word; cqw is the stage's
+       content box, already inside the gutters), but never so tall that the rest of the hero
+       (header, description, stats, CTA = --wordmark-reserve) leaves the first screen on short,
+       wide displays. The word occupies 0.68em of flow height after the margin trims below. */
+    font-size: min(
+      calc(100cqw / var(--wordmark-em)),
+      calc((100svh - var(--wordmark-reserve)) / 0.68)
+    );
+    --wordmark-reserve: 30rem;
+
+    font-family: var(--font-display);
+    font-weight: 400;
+    line-height: 0.86;
+    white-space: nowrap;
+    color: var(--surface-fg-display);
+
+    /* Clip vertically only: letters rise out of the baseline, while horizontal overflow stays
+       free for the tilt now and the cursor push later. The 0.1em top padding leaves room for
+       the settle overshoot; the negative margins cancel the padding and trim the empty
+       descender band (0.18em) below the caps. */
+    overflow-x: visible;
+    overflow-y: clip;
+    /* Horizontal finger drags bend the letters; vertical ones still scroll the page. */
+    touch-action: pan-y;
+    padding-top: 0.1em;
+    margin-top: -0.1em;
+    margin-bottom: -0.18em;
+  }
+
+  .letters {
+    display: flex;
+    /* The letters are positioned (for their bend strips), so they'd paint above the
+       description that tucks under the trimmed descender band and swallow its clicks.
+       The bend follows the pointer from window events, so the letters need none. */
+    pointer-events: none;
+  }
+
+  .letter {
+    position: relative;
+    display: inline-block;
+    /* Stretch grows up from the baseline (0.68 / 0.86 of the line box). */
+    transform-origin: 50% 79.07%;
+  }
+
+  /*
+   * Bend strips (see bend-geometry.ts). Each one redraws the letter through `content`,
+   * clips to its horizontal band, then shifts by the curve's travel at its bottom edge and
+   * skews so its top edge meets the strip above. Bands overlap by 0.5px so antialiased
+   * clip edges never leave a hairline. Hidden until the letters start bending.
+   */
+  .slice {
+    position: absolute;
+    inset: 0;
+    visibility: hidden;
+    pointer-events: none;
+    color: var(--surface-fg-display);
+    clip-path: inset(var(--t) -50% calc(var(--b) - 0.5px) -50%);
+    transform-origin: 50% calc(100% - var(--b));
+    transform: translateX(calc(var(--bend, 0px) * var(--k1)))
+      skewX(atan2(calc(var(--bend, 0px) * (var(--k1) - var(--k0))), var(--h)));
+  }
+
+  .slice::before {
+    content: var(--char);
+  }
+
+  .letters[data-bending] .letter {
+    color: transparent;
+  }
+
+  .letters[data-bending] .slice {
+    visibility: visible;
+    will-change: transform;
+  }
+
+  @media (min-width: 64rem) {
+    .wordmark {
+      --wordmark-reserve: 26.5rem;
+    }
+  }
+}

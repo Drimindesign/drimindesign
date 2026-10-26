@@ -1,0 +1,200 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .root {
+    /* Not positioned on purpose: the physics layer spans the whole hero stage. */
+    min-width: 0;
+  }
+
+  /* All sentences share one grid cell, so the block is as tall as the longest one and the
+     rotation never shifts the layout (no CLS). Inactive sentences are visibility: hidden. */
+  .stack {
+    display: grid;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .sentence {
+    grid-area: 1 / 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    row-gap: 0.05em;
+    visibility: hidden;
+  }
+
+  .sentence[data-state="shown"],
+  .sentence[data-state="enter"],
+  .sentence[data-state="leave"] {
+    visibility: visible;
+  }
+
+  .word {
+    display: inline-block;
+    margin-inline-end: 0.28em;
+    border: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: inherit;
+  }
+
+  .word[data-fallen] {
+    display: none;
+  }
+
+  /* Loose words are marked with a dashed underline (they're "perforated": tear here).
+     On hover the line goes solid and the word wobbles in its socket. */
+  .falls {
+    cursor: pointer;
+    text-decoration-line: underline;
+    text-decoration-style: dashed;
+    text-decoration-color: rgb(10 10 10 / 0.5);
+    text-decoration-thickness: 0.07em;
+    text-underline-offset: 0.22em;
+    transition: text-decoration-color var(--duration-fast) var(--ease-standard);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .falls:hover {
+      text-decoration-style: solid;
+      text-decoration-color: currentColor;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @media (hover: hover) and (pointer: fine) {
+      .falls:hover {
+        animation: wobble 420ms var(--ease-standard);
+      }
+    }
+
+    .falls[data-demo] {
+      text-decoration-style: solid;
+      text-decoration-color: currentColor;
+      animation: wobble 325ms var(--ease-standard) 2;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .sentence[data-state="enter"] .word {
+      animation: word-in 640ms var(--ease-out-expo) calc(140ms + var(--i) * 32ms) both;
+    }
+
+    .sentence[data-state="leave"] .word {
+      animation: word-out 360ms var(--ease-standard) calc(var(--i) * 18ms) both;
+    }
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.75rem;
+  }
+
+  /* 24px-tall hit area; the visible bar is the 3px ::before. */
+  .bar {
+    position: relative;
+    width: 1.75rem;
+    height: 1.5rem;
+    border: 0;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  .bar::before,
+  .bar::after {
+    content: "";
+    position: absolute;
+    inset: calc(50% - 1.5px) 0.125rem;
+    border-radius: var(--radius-pill);
+    background: var(--surface-border);
+  }
+
+  .bar::after {
+    background: var(--surface-fg);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+
+  .bar[aria-current="true"]::after {
+    transform: scaleX(1);
+  }
+
+  /* The active bar fills over the rotation interval; its animationend advances the
+     sentence, so pausing the animation pauses the rotation. No animation under reduced
+     motion means no auto-rotation (the bars still switch sentences). */
+  @media (prefers-reduced-motion: no-preference) {
+    .root[data-rotating] .bar[aria-current="true"]::after {
+      animation: bar-fill var(--rotate-ms) linear both;
+    }
+
+    .root[data-paused] .bar::after {
+      animation-play-state: paused !important;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .root:hover .bar::after {
+        animation-play-state: paused;
+      }
+    }
+
+    .root:focus-within .bar::after {
+      animation-play-state: paused;
+    }
+  }
+
+  .action {
+    margin-inline-start: 0.5rem;
+  }
+
+  .layer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .ghost {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
+    white-space: nowrap;
+    will-change: transform;
+  }
+
+  @keyframes word-in {
+    from {
+      opacity: 0.01;
+      transform: translateY(45%);
+    }
+  }
+
+  @keyframes word-out {
+    to {
+      opacity: 0;
+      transform: translateY(-35%);
+    }
+  }
+
+  @keyframes bar-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes wobble {
+    25% {
+      rotate: -3deg;
+    }
+    60% {
+      rotate: 2deg;
+    }
+  }
+}

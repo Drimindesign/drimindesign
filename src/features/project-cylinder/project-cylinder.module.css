@@ -1,0 +1,117 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  /*
+   * Above the story section that follows: at the end the room lifts up off the page like a
+   * raised panel, casting a soft shadow on the white page it uncovers.
+   */
+  .section {
+    position: relative;
+    z-index: 2;
+    background: #fa2e00;
+  }
+
+  .section::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: clamp(56px, 10svh, 120px);
+    background: linear-gradient(180deg, rgb(60 12 0 / 0.26) 0%, rgb(60 12 0 / 0.08) 45%, transparent 100%);
+    pointer-events: none;
+  }
+
+  /* The pinned screen: the scene and its overlay stay put while the section scrolls by. */
+  .stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    overflow: hidden;
+    /* Before the canvas paints: the same hazy room, as gradients (scene/palette.ts). */
+    background:
+      radial-gradient(60% 40% at 50% 46%, rgb(255 91 40 / 0.8), transparent 75%),
+      linear-gradient(180deg, #e22900 0%, #fa2e00 52%, #df2900 70%, #c92400 100%);
+  }
+
+  /* During the lift (--exit 0 → 1) the scene rises a touch faster than the page: depth. */
+  .canvas {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transform: translateY(calc(var(--exit, 0) * -8%));
+    transition: opacity 600ms var(--ease-standard);
+  }
+
+  .canvas[data-ready] {
+    opacity: 1;
+  }
+
+  /* Overlay copy fades in over the last quarter of the descent (--land: 0 → 1). */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: calc(var(--header-offset) + var(--control-height) + 1.5rem) var(--gutter) var(--gutter);
+    pointer-events: none;
+    opacity: clamp(0, calc((var(--land, 0) - 0.72) * 3.6), 1);
+  }
+
+  .copy {
+    width: 100%;
+    opacity: calc(1 - var(--exit, 0) * 2.5);
+  }
+
+
+
+  /* Landscape: the ring sits left (camera-rig.tsx LEFT_SHIFT), the copy takes the right column. */
+  @media (min-aspect-ratio: 7 / 5) and (min-width: 48rem) {
+    .overlay {
+      justify-content: center;
+      align-items: flex-end;
+    }
+
+    .copy {
+      width: min(30vw, 28rem);
+      padding-top: var(--control-height);
+    }
+  }
+
+  .caption {
+    animation: caption-in 700ms var(--ease-out-expo) both;
+  }
+
+  /* Snap markers read by Lenis Snap (cylinder-stage.tsx); invisible, zero-size. */
+  .snap {
+    position: absolute;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .fallbackImage {
+    position: absolute;
+    left: 50%;
+    top: 46%;
+    width: min(78vw, 64rem);
+    aspect-ratio: 7 / 5;
+    translate: -50% -50%;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .caption {
+      animation: none;
+    }
+  }
+
+  @keyframes caption-in {
+    from {
+      opacity: 0.01;
+      transform: translateY(0.75rem);
+    }
+  }
+}

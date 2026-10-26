@@ -1,0 +1,101 @@
+/*
+ * Intro choreography. Only transform and opacity animate, so the whole sequence runs on
+ * the compositor. Rules are active only while <html data-intro="play">, which the inline
+ * script sets before first paint; without JS or with reduced motion nothing here applies
+ * and the page renders in its final state.
+ */
+
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .stage {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+    container-type: inline-size;
+    transform-origin: 50% var(--intro-oy, 50%);
+  }
+
+  /* Overhangs the stage by --intro-r so its rounded corners are off-screen at full size. */
+  .panel {
+    position: absolute;
+    inset: calc(var(--intro-r, 0px) * -1);
+    z-index: -1;
+    border-radius: var(--intro-r, 0px);
+    background: var(--surface-bg);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /*
+     * The pop and the expand animate different properties (`scale` and `transform`), which
+     * multiply. Chrome only composites one animation per property, so splitting them keeps
+     * both on the compositor. Both fill both ways: the expand holds the framed state while
+     * the pop runs, and the pop ends at scale 1 (identity).
+     */
+    :global(html[data-intro="play"]) .stage {
+      animation:
+        intro-pop var(--intro-pop-ms) var(--ease-out-expo) both,
+        intro-expand var(--intro-expand-ms) var(--ease-in-out) var(--intro-expand-delay) both;
+    }
+
+    :global(html[data-intro="play"]) .letter {
+      transform-origin: 0% 100%;
+      animation: intro-letter var(--intro-letter-ms) var(--ease-settle)
+        calc(var(--intro-letter-delay) + var(--i, 0) * var(--intro-letter-stagger)) both;
+    }
+
+    :global(html[data-intro="play"]) .item {
+      animation: intro-rise var(--intro-item-ms) var(--ease-out-expo)
+        calc(var(--intro-items-delay) + var(--intro-order, 0) * var(--intro-item-stagger)) both;
+    }
+
+    :global(html[data-intro="play"]) .itemDrop {
+      animation-name: intro-drop;
+    }
+  }
+
+  @keyframes intro-pop {
+    from {
+      scale: var(--intro-pop);
+    }
+    to {
+      scale: 1;
+    }
+  }
+
+  @keyframes intro-expand {
+    from {
+      transform: scale(var(--intro-sx), var(--intro-sy));
+    }
+    to {
+      transform: scale(1, 1);
+    }
+  }
+
+  /* Letters rise out of the wordmark's clipped line box, leaning back, then settle upright. */
+  @keyframes intro-letter {
+    from {
+      transform: translateY(100%) rotate(var(--intro-letter-tilt));
+    }
+  }
+
+  /*
+   * 0.01, not 0: Chrome skips fully transparent text when picking the LCP element, so a
+   * 0-start would push LCP back to whenever the description fades in. At 0.01 it counts
+   * as painted with the first frame while staying invisible.
+   */
+  @keyframes intro-rise {
+    from {
+      opacity: 0.01;
+      transform: translateY(1.5rem);
+    }
+  }
+
+  @keyframes intro-drop {
+    from {
+      opacity: 0.01;
+      transform: translateY(-1rem);
+    }
+  }
+}

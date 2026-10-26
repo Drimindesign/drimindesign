@@ -1,0 +1,75 @@
+/* Buttons get depth from inner shadows and gradients, never drop shadows (DESIGN.md §6, §8.2). */
+
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-body);
+    font-weight: 600;
+    white-space: nowrap;
+    text-decoration: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      transform var(--duration-fast) var(--ease-standard),
+      box-shadow var(--duration-fast) var(--ease-standard),
+      filter var(--duration-fast) var(--ease-standard);
+  }
+
+  .button:active {
+    transform: translateY(1px);
+    box-shadow: var(--inset-pressed);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .button:hover {
+      filter: brightness(1.12);
+    }
+  }
+
+  .primary {
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-fg);
+    box-shadow: var(--btn-primary-inset);
+  }
+
+  /* .glass: surface and colour come from the `liquid-glass` utility, added in button.tsx. */
+
+  .ghost {
+    background: transparent;
+    color: var(--surface-fg);
+    box-shadow: inset 0 0 0 1px var(--surface-border);
+  }
+
+  .sm {
+    height: 2.25rem;
+    padding-inline: 0.875rem;
+    font-size: var(--text-label);
+    letter-spacing: 0.02em;
+  }
+
+  /* Extends the 36px sm button to a 44px touch target without changing its look.
+     Glass buttons use ::after for their sheen and are never smaller than md. */
+  .sm:not(.glass)::after {
+    content: "";
+    position: absolute;
+    inset: -4px 0;
+  }
+
+  .md {
+    height: var(--control-height);
+    padding-inline: 1.25rem;
+    font-size: var(--text-body-sm);
+  }
+
+  .lg {
+    height: 3.5rem;
+    padding-inline: 1.75rem;
+    font-size: var(--text-body);
+  }
+}

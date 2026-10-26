@@ -1,0 +1,166 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .section {
+    position: relative;
+    padding-block: clamp(5rem, 16svh, 11rem);
+    padding-inline: var(--gutter);
+  }
+
+  .inner {
+    max-width: 72rem;
+    margin-inline: auto;
+  }
+
+  .form {
+    margin-top: clamp(2.5rem, 7svh, 4.5rem);
+  }
+
+  /* The sentence: large, relaxed leading so the blanks' underlines never touch the next line. */
+  .sentence {
+    font-size: clamp(1.5rem, 3.4vw, 3rem);
+    font-weight: 500;
+    line-height: 1.75;
+    letter-spacing: -0.01em;
+    text-wrap: pretty;
+  }
+
+  /* A blank: sized to its content, underlined like a form on paper. */
+  .blank {
+    field-sizing: content;
+    min-width: 5ch;
+    max-width: 100%;
+    margin-inline: 0.15em;
+    padding: 0 0.1em;
+    border: 0;
+    border-bottom: 2px solid rgb(10 10 10 / 0.55);
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-ink-950);
+    font: inherit;
+    font-weight: 600;
+    line-height: 1.2;
+    vertical-align: baseline;
+    transition:
+      border-color var(--duration-fast) var(--ease-standard),
+      background-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .blank::placeholder {
+    color: rgb(10 10 10 / 0.42);
+    font-weight: 500;
+  }
+
+  .blank:hover {
+    border-bottom-color: var(--color-ink-950);
+  }
+
+  .blank:focus-visible {
+    outline: none;
+    border-bottom-color: var(--color-ink-950);
+    background: rgb(255 255 255 / 0.16);
+  }
+
+  .blank[aria-invalid="true"] {
+    border-bottom-style: dashed;
+    border-bottom-color: var(--color-ink-950);
+  }
+
+  .selectWrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  .select {
+    appearance: none;
+    padding-right: 1.1em;
+    cursor: pointer;
+  }
+
+  /* An empty select shows its "choose" prompt in the placeholder colour. */
+  .select:has(option[value=""]:checked) {
+    color: rgb(10 10 10 / 0.42);
+    font-weight: 500;
+  }
+
+  .selectWrap::after {
+    content: "";
+    position: absolute;
+    right: 0.3em;
+    top: 50%;
+    width: 0.32em;
+    height: 0.32em;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    rotate: 45deg;
+    translate: 0 -70%;
+    pointer-events: none;
+  }
+
+  .errors {
+    margin-top: 1.25rem;
+    font-size: var(--text-body);
+    font-weight: 600;
+  }
+
+  .errors li::before {
+    content: "— ";
+  }
+
+  .arrow {
+    transition: transform var(--duration-base) var(--ease-out-expo);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    button:hover > .arrow {
+      transform: translateX(3px);
+    }
+  }
+
+  /* Sent: the note settles in and a tick draws itself. */
+  .success {
+    margin-top: clamp(2.5rem, 7svh, 4.5rem);
+    animation: settle var(--duration-slower) var(--ease-out-expo) both;
+  }
+
+  .check {
+    fill: none;
+    stroke: var(--color-ink-950);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .check circle {
+    stroke-dasharray: 139;
+    stroke-dashoffset: 139;
+    animation: draw 700ms var(--ease-out-expo) 120ms forwards;
+  }
+
+  .check path {
+    stroke-dasharray: 36;
+    stroke-dashoffset: 36;
+    animation: draw 420ms var(--ease-out-expo) 620ms forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .success,
+    .check circle,
+    .check path {
+      animation: none;
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes settle {
+    from {
+      opacity: 0.01;
+      transform: translateY(1rem);
+    }
+  }
+
+  @keyframes draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+}

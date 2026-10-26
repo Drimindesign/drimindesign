@@ -19,7 +19,7 @@ export interface CylinderSceneProps {
   onReady?: () => void;
 }
 
-const DPR: Record<DeviceTier, [number, number]> = { high: [1, 2], medium: [1, 1.5], low: [1, 1] };
+const DPR: Record<DeviceTier, [number, number]> = { high: [1, 2], medium: [1, 2], low: [1, 1.5] };
 
 /*
  * Renders on demand: a frame is drawn only when scroll notifies or something is still moving.

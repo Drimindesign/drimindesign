@@ -32,10 +32,11 @@ interface RingProps {
   store: CylinderStore;
 }
 
-const IMAGE_WIDTH: Record<DeviceTier, ProjectImageWidth> = { high: 1400, medium: 1000, low: 700 };
+/* The ring is the first thing visitors see, so only the weakest devices get a smaller picture (five images, lazy-loaded). */
+const IMAGE_WIDTH: Record<DeviceTier, ProjectImageWidth> = { high: 1400, medium: 1400, low: 1000 };
 const SEGMENTS: Record<DeviceTier, number> = { high: 48, medium: 32, low: 20 };
-/* Panels glow like screens: unlit, a touch below full white so highlights don't clip. */
-const OUTER_TINT = new Color(0.94, 0.94, 0.94);
+/* Panels glow like screens: unlit and untinted (no tone mapping), so the photos show their true colours. */
+const OUTER_TINT = new Color(1, 1, 1);
 /* The inside of the band is in its own shade: same images, dimmer and slightly warm. */
 const INNER_TINT = new Color(0.42, 0.39, 0.37);
 const PLACEHOLDER = new Color("#d42600");

@@ -51,6 +51,12 @@
     margin: clamp(4rem, 12svh, 8rem) auto 0;
   }
 
+  .legal {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+  }
+
   .bottom {
     display: flex;
     flex-wrap: wrap;

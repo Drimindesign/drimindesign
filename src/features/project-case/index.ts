@@ -1,1 +1,1 @@
-export { ProjectCase, heroTransitionName } from "./project-case";
+export { ProjectCase, ProjectCaseFallback, heroTransitionName } from "./project-case";

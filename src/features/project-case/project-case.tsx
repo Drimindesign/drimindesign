@@ -12,6 +12,15 @@ export function heroTransitionName(slug: string): string {
   return `project-${slug}`;
 }
 
+/* Holds the hero's place while a project streams in (the route's shared navigation shell). */
+export function ProjectCaseFallback(): React.ReactElement {
+  return (
+    <main>
+      <div data-surface="dark" className={styles.hero} />
+    </main>
+  );
+}
+
 /*
  * A project's case study: a full-screen hero (exactly where the tissue pull lands), the facts,
  * a large intro line, the story in images and short chapters, and the next project. Server

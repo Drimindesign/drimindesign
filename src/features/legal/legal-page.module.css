@@ -1,0 +1,103 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .page {
+    padding: calc(var(--header-offset) + var(--control-height) + clamp(3rem, 10svh, 7rem)) var(--gutter)
+      clamp(4rem, 12svh, 8rem);
+    background: #fff;
+    color: var(--color-ink-950);
+  }
+
+  .inner {
+    max-width: 72rem;
+    margin-inline: auto;
+  }
+
+  .title {
+    font-size: clamp(2.5rem, 6vw, 5.5rem);
+    line-height: 0.95;
+  }
+
+  .layout {
+    display: grid;
+    gap: 2.5rem;
+    margin-top: clamp(3rem, 8svh, 5rem);
+  }
+
+  /* Wide screens: the jump list sticks beside the text. */
+  @media (min-width: 64rem) {
+    .layout {
+      grid-template-columns: 16rem minmax(0, 1fr);
+      gap: 4rem;
+      align-items: start;
+    }
+
+    .toc {
+      position: sticky;
+      top: calc(var(--header-offset) + var(--control-height) + 2rem);
+    }
+  }
+
+  .toc ol {
+    display: grid;
+    gap: 0.25rem;
+    padding-left: 1.2rem;
+    list-style: decimal-leading-zero;
+    font-size: var(--text-body-sm);
+    color: var(--color-ink-500);
+  }
+
+  .tocLink {
+    display: inline-block;
+    padding-block: 0.35rem;
+    font-weight: 500;
+    color: var(--color-ink-700);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tocLink:hover {
+      color: var(--color-ink-950);
+      text-decoration: underline;
+      text-underline-offset: 0.25em;
+    }
+  }
+
+  .body {
+    display: grid;
+    gap: clamp(2.5rem, 6svh, 3.5rem);
+    max-width: 68ch;
+  }
+
+  .section {
+    display: grid;
+    gap: 1rem;
+    scroll-margin-top: calc(var(--header-offset) + var(--control-height) + 1.5rem);
+    font-size: var(--text-body-lg);
+    line-height: 1.6;
+    color: var(--color-ink-700);
+  }
+
+  .section h2 {
+    color: var(--color-ink-950);
+  }
+
+  .section ul {
+    display: grid;
+    gap: 0.5rem;
+    padding-left: 1.25rem;
+    list-style: disc;
+  }
+
+  .number {
+    margin-right: 0.35em;
+    color: var(--color-orange-600);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .link {
+    color: var(--color-ink-950);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.25em;
+  }
+}

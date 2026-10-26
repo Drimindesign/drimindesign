@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { appointmentCopy, STUDIO_TIME_ZONE_LABEL } from "@/content/appointment";
 import { SERVICES } from "@/content/inquiry";
 import { Button } from "@/components/ui/button";
+import { ConsentCheckbox } from "@/components/ui/consent-checkbox";
 import { bookAppointment } from "../actions";
 import type { AppointmentField, AppointmentResult } from "../schema";
 import styles from "../appointment.module.css";
@@ -14,7 +15,7 @@ export interface BookingDay {
   slots: { iso: string; time: string; taken: boolean }[];
 }
 
-const LABELS: Record<Exclude<AppointmentField, "slot">, string> = {
+const LABELS: Record<Exclude<AppointmentField, "slot" | "consent">, string> = {
   name: "Your name",
   email: "Your email",
   topic: "What the call is about",
@@ -50,7 +51,7 @@ function Booking({ days, onBooked }: { days: BookingDay[]; onBooked: () => void 
   const errors = state && !state.ok ? state.errors : {};
   const firstOpen = days.find((day) => day.slots.some((slot) => !slot.taken && slot.iso === values.slot))?.day ??
     days.find((day) => day.slots.some((slot) => !slot.taken))?.day;
-  const messages = (["slot", "name", "email", "topic", "note"] as const).filter((field) => errors[field]);
+  const messages = (["slot", "name", "email", "topic", "note", "consent"] as const).filter((field) => errors[field]);
 
   return (
     <form action={action} noValidate className={styles.form}>
@@ -123,6 +124,12 @@ function Booking({ days, onBooked }: { days: BookingDay[]; onBooked: () => void 
           <textarea name="note" rows={3} maxLength={600} defaultValue={values.note} {...describedBy("note", state)} />
         </label>
       </fieldset>
+
+      <ConsentCheckbox
+        id="booking-consent"
+        errorId={errors.consent ? "booking-consent-error" : undefined}
+        defaultChecked={values.consent === "on"}
+      />
 
       {/* Honeypot: hidden from people and assistive tech; bots fill it in. */}
       <div className="sr-only" aria-hidden="true">

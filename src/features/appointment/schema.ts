@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { consentCopy } from "@/content/legal";
 import { SERVICES } from "@/content/inquiry";
 
 /* Shared by the booking form (client) and the server action: one source of truth for validation. */
@@ -8,11 +9,13 @@ export const appointmentSchema = z.object({
   email: z.email({ error: "That email doesn't look right." }).max(160),
   topic: z.enum(SERVICES, { error: "Pick what the call is about." }),
   note: z.string().trim().max(600, "Keep the note under 600 characters, please."),
+  // A ticked box becomes the policy version agreed to, stored with the booking.
+  consent: z.literal("on", { error: consentCopy.error }).transform(() => consentCopy.version),
 });
 
-export type AppointmentInput = z.infer<typeof appointmentSchema>;
+export type AppointmentInput = z.output<typeof appointmentSchema>;
 export type AppointmentField = keyof AppointmentInput;
-export const APPOINTMENT_FIELDS = ["slot", "name", "email", "topic", "note"] as const satisfies readonly AppointmentField[];
+export const APPOINTMENT_FIELDS = ["slot", "name", "email", "topic", "note", "consent"] as const satisfies readonly AppointmentField[];
 
 export type AppointmentValues = Partial<Record<AppointmentField, string>>;
 export type AppointmentErrors = Partial<Record<AppointmentField | "form", string>>;

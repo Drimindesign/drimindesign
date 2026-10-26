@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { projectDetails } from "@/content/project-details";
 import { projectBySlug, projectImageUrl, projects } from "@/content/projects";
-import { ProjectCase } from "@/features/project-case";
+import { ProjectCase, ProjectCaseFallback } from "@/features/project-case";
 import { breadcrumbSchema, creativeWorkSchema, JsonLd } from "@/lib/seo/json-ld";
 
 export function generateStaticParams(): { slug: string }[] {
@@ -31,7 +32,20 @@ export async function generateMetadata({ params }: PageProps<"/projects/[slug]">
   };
 }
 
-export default async function ProjectPage({ params }: PageProps<"/projects/[slug]">): Promise<React.ReactElement> {
+/*
+ * `params` is read under <Suspense> (instant navigation): every project is still prerendered
+ * whole from generateStaticParams; the fallback only fills the route's shared navigation
+ * shell, shaped like the hero so nothing moves when the project arrives.
+ */
+export default function ProjectPage({ params }: PageProps<"/projects/[slug]">): React.ReactElement {
+  return (
+    <Suspense fallback={<ProjectCaseFallback />}>
+      <Project params={params} />
+    </Suspense>
+  );
+}
+
+async function Project({ params }: { params: PageProps<"/projects/[slug]">["params"] }): Promise<React.ReactElement> {
   const { slug } = await params;
   const project = projectBySlug(slug);
   if (!project) notFound();

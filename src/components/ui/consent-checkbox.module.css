@@ -1,0 +1,38 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .consent {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: start;
+    max-width: 60ch;
+    font-size: var(--text-body-sm);
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  /* A 22px box inside a 44px-tall hit area (the label extends it). */
+  .box {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    accent-color: var(--color-ink-950);
+    cursor: pointer;
+  }
+
+  .consent label {
+    cursor: pointer;
+  }
+
+  .box[aria-invalid="true"] {
+    outline: 2px dashed currentColor;
+    outline-offset: 2px;
+  }
+
+  .link {
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.25em;
+  }
+}

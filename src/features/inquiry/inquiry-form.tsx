@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { BUDGETS, SERVICES, inquiryCopy } from "@/content/inquiry";
 import { Button } from "@/components/ui/button";
+import { ConsentCheckbox } from "@/components/ui/consent-checkbox";
 import { submitInquiry } from "./actions";
 import styles from "./inquiry.module.css";
 import type { InquiryField, InquiryResult } from "./schema";
@@ -22,6 +23,7 @@ const LABELS: Record<InquiryField, string> = {
   service: "What you need help with",
   budget: "Budget",
   email: "Your email",
+  consent: "Consent",
 };
 
 function fieldProps({ field, state, prefix }: Omit<BlankProps, "label">): {
@@ -110,6 +112,14 @@ function Sentence({ onSent, prefix }: { onSent: () => void; prefix: string }): R
       <div className="sr-only" aria-hidden="true">
         <label htmlFor={`${prefix}-website`}>Website</label>
         <input id={`${prefix}-website`} name="website" type="text" tabIndex={-1} autoComplete="off" />
+      </div>
+
+      <div className="mt-8">
+        <ConsentCheckbox
+          id={`${prefix}-consent`}
+          errorId={errors.consent ? `${prefix}-consent-error` : undefined}
+          defaultChecked={state !== null && !state.ok && state.values.consent === "on"}
+        />
       </div>
 
       <div aria-live="polite" className={styles.errors}>

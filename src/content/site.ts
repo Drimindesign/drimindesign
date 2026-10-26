@@ -71,4 +71,8 @@ export const footer = {
   navTitle: "Explore",
   contactTitle: "Say hello",
   backToTop: "Back to top",
+  legal: [
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms of Use", href: "/terms" },
+  ] satisfies NavItem[],
 } as const;

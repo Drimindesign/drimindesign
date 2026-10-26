@@ -1,8 +1,8 @@
 import type { MetadataRoute } from "next";
 import { projects } from "@/content/projects";
-import { navItems, site } from "@/content/site";
+import { footer, navItems, site } from "@/content/site";
 
-/* Static routes plus every project page. */
+/* Static routes, every project page, and the legal pages. */
 export default function sitemap(): MetadataRoute.Sitemap {
   const pages: MetadataRoute.Sitemap = navItems.map((item) => ({
     url: new URL(item.href, site.url).toString(),
@@ -14,5 +14,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: "yearly",
     priority: 0.6,
   }));
-  return [...pages, ...work];
+  const legal: MetadataRoute.Sitemap = footer.legal.map((item) => ({
+    url: new URL(item.href, site.url).toString(),
+    changeFrequency: "yearly",
+    priority: 0.2,
+  }));
+  return [...pages, ...work, ...legal];
 }

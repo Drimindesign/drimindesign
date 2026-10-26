@@ -72,6 +72,15 @@ export function SiteFooter(): React.ReactElement {
         <p>
           © <CopyrightYear /> {site.name}. {site.tagline}.
         </p>
+        <ul className={styles.legal} aria-label="Legal">
+          {footer.legal.map((item) => (
+            <li key={item.href}>
+              <Link href={item.href} className={styles.link}>
+                {item.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
         <a href="#top" className={styles.link}>
           {footer.backToTop} ↑
         </a>

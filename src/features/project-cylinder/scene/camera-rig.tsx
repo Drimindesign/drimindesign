@@ -27,7 +27,7 @@ const LOOK_Y = RING_MID_Y - 0.12;
 const LANDED_WIDTH_FILL = { wide: 0.56, tall: 1.06 } as const;
 const LANDED_HEIGHT_FILL = { wide: 0.72, tall: 0.78 } as const;
 /** On landscape screens the ring's centre sits this far left of the frame's centre (fraction of width). */
-const LEFT_SHIFT = 0.16;
+const LEFT_SHIFT = 0.2;
 /** At the start, the ring's diameter spans this fraction of the frame's width (at most). */
 const START_WIDTH_FILL = 0.62;
 const SETTLE_EPSILON = 1e-4;

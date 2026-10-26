@@ -118,6 +118,17 @@
 }
 
 /*
+ * Small screens: a slightly milder brand orange (12 % toward white). A phone's whole screen
+ * is orange in the hero and the ring, so the full-strength colour reads too intense there.
+ * The ring's 3D room switches with it (project-cylinder/scene/palette.ts, same breakpoint).
+ */
+@media (max-width: 47.99rem) {
+  :root {
+    --color-orange-500: #fb471f;
+  }
+}
+
+/*
  * Surfaces — a section declares one; components only read semantic tokens.
  * The fixed header isn't inside any section, so until HeaderSurface (JS) sets its own
  * data-surface, it borrows the surface of the page's first section via :has().

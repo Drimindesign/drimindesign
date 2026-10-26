@@ -7,7 +7,7 @@
   .section {
     position: relative;
     z-index: 2;
-    background: #fa2e00;
+    background: var(--color-orange-500);
   }
 
   .section::after {
@@ -65,7 +65,8 @@
 
 
 
-  /* Landscape: the ring sits left (camera-rig.tsx LEFT_SHIFT), the copy takes the right column. */
+  /* Landscape: the ring sits left (camera-rig.tsx LEFT_SHIFT), the copy takes a right column
+     narrow enough to stay clear of the ring and the figures in front of it. */
   @media (min-aspect-ratio: 7 / 5) and (min-width: 48rem) {
     .overlay {
       justify-content: center;
@@ -73,7 +74,7 @@
     }
 
     .copy {
-      width: min(30vw, 28rem);
+      width: min(25vw, 26rem);
       padding-top: var(--control-height);
     }
   }

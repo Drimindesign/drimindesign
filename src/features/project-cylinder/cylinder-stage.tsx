@@ -145,7 +145,7 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
             </span>
           </p>
           <div key={project.slug} className={styles.caption}>
-            <p className="mt-4 font-display text-display-lg text-fg-display uppercase">{project.title}</p>
+            <p className="mt-4 font-display text-[clamp(2.5rem,5vw,5.25rem)] leading-[0.92] text-balance text-fg-display uppercase">{project.title}</p>
             <p className="mt-3 text-body-sm font-medium text-fg">
               {project.category}
             </p>

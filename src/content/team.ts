@@ -23,33 +23,36 @@ export const aboutIntro = {
   hint: "Drag a card. Tap to flip it.",
 } as const;
 
-/* PLACEHOLDER: names, roles and bios. */
+/*
+ * PLACEHOLDER: the QA tester's and software engineer's names (their role shows in the name
+ * slot until then), and all bios.
+ */
 export const team: readonly TeamMember[] = [
   {
-    name: "Founder",
-    role: "Creative direction",
+    name: "Dhruval Patel",
+    role: "Founder",
     bio: "Started Drimin as a freelancer in 2023 and still sketches every first idea by hand.",
     since: "2023",
     photo: "/team/founder.webp",
   },
   {
-    name: "Brand designer",
-    role: "Identity & print",
-    bio: "Builds logos, systems and packaging that hold up from a business card to a billboard.",
+    name: "Krupa Patel",
+    role: "Application designer",
+    bio: "Designs the screens and flows of our apps, from the first sketch to the last pixel.",
     since: "2024",
     photo: "/team/brand-designer.webp",
   },
   {
-    name: "Developer",
-    role: "Web & apps",
-    bio: "Turns designs into fast, accessible websites and apps that feel as good as they look.",
+    name: "QA Tester",
+    role: "Quality assurance",
+    bio: "Tests every page, flow and device before launch, so nothing ships broken.",
     since: "2024",
     photo: "/team/developer.webp",
   },
   {
-    name: "Motion designer",
-    role: "Motion & 3D",
-    bio: "Makes things move with weight and intent, from micro-interactions to launch films.",
+    name: "Software Engineer",
+    role: "Web & apps",
+    bio: "Turns designs into fast, accessible websites and apps that feel as good as they look.",
     since: "2025",
     photo: "/team/motion-designer.webp",
   },

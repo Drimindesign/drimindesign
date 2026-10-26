@@ -27,6 +27,8 @@ Rules for using this system in code are in [AGENTS.md](AGENTS.md). Product behav
 
 `#FA2E00` is the brand colour (`orange-500`). The scale is derived around it for states, gradients and illustration.
 
+**Small screens (< 48rem):** `orange-500` becomes `#FB471F`, the brand orange mixed 12 % toward white, because a full phone screen of `#FA2E00` reads too intense. The ring's 3D room uses the same milder palette (`scene/palette.ts`), and the browser theme colour follows it. Print artwork (ID cards, strap) always uses `#FA2E00`.
+
 | Token | Hex | Use |
 |---|---|---|
 | `orange-50` | `#FFF2EE` | Tints on white surfaces |

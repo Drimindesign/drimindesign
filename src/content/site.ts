@@ -21,6 +21,8 @@ export const site = {
   description:
     "Drimindesign turns vision and creativity into reality: a brand, web and motion studio designing identities and websites that move with intent and get remembered.",
   themeColor: "#FA2E00",
+  /** The milder orange used below 48rem (tokens.css). */
+  themeColorSmall: "#FB471F",
 } as const;
 
 export const navItems: readonly NavItem[] = [

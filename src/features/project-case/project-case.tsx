@@ -72,6 +72,16 @@ export function ProjectCase({ project }: { project: Project }): React.ReactEleme
             <dd>{project.disciplines.join(" · ")}</dd>
           </div>
         </dl>
+        {detail.credits && (
+          <dl className={`${styles.facts} ${styles.credits}`} aria-label="Credits">
+            {detail.credits.map((credit) => (
+              <div key={credit.role}>
+                <dt>{credit.role}</dt>
+                <dd>{credit.name}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
 
         <div className={styles.intro}>
           <p className={`${styles.reveal} text-heading-xl font-medium tracking-tight text-balance`}>{detail.intro}</p>

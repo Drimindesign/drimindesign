@@ -65,7 +65,7 @@ export const projects: readonly Project[] = [
   {
     slug: "house-of-diams",
     title: "House of Diams",
-    category: "Web design · E-commerce",
+    category: "Web development · Admin design",
     alt: "House of Diams luxury jewellery website open on a laptop beside a diamond ring in a velvet box",
     disciplines: ["Web"],
   },

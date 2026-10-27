@@ -27,8 +27,15 @@ export type CaseSection =
   /** A short chapter of the story beside its number. */
   | { kind: "chapter"; title: string; body: string };
 
+/** Who did which part, when more than one studio worked on a project. */
+export interface Credit {
+  role: string;
+  name: string;
+}
+
 export interface ProjectDetail {
   client: string;
+  credits?: readonly Credit[];
   year: string;
   services: readonly string[];
   /** One or two sentences, set large under the hero. */
@@ -219,8 +226,14 @@ export const projectDetails: Record<string, ProjectDetail> = {
   "house-of-diams": {
     client: "House of Diams",
     year: "2025",
-    services: ["Web design", "E-commerce", "Admin dashboard"],
-    intro: "A jewellery store that sells the feeling of a forever moment: warm, unhurried, and as easy to run as it is to browse.",
+    credits: [
+      { role: "Storefront design", name: "Sonder AI" },
+      { role: "Storefront development", name: "Drimindesign" },
+      { role: "Admin panel design", name: "Drimindesign" },
+    ],
+    services: ["Storefront development", "Admin panel design"],
+    intro:
+      "A jewellery store that sells the feeling of a forever moment: designed by Sonder AI, developed by us, with an admin panel we designed so the team can run it without training.",
     sections: [
       {
         kind: "wide",
@@ -230,7 +243,7 @@ export const projectDetails: Record<string, ProjectDetail> = {
       {
         kind: "chapter",
         title: "The brief",
-        body: "A storefront with the quiet confidence of a high-street jeweller, and a back office the team can run without training.",
+        body: "A storefront with the quiet confidence of a high-street jeweller, designed by Sonder AI and developed by Drimindesign, and a back office the team can run without training, designed by Drimindesign.",
       },
       {
         kind: "pair",
@@ -243,7 +256,7 @@ export const projectDetails: Record<string, ProjectDetail> = {
       {
         kind: "chapter",
         title: "The result",
-        body: "Espresso, ivory and gold set the tone; large product photography and generous space let each piece take its time.",
+        body: "On the storefront, large product photography and generous space let each piece take its time. In the admin panel, orders, products and enquiries are always one click away.",
       },
     ],
   },

@@ -81,6 +81,16 @@
     }
   }
 
+  /* Credits sit under the facts as one block: a single rule below both. */
+  .facts:has(+ .credits) {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .credits {
+    padding-top: 1.75rem;
+  }
+
   .facts dt {
     color: var(--color-ink-500);
     font-size: var(--text-label);

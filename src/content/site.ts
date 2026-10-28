@@ -50,11 +50,11 @@ export const hero = {
     // → "We turn vision and creativity into reality."
     "We turn [your wildest] vision and [boldest] creativity into [a living, breathing] reality.",
   ],
-  /* PLACEHOLDER numbers. */
+  /* The same figures as the story tree (content/milestones.ts); update both together. */
   stats: [
-    { value: "60+", label: "Projects shipped" },
-    { value: "12", label: "Countries" },
-    { value: "8 yrs", label: "In practice" },
+    { value: "15+", label: "Identities designed" },
+    { value: "3", label: "Apps shipped" },
+    { value: "2", label: "In progress" },
   ] satisfies Stat[],
   primaryAction: { label: "Book a call", href: "/appointment" },
   cta: { eyebrow: "Have an idea?", label: "Start a project", href: "/contact" },

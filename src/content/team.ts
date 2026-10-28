@@ -30,8 +30,8 @@ export const aboutIntro = {
 export const team: readonly TeamMember[] = [
   {
     name: "Dhruval Patel",
-    role: "Founder",
-    bio: "Started Drimin as a freelancer in 2023 and still sketches every first idea by hand.",
+    role: "Designer & developer",
+    bio: "Has been designing under the Drimin name since 2023 and still sketches every first idea by hand.",
     since: "2023",
     photo: "/team/founder.webp",
   },

@@ -64,6 +64,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
     if (!root || !stage || !canvas) return;
     let cancelled = false;
     let observer: ResizeObserver | null = null;
+    let glow: { render(): void; dispose(): void } | null = null;
 
     void retryImport(() => import("./engine/game"))
       .then(({ Game }) => {
@@ -72,6 +73,14 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         gameRef.current = game;
         // QA: /play?debug exposes the running game in the console.
         if (new URLSearchParams(window.location.search).has("debug")) (window as unknown as { orbit?: Game }).orbit = game;
+        // /play?gpu: the same game with a WebGL2 glow and grade over the 2D frame.
+        if (new URLSearchParams(window.location.search).has("gpu")) {
+          void import("./engine/glow").then(({ GlowPass }) => {
+            if (cancelled) return;
+            glow = GlowPass.attach(canvas);
+            if (glow) game.onFrame = () => glow?.render();
+          });
+        }
         observer = new ResizeObserver(([entry]) => {
           game.resize(entry.contentRect.width, entry.contentRect.height, window.devicePixelRatio || 1);
         });
@@ -90,6 +99,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       window.removeEventListener("keydown", unlock);
       gameRef.current?.stop();
       gameRef.current = null;
+      glow?.dispose();
     };
   }, []);
 
@@ -204,6 +214,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         <p className={styles.small}>
           Best <span data-hud="best-score">—</span> pts · <span data-hud="best">—</span>
         </p>
+        <p className={styles.small}>Music: “Skylines” by Alex-Productions, via chosic.com</p>
       </section>
 
       <section className={`${styles.card} ${styles.pauseCard}`} aria-label="Paused">

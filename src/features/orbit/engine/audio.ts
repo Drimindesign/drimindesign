@@ -20,9 +20,11 @@ export interface AudioState {
   thrust: number;
 }
 
-/** Smoothing time constant for continuous parameters (s). */
-const GLIDE = 0.08;
 const MASTER = 0.65;
+/** Background music level: low, under the effects (it dips a little more while the thrusters fire). */
+const MUSIC = 0.13;
+/** "Skylines" by Alex-Productions (chosic.com), re-encoded at 96 kb/s; streamed, not decoded whole. */
+const MUSIC_URL = "/audio/skylines.mp3";
 /** A major pentatonic on C (Hz): pickups, chimes and the finish all draw from it. */
 const SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51] as const;
 
@@ -38,9 +40,9 @@ export class GameAudio {
   private master: GainNode | null = null;
   private bus: Bus | null = null;
   private noise: AudioBuffer | null = null;
-  private engine: { tone: OscillatorNode; overtone: OscillatorNode; sub: OscillatorNode; filter: BiquadFilterNode; gain: GainNode; subGain: GainNode } | null = null;
   private thrust: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private muted = false;
+  private music: { element: HTMLAudioElement; gain: GainNode } | null = null;
   private lastPickup = 0;
   private pickupStep = 0;
 
@@ -101,9 +103,20 @@ export class GameAudio {
     }
     this.noise = noise;
 
-    this.buildEngine(ctx);
     this.buildThrust(ctx);
-    this.buildAmbience(ctx);
+    this.buildMusic(ctx);
+  }
+
+  /** The tab is hidden or the game stopped: silence everything, music included. */
+  suspend(): void {
+    this.music?.element.pause();
+    void this.ctx?.suspend();
+  }
+
+  resume(): void {
+    if (!this.ctx) return;
+    void this.ctx.resume();
+    void this.music?.element.play().catch(() => undefined);
   }
 
   setMuted(muted: boolean): void {
@@ -114,22 +127,12 @@ export class GameAudio {
   /** Called every frame with the simulation's state. */
   update(state: AudioState): void {
     const ctx = this.ctx;
-    if (!ctx || !this.engine || !this.thrust) return;
+    if (!ctx || !this.thrust) return;
     const now = ctx.currentTime;
-    const speed = Math.min(Math.abs(state.speed), 45);
-    const load = Math.abs(state.throttle);
-    // The motor: pitch with speed, brightness with load.
-    const pitch = 70 + speed * 7;
-    this.engine.tone.frequency.setTargetAtTime(pitch, now, GLIDE);
-    this.engine.overtone.frequency.setTargetAtTime(pitch * 2, now, GLIDE);
-    this.engine.sub.frequency.setTargetAtTime(pitch / 2, now, GLIDE);
-    this.engine.filter.frequency.setTargetAtTime(500 + load * 1100 + speed * 20, now, GLIDE * 2);
-    const level = state.driving ? 0.05 + load * 0.06 + (speed / 45) * 0.04 : 0;
-    this.engine.gain.gain.setTargetAtTime(level, now, GLIDE * 2);
-    this.engine.subGain.gain.setTargetAtTime(state.driving ? 0.05 + load * 0.03 : 0, now, GLIDE * 2);
     // Thrusters: a soft breath of air that swells in and fades out slowly.
     this.thrust.gain.gain.setTargetAtTime(state.thrust * 0.11, now, state.thrust > 0 ? 0.12 : 0.25);
     this.thrust.filter.frequency.setTargetAtTime(700 + state.thrust * 500, now, 0.15);
+    this.music?.gain.gain.setTargetAtTime(MUSIC * (1 - state.thrust * 0.35), now, 0.4);
   }
 
   footstep(): void {
@@ -200,6 +203,8 @@ export class GameAudio {
   }
 
   dispose(): void {
+    this.music?.element.pause();
+    this.music = null;
     void this.ctx?.close();
     this.ctx = null;
   }
@@ -285,44 +290,6 @@ export class GameAudio {
     this.send(gain, 0.45);
   }
 
-  /* The electric motor: a sine and its octave through a low-pass that opens with load, a soft sub below, and a slow shimmer. */
-  private buildEngine(ctx: AudioContext): void {
-    const tone = ctx.createOscillator();
-    const overtone = ctx.createOscillator();
-    const sub = ctx.createOscillator();
-    tone.type = "triangle";
-    overtone.type = "sine";
-    sub.type = "sine";
-    tone.frequency.value = 70;
-    overtone.frequency.value = 140;
-    sub.frequency.value = 35;
-    const shimmer = ctx.createOscillator();
-    shimmer.frequency.value = 5.5;
-    const shimmerDepth = ctx.createGain();
-    shimmerDepth.gain.value = 1.2;
-    shimmer.connect(shimmerDepth);
-    shimmerDepth.connect(tone.frequency);
-    shimmerDepth.connect(overtone.frequency);
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 600;
-    filter.Q.value = 0.7;
-    const overtoneLevel = ctx.createGain();
-    overtoneLevel.gain.value = 0.3;
-    const gain = ctx.createGain();
-    const subGain = ctx.createGain();
-    gain.gain.value = 0;
-    subGain.gain.value = 0;
-    tone.connect(filter);
-    overtone.connect(overtoneLevel).connect(filter);
-    filter.connect(gain);
-    sub.connect(subGain);
-    this.send(gain, 0.12);
-    this.send(subGain, 0);
-    for (const node of [tone, overtone, sub, shimmer]) node.start();
-    this.engine = { tone, overtone, sub, filter, gain, subGain };
-  }
-
   /*
    * Thrusters: looped soft noise, band-limited to the airy middle (no rumble below, no hiss
    * above), so a long hover is a gentle breath of air rather than a roar.
@@ -345,40 +312,22 @@ export class GameAudio {
     this.thrust = { gain, filter };
   }
 
-  /* Night air: a very quiet low pad (a fifth, breathing slowly) under a soft wash of wind. */
-  private buildAmbience(ctx: AudioContext): void {
-    const pad = ctx.createGain();
-    pad.gain.value = 0.018;
-    const breathe = ctx.createOscillator();
-    breathe.frequency.value = 0.07;
-    const depth = ctx.createGain();
-    depth.gain.value = 0.008;
-    breathe.connect(depth).connect(pad.gain);
-    for (const frequency of [110, 164.81, 220.5]) {
-      const tone = ctx.createOscillator();
-      tone.type = "sine";
-      tone.frequency.value = frequency;
-      tone.connect(pad);
-      tone.start();
-    }
-    this.send(pad, 0.6);
-    breathe.start();
-
-    const wind = this.noiseSource(ctx, true);
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 320;
+  /*
+   * Background music: streamed from a media element (decoding three minutes up front would
+   * cost ~65 MB on a phone), looping, fading in over two seconds. It joins after the
+   * compressor so the effects never pump it.
+   */
+  private buildMusic(ctx: AudioContext): void {
+    if (!this.master) return;
+    const element = new Audio(MUSIC_URL);
+    element.loop = true;
+    element.preload = "auto";
     const gain = ctx.createGain();
-    gain.gain.value = 0.03;
-    const gust = ctx.createOscillator();
-    gust.frequency.value = 0.11;
-    const gustDepth = ctx.createGain();
-    gustDepth.gain.value = 0.018;
-    gust.connect(gustDepth).connect(gain.gain);
-    wind.connect(filter).connect(gain);
-    this.send(gain, 0.2);
-    wind.start();
-    gust.start();
+    gain.gain.value = 0;
+    ctx.createMediaElementSource(element).connect(gain).connect(this.master);
+    gain.gain.setTargetAtTime(MUSIC, ctx.currentTime + 0.3, 0.7);
+    void element.play().catch(() => undefined);
+    this.music = { element, gain };
   }
 }
 

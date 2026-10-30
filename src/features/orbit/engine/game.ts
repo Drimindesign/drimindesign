@@ -93,6 +93,8 @@ export class Game {
   private last = 0;
   private running = false;
 
+  /** Called after every drawn frame (the GPU glow pass hooks in here). */
+  onFrame: (() => void) | null = null;
   /** Phones and tablets: prompts name the on-screen pads instead of keys. */
   private readonly touch = matchMedia("(pointer: coarse)").matches;
 
@@ -191,6 +193,7 @@ export class Game {
   private resume(): void {
     if (this.running) return;
     this.running = true;
+    this.audio.resume();
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.tick);
   }
@@ -198,6 +201,7 @@ export class Game {
   private pause(): void {
     this.running = false;
     cancelAnimationFrame(this.raf);
+    this.audio.suspend();
   }
 
   private readonly tick = (now: number): void => {
@@ -222,6 +226,7 @@ export class Game {
     this.frameDt = Math.max(1 / 240, elapsed);
     this.frame++;
     this.draw(this.accumulator / STEP);
+    this.onFrame?.();
     // The HUD at ~20 Hz: each write restyles the overlay, which phones feel; bars ease between writes in CSS.
     if (this.frame % 3 === 0 || this.phase !== "play") this.writeHud();
     const hud = this.stage.hud();

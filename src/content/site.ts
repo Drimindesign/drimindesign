@@ -20,7 +20,7 @@ export const site = {
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   description:
     "Drimindesign turns vision and creativity into reality: a brand, web and motion studio designing identities and websites that move with intent and get remembered.",
-  themeColor: "#FA2E00",
+  themeColor: "#4C1D95",
 } as const;
 
 export const navItems: readonly NavItem[] = [
@@ -63,8 +63,7 @@ export const hero = {
 export const footer = {
   eyebrow: "Have an idea?",
   title: "Let's make it real.",
-  /* PLACEHOLDER: confirm the studio inbox. */
-  email: "hello@drimindesign.com",
+  email: "hello@drimindesigns.co.in",
   action: { label: "Book a call", href: "/appointment" },
   navTitle: "Explore",
   contactTitle: "Say hello",

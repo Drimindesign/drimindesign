@@ -11,12 +11,23 @@ const SHADOW = "rgba(12, 8, 14, 0.42)";
 export const MAX_HEARTS = 3;
 
 /*
- * The sword swing, in seconds: wind up (draw the blade back), strike (only this window can
- * hit), recover. Angles are in character space (0 = straight ahead, positive = up), for the
- * sword in the front hand. Swings alternate: an overhead cut down, then a rising cut up.
+ * The two-handed sword swing, as keyframes (time s, blade angle rad, stance 0 … 1). Angles are in
+ * character space: 0 = straight ahead, positive = up, past π/2 = behind the head. From a low
+ * guard (blade down), the hands draw it up and back over the head while the body sinks into a
+ * stance; the cut whips it forward to level as the body lunges, arms fully extended; then it
+ * swings back up overhead and settles down to the guard. Only the cut and the extension hit.
  */
-const SWING = { windup: 0.09, strike: 0.19, end: 0.38 } as const;
-const SWORD = { guard: 0.55, high: 2.35, low: -1.05, length: 1.05, cooldown: 0.3 } as const;
+const KEYS: readonly (readonly [number, number, number])[] = [
+  [0, -1.0, 0],
+  [0.13, 2.4, 0.35],
+  [0.16, 2.45, 0.4],
+  [0.24, 0.05, 0.65],
+  [0.32, -0.05, 0.6],
+  [0.46, 2.0, 0.3],
+  [0.62, -1.0, 0],
+];
+const SWING = { strike: 0.16, extended: 0.32, end: 0.62 } as const;
+const SWORD = { guard: -1.0, length: 1.15, cooldown: 0.5 } as const;
 /** Contact freezes the blade this long (s): the hit lands with weight. */
 const HIT_STOP = 0.06;
 /** Hands are never still: the guard breathes and sways (rad), and swings with the walk. */
@@ -44,8 +55,6 @@ export class Explorer {
   /** Time into the current swing (s), or -1 when not swinging. */
   private swing = -1;
   private cooldown = 0;
-  /** Which cut: 0 overhead, 1 rising. */
-  private cut = 0;
   private hitStop = 0;
   /** Seconds alive, for the sway of the hands. */
   private clock = 0;
@@ -95,7 +104,7 @@ export class Explorer {
 
   /** In the strike window of a swing: the blade can hit. */
   get striking(): boolean {
-    return this.swing >= SWING.windup && this.swing <= SWING.strike;
+    return this.swing >= SWING.strike && this.swing <= SWING.extended;
   }
 
   /** The strike's reach in front of the explorer (world m). */
@@ -131,32 +140,43 @@ export class Explorer {
     this.body.impulse(this.body.vx, 6.2);
   }
 
-  /** Where the cut starts and ends. */
-  private get arc(): [number, number] {
-    return this.cut === 0 ? [SWORD.high, SWORD.low] : [SWORD.low, SWORD.high - 0.4];
+  /** The keyframes around the current swing time, and how far between them (0 … 1). */
+  private key(): { from: readonly [number, number, number]; to: readonly [number, number, number]; k: number } {
+    const t = this.swing;
+    for (let i = 1; i < KEYS.length; i++) {
+      if (t <= KEYS[i][0]) {
+        const from = KEYS[i - 1];
+        const to = KEYS[i];
+        return { from, to, k: (t - from[0]) / (to[0] - from[0]) };
+      }
+    }
+    const last = KEYS[KEYS.length - 1];
+    return { from: last, to: last, k: 1 };
   }
 
   /*
-   * The blade's angle: drawn back smoothly, then the cut accelerates through the arc (t²: the
-   * arm whips), overshoots a touch past the guard on the recovery and settles. At rest the
-   * guard breathes, drifts and swings with the walk.
+   * The blade's angle: between keyframes the wind-up and recovery ease in and out, while the
+   * cut accelerates (k², the arms whip it). At rest the guard breathes, drifts and swings with
+   * the walk, so the hands are never still.
    */
   private swordAngle(): number {
-    const t = this.swing;
     const b = this.body;
     const walk = Math.min(1, Math.abs(b.vx) / 3) * Math.sin(this.animator.gaitPhase * Math.PI * 2);
-    const guard =
-      SWORD.guard + Math.sin(this.clock * 1.7) * SWAY.breathe + Math.sin(this.clock * 3.1 + 1.3) * SWAY.drift + walk * SWAY.gait;
-    if (t < 0) return guard;
-    const [from, to] = this.arc;
-    if (t < SWING.windup) return guard + (from - guard) * smooth(t / SWING.windup);
-    if (t < SWING.strike) {
-      const k = (t - SWING.windup) / (SWING.strike - SWING.windup);
-      return from + (to - from) * k * k;
-    }
-    const k = (t - SWING.strike) / (SWING.end - SWING.strike);
-    const back = 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2);
-    return to + (guard - to) * back;
+    const sway = Math.sin(this.clock * 1.7) * SWAY.breathe + Math.sin(this.clock * 3.1 + 1.3) * SWAY.drift + walk * SWAY.gait;
+    if (this.swing < 0) return SWORD.guard + sway;
+    const { from, to, k } = this.key();
+    const cut = from[0] === SWING.strike;
+    const eased = cut ? k * k : smooth(k);
+    // The sway fades out through the swing and back in as it ends.
+    const settle = Math.max(0, 1 - this.swing / 0.1, (this.swing - SWING.end + 0.12) / 0.12);
+    return from[1] + (to[1] - from[1]) * eased + sway * Math.min(1, settle);
+  }
+
+  /** How far the body sinks into the stance and lunge (0 … 1). */
+  private stance(): number {
+    if (this.swing < 0) return 0;
+    const { from, to, k } = this.key();
+    return from[2] + (to[2] - from[2]) * smooth(k);
   }
 
   /** The blade bit into something: a moment's stop and a little push back through the arm. */
@@ -173,7 +193,6 @@ export class Explorer {
     this.clock += dt;
     if (input.attackPressed && this.cooldown === 0 && this.swing < 0) {
       this.swing = 0;
-      this.cut = 1 - this.cut;
       this.cooldown = SWORD.cooldown;
       this.struck.clear();
       this.audio.swing();
@@ -183,8 +202,8 @@ export class Explorer {
     } else if (this.swing >= 0) {
       const before = this.swing;
       this.swing += dt;
-      // The strike carries the body a step forward.
-      if (before < SWING.windup && this.swing >= SWING.windup && this.body.grounded) this.body.vx += this.body.facing * 1.4;
+      // The cut carries the body forward into the lunge.
+      if (before < SWING.strike && this.swing >= SWING.strike && this.body.grounded) this.body.vx += this.body.facing * 2.2;
       if (this.swing > SWING.end) this.swing = -1;
     }
     this.body.step(dt, gravity, input);
@@ -233,19 +252,20 @@ export class Explorer {
     // Blinking while invulnerable after a hit.
     if (this.mercy > 0 && Math.floor(this.mercy * 12) % 2 === 0) return;
 
-    const pose = this.animator.update(Math.min(1 / 20, dt), c, this.terrain, gravity, this.crouch);
+    const pose = this.animator.update(Math.min(1 / 20, dt), c, this.terrain, gravity, Math.max(this.crouch, this.stance()));
     const angle = this.swordAngle();
     const b = this.animator.body;
     const arm = pose.arms[1];
-    // The sword arm reaches from the shoulder along the blade: at guard it's held forward and low,
-    // in a cut it extends with the swing.
-    const reach = this.swing >= 0 ? 0.95 : 0.7;
-    const elbow = angle * 0.55 - 0.5;
+    // Both hands on the grip. The arms reach from the shoulders toward it: bent at the guard,
+    // raised overhead in the wind-up, straight out at the end of the cut.
+    const extended = this.swing >= SWING.strike && this.swing <= SWING.extended + 0.06;
+    const reach = extended ? 0.98 : this.swing >= 0 ? 0.85 : 0.72;
+    const elbow = angle * 0.6 - 0.45;
     arm.mid = { x: arm.root.x + Math.cos(elbow) * b.upperArm * reach + 0.03, y: arm.root.y + Math.sin(elbow) * b.upperArm * reach };
-    arm.end = { x: arm.mid.x + Math.cos(angle) * b.forearm * 0.8, y: arm.mid.y + Math.sin(angle) * b.forearm * 0.8 };
-    // The free hand drifts a little, out of step with the other.
-    const free = pose.arms[0];
-    free.end = { x: free.end.x + Math.sin(this.clock * 1.3 + 2) * 0.04, y: free.end.y + Math.sin(this.clock * 2.3) * 0.03 };
+    arm.end = { x: arm.mid.x + Math.cos(angle) * b.forearm * reach, y: arm.mid.y + Math.sin(angle) * b.forearm * reach };
+    const back = pose.arms[0];
+    back.mid = { x: (back.root.x + arm.end.x) / 2 - 0.04, y: (back.root.y + arm.end.y) / 2 - 0.06 };
+    back.end = { x: arm.end.x - Math.cos(angle) * 0.09, y: arm.end.y - Math.sin(angle) * 0.09 };
     this.sprite.draw(pose, b, EXPLORERS[this.look].look, c.facing);
     const [ex, ey] = toScreen(x, y);
     ctx.globalAlpha = this.alpha;
@@ -259,7 +279,7 @@ export class Explorer {
     const blade = SWORD.length;
     if (this.striking) {
       // The smear of the cut: a pale wedge over the arc swept so far.
-      const [from] = this.arc;
+      const from = KEYS[2][1];
       const a0 = c.facing > 0 ? -from : Math.PI + from;
       const a1 = c.facing > 0 ? -angle : Math.PI + angle;
       ctx.save();

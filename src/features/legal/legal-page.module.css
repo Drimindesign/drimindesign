@@ -89,7 +89,7 @@
 
   .number {
     margin-right: 0.35em;
-    color: var(--color-orange-600);
+    color: var(--color-brand-600);
     font-variant-numeric: tabular-nums;
   }
 

@@ -12,8 +12,8 @@ import { initialsOf, type TeamMember } from "@/content/team";
 const W = 640;
 /** Texture pixels per design unit (1024 px wide cards). */
 const H = Math.round(W * 1.586);
-const ORANGE = "#fa2e00";
-const ORANGE_LIGHT = "#ff6a3d";
+const BRAND = "#4c1d95";
+const BRAND_LIGHT = "#7a45d1";
 const INK = "#0a0a0a";
 const MUTED = "#3d3d3d";
 const PAPER = "#ffffff";
@@ -140,7 +140,7 @@ function drawFront(member: TeamMember, index: number, fonts: Fonts, photo: HTMLI
   drawSlot(ctx);
 
   // Header: mark, studio name, pass label.
-  drawMark(ctx, 48, 92, 76, ORANGE);
+  drawMark(ctx, 48, 92, 76, BRAND);
   ctx.fillStyle = INK;
   ctx.textBaseline = "middle";
   ctx.font = `600 32px ${fonts.body}`;
@@ -163,8 +163,8 @@ function drawFront(member: TeamMember, index: number, fonts: Fonts, photo: HTMLI
     ctx.drawImage(photo, px, py, pw, ph);
   } else {
     const gradient = ctx.createLinearGradient(px, py, px + pw, py + ph);
-    gradient.addColorStop(0, ORANGE_LIGHT);
-    gradient.addColorStop(1, ORANGE);
+    gradient.addColorStop(0, BRAND_LIGHT);
+    gradient.addColorStop(1, BRAND);
     ctx.fillStyle = gradient;
     ctx.fillRect(px, py, pw, ph);
     ctx.fillStyle = PAPER;
@@ -173,11 +173,11 @@ function drawFront(member: TeamMember, index: number, fonts: Fonts, photo: HTMLI
     ctx.fillText(initialsOf(member.name), px + pw / 2, py + ph / 2 + ph * 0.03);
   }
   ctx.restore();
-  // Orange corner tab with the card number, like a printed pass.
-  ctx.fillStyle = ORANGE;
+  // Brand-colour corner tab with the card number, like a printed pass.
+  ctx.fillStyle = BRAND;
   roundedRect(ctx, px, py + ph - 52, 116, 52, [0, 22, 0, 22]);
   ctx.fill();
-  ctx.fillStyle = INK;
+  ctx.fillStyle = PAPER;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `600 26px ${fonts.body}`;
@@ -213,7 +213,7 @@ function drawBack(member: TeamMember, fonts: Fonts, resolution: number): HTMLCan
   ctx.fillRect(0, 0, W, H);
   drawSlot(ctx);
 
-  ctx.fillStyle = ORANGE;
+  ctx.fillStyle = BRAND;
   ctx.fillRect(48, 112, 56, 6);
   ctx.fillStyle = MUTED;
   ctx.font = `600 26px ${fonts.body}`;
@@ -229,7 +229,7 @@ function drawBack(member: TeamMember, fonts: Fonts, resolution: number): HTMLCan
 
   ctx.fillStyle = "#e5e5e5";
   ctx.fillRect(48, H - 210, W - 96, 2);
-  drawMark(ctx, 48, H - 168, 72, ORANGE);
+  drawMark(ctx, 48, H - 168, 72, BRAND);
   ctx.fillStyle = INK;
   ctx.font = `600 28px ${fonts.body}`;
   ctx.fillText("drimindesign", 136, H - 128);
@@ -240,15 +240,15 @@ function drawBack(member: TeamMember, fonts: Fonts, resolution: number): HTMLCan
 }
 
 /*
- * Woven strap: brand orange with a darker woven border down each edge and the wordmark
+ * Woven strap: brand purple with a darker woven border down each edge and the wordmark
  * once per repeat, large (half the strap's width) and letter-spaced so it reads at a glance.
  * U runs across, V along; one repeat is 8 strap widths.
  */
 function drawStrap(fonts: Fonts, resolution: number): HTMLCanvasElement {
   const [element, ctx] = canvas(64, 512, resolution);
-  ctx.fillStyle = ORANGE;
+  ctx.fillStyle = BRAND;
   ctx.fillRect(0, 0, 64, 512);
-  ctx.fillStyle = "rgb(120 20 0 / 0.3)";
+  ctx.fillStyle = "rgb(20 6 50 / 0.35)";
   ctx.fillRect(0, 0, 2.5, 512);
   ctx.fillRect(61.5, 0, 2.5, 512);
   ctx.fillStyle = "rgb(255 255 255 / 0.16)";

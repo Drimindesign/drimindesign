@@ -45,7 +45,7 @@ export function LegalPage({ document }: { document: LegalDocument }): React.Reac
     <main data-surface="light" className={styles.page}>
       <div className={styles.inner}>
         <header className={styles.header}>
-          <p className="text-label font-semibold tracking-[0.08em] text-orange-600 uppercase">Legal</p>
+          <p className="text-label font-semibold tracking-[0.08em] text-brand-600 uppercase">Legal</p>
           <h1 className={`${styles.title} mt-4 font-semibold tracking-tight text-balance`}>{document.title}</h1>
           <p className="mt-4 text-body-sm font-medium text-ink-500">
             Last updated <time dateTime={document.updated}>{formatDate(document.updated)}</time>

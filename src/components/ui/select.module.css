@@ -38,7 +38,7 @@
   }
 
   .control:focus-visible {
-    outline: 2px solid var(--surface-focus, var(--color-orange-600));
+    outline: 2px solid var(--surface-focus, var(--color-brand-600));
     outline-offset: 3px;
   }
 
@@ -47,7 +47,7 @@
   }
 
   .control[aria-invalid="true"] {
-    border-color: var(--color-orange-700);
+    border-color: var(--color-brand-700);
   }
 
   .control:disabled {
@@ -77,9 +77,10 @@
     padding-block: 0;
     padding-inline-start: 0.1em;
     border: 0;
-    border-block-end: 2px solid rgb(10 10 10 / 0.55);
+    border-block-end: 2px solid color-mix(in srgb, var(--surface-fg) 60%, transparent);
     border-radius: 0;
     background: transparent;
+    color: var(--surface-fg);
     font: inherit;
     font-weight: 600;
     line-height: 1.2;
@@ -90,14 +91,22 @@
     font-weight: 500;
   }
 
+  .inline .chevron {
+    color: var(--surface-fg);
+  }
+
   .inline .control[aria-invalid="true"] {
     border-block-end-style: dashed;
-    border-color: var(--color-ink-950);
+    border-color: var(--surface-fg);
   }
 
   @media (hover: hover) and (pointer: fine) {
     .control:hover:not(:disabled) {
       border-color: var(--color-ink-950);
+    }
+
+    .inline .control:hover:not(:disabled) {
+      border-color: var(--surface-fg);
     }
   }
 
@@ -157,7 +166,7 @@
     .control option::checkmark {
       order: 1;
       margin-inline-start: auto;
-      color: var(--color-orange-400);
+      color: var(--color-brand-400);
     }
 
     .control option:disabled {

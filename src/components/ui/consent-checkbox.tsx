@@ -14,7 +14,7 @@ interface ConsentCheckboxProps {
 /*
  * The consent line shared by the inquiry and booking forms: a required checkbox (a clear,
  * affirmative choice) with links to the Privacy Policy and Terms. Its value is checked again
- * on the server. Colours follow the surface (currentColor), so it sits on orange or white.
+ * on the server. Colours follow the surface (currentColor), so it sits on the brand purple or white.
  */
 export function ConsentCheckbox({ id, errorId, defaultChecked }: ConsentCheckboxProps): React.ReactElement {
   return (

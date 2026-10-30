@@ -25,7 +25,7 @@ export default function ProjectsPage(): React.ReactElement {
   return (
     <main data-surface="light" className="px-[var(--gutter)] pt-[calc(var(--header-offset)+var(--control-height)+clamp(3rem,10svh,7rem))] pb-[clamp(4rem,10svh,7rem)]">
       <div className="mx-auto max-w-[var(--container-max)]">
-        <p className="text-label font-semibold tracking-[0.08em] text-orange-600 uppercase">Selected work</p>
+        <p className="text-label font-semibold tracking-[0.08em] text-brand-600 uppercase">Selected work</p>
         <h1 className="mt-4 max-w-[14ch] text-[clamp(2.75rem,7vw,7rem)] leading-[0.95] font-semibold tracking-tight text-balance">
           Work that moves people.
         </h1>

@@ -368,7 +368,8 @@
   .root[data-reward="discover"] .reward[data-for="discover"],
   .root[data-reward="build"] .reward[data-for="build"],
   .root[data-reward="launch"] .reward[data-for="launch"],
-  .root[data-reward="grow"] .reward[data-for="grow"] {
+  .root[data-reward="grow"] .reward[data-for="grow"],
+  .root[data-reward="jupiter"] .reward[data-for="jupiter"] {
     display: grid;
   }
 

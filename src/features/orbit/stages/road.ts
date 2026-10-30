@@ -8,6 +8,7 @@ import { CAR, PLANETS, PPM } from "../engine/config";
 import type { InputSnapshot } from "../engine/input";
 import { RoadTerrain, type RoadFeature } from "../engine/terrain";
 import { City } from "../pixel/city";
+import { JupiterScene } from "../pixel/jupiter-scene";
 import type { ExplorerId } from "../pixel/explorer-sprite";
 import type { Painter } from "../pixel/painter";
 import { NIGHT } from "../pixel/palette";
@@ -26,8 +27,10 @@ interface TrafficSpec {
 }
 
 export interface RoadConfig {
-  id: "discover" | "build";
-  scene: "city" | "forest";
+  id: "discover" | "build" | "jupiter";
+  scene: "city" | "forest" | "jupiter";
+  /** Surface gravity (m/s²); Earth's when omitted. */
+  gravity?: number;
   seed: number;
   /** 0 flat street … 1 rolling forest road. */
   hills: number;
@@ -66,10 +69,11 @@ interface Traffic extends TrafficSpec {
  * rings that boost and refuel, and gaps sized so the tank makes you choose. Wrecks and falls go back to the last checkpoint.
  */
 export class RoadStage implements Stage {
-  readonly id: "discover" | "build";
+  readonly id: "discover" | "build" | "jupiter";
   private readonly terrain: RoadTerrain;
   private readonly world: World | null;
   private readonly city: City | null;
+  private readonly jupiter: JupiterScene | null;
   private readonly camera = new FollowCamera(480, 270);
   private readonly crew: Crew;
   private readonly cells: Pickups;
@@ -83,7 +87,7 @@ export class RoadStage implements Stage {
   private height = 270;
   private done = false;
   fade = 0;
-  private readonly gravity = PLANETS.earth.gravity;
+  private readonly gravity: number;
 
   constructor(
     private readonly context: StageContext,
@@ -94,6 +98,8 @@ export class RoadStage implements Stage {
     this.terrain = new RoadTerrain(config.seed, config.features, config.hills);
     this.world = config.scene === "forest" ? new World(this.terrain, NIGHT) : null;
     this.city = config.scene === "city" ? new City(this.terrain) : null;
+    this.jupiter = config.scene === "jupiter" ? new JupiterScene(this.terrain, config.finish + 60) : null;
+    this.gravity = config.gravity ?? PLANETS.earth.gravity;
     const explorer = new Explorer(4, this.terrain, look, context.audio, context.particles);
     const car = new Car(6, this.terrain, context.audio, context.particles);
     this.crew = new Crew(explorer, car, this.terrain, context.audio);
@@ -128,6 +134,11 @@ export class RoadStage implements Stage {
     this.camera.setView(width, height);
     this.world?.resize(width, height, this.camera.y);
     this.city?.resize(width, height);
+    this.jupiter?.resize(width, height);
+  }
+
+  dispose(): void {
+    this.jupiter?.dispose();
   }
 
   step(dt: number, input: InputSnapshot): void {
@@ -250,6 +261,8 @@ export class RoadStage implements Stage {
       this.city.drawGround(ctx, camera);
       this.city.drawLamps(ctx, toScreen, camera, 0);
     }
+    // Jupiter: the 3D world and its creatures, under the 2D car.
+    this.jupiter?.draw(ctx, camera, time, dt, this.boars);
     this.drawObstacles(painter, toScreen);
     this.drawFinish(ctx, painter, toScreen, time);
     for (const c of this.config.checkpoints.slice(1)) {
@@ -269,7 +282,7 @@ export class RoadStage implements Stage {
       blit(ctx, t.sprite, x, y + 1);
       glow(ctx, x - LENGTH[t.kind] * 8, y - (t.kind === "truck" ? 9 : 10), t.moving ? 6 : 9, "255, 60, 60", t.moving ? 0.5 : 0.85);
     }
-    for (const boar of this.boars) boar.draw(ctx, toScreen, time);
+    if (!this.jupiter) for (const boar of this.boars) boar.draw(ctx, toScreen, time);
     this.context.particles.draw(painter, toScreen, view.frame);
     car.draw(ctx, painter, toScreen, alpha, true);
     this.drawRings(ctx, toScreen, time, true);
@@ -311,7 +324,7 @@ export class RoadStage implements Stage {
     ctx.font = "700 6px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillStyle = Math.sin(time * 6) > -0.8 ? "#ff5b28" : "#7a2a14";
-    ctx.fillText("CITY LIMITS", x, y - 44);
+    ctx.fillText(this.config.scene === "jupiter" ? "ORBIT GATE" : "CITY LIMITS", x, y - 44);
     ctx.restore();
     glow(ctx, x, y - 46, 40, "250, 46, 0", 0.35);
   }
@@ -335,9 +348,12 @@ export class RoadStage implements Stage {
         for (let i = 0; i < 4; i++) painter.rect(x - 1, y + i * 4, 1, 2, "#ffd27a");
       } else {
         // The ravine is a dark chasm from its lips down: without this the sky glow behind the scene shows through the pit.
-        const [x0, y0] = toScreen(f.x, Math.min(this.terrain.height(f.x - 0.05), this.terrain.height(f.x + f.size + 0.05)));
-        const [x1] = toScreen(f.x + f.size, 0);
-        painter.rect(x0, y0 + 2, x1 - x0, Math.max(0, this.height - y0), "#05060a");
+        // (On Jupiter the 3D shelf has real gaps, with cloud below.)
+        if (!this.jupiter) {
+          const [x0, y0] = toScreen(f.x, Math.min(this.terrain.height(f.x - 0.05), this.terrain.height(f.x + f.size + 0.05)));
+          const [x1] = toScreen(f.x + f.size, 0);
+          painter.rect(x0, y0 + 2, x1 - x0, Math.max(0, this.height - y0), "#05060a");
+        }
         const [x, y] = toScreen(f.x - 5, this.terrain.height(f.x - 5));
         painter.rect(x, y - 12, 1, 12, "#a2aba8");
         painter.poly([[x - 4, y - 16], [x + 5, y - 16], [x + 5, y - 11], [x - 4, y - 11]], "#ffd27a");

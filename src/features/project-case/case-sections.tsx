@@ -63,7 +63,7 @@ export function CaseSections({ sections }: { sections: readonly CaseSection[] })
           case "chapter":
             return (
               <section key={index} className={`${styles.chapter} ${styles.reveal}`} aria-label={section.title}>
-                <p className="text-label font-semibold tracking-[0.08em] text-orange-600 uppercase tabular-nums">
+                <p className="text-label font-semibold tracking-[0.08em] text-brand-600 uppercase tabular-nums">
                   {String(numbers[index]).padStart(2, "0")} · {section.title}
                 </p>
                 <p className="text-heading-md font-medium text-pretty text-ink-900">{section.body}</p>

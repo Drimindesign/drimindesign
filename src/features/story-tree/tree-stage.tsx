@@ -46,7 +46,7 @@ export function TreeStage({ title, outro, milestones }: TreeStageProps): React.R
                   { "--x": `${slot.x}px`, "--y": `${slot.y}px`, "--label-width": `${slot.width}px` } as CSSProperties
                 }
               >
-                <p className={`${styles.tag} text-heading-lg font-semibold tracking-tight text-orange-600 tabular-nums`}>{milestone.tag}</p>
+                <p className={`${styles.tag} text-heading-lg font-semibold tracking-tight text-brand-600 tabular-nums`}>{milestone.tag}</p>
                 <p className="mt-1 text-body font-medium text-pretty text-ink-700">{milestone.text}</p>
               </div>
             );
@@ -54,7 +54,7 @@ export function TreeStage({ title, outro, milestones }: TreeStageProps): React.R
         : current && (
             <div className={styles.caption}>
               <div key={current.tag} className={styles.captionLine}>
-                <p className={`${styles.tag} text-heading-lg font-semibold tracking-tight text-orange-600 tabular-nums`}>{current.tag}</p>
+                <p className={`${styles.tag} text-heading-lg font-semibold tracking-tight text-brand-600 tabular-nums`}>{current.tag}</p>
                 <p className="mx-auto mt-1 max-w-[30ch] text-body font-medium text-pretty text-ink-700">{current.text}</p>
               </div>
             </div>

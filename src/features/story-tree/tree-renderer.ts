@@ -48,9 +48,9 @@ const BARK_STEPS = 12;
 /* Roots fade out with depth into the white page: there is no ground, only a hint of them. */
 const ROOT_RGB = "74, 54, 43";
 const ROOT_FADE_DEPTH = 70;
-/* Young → mature greens, then two brand oranges (a few leaves turn to the brand at the end). */
-const LEAF_COLORS = ["#7e9e55", "#5f7f40", "#94b06a", "#46663a", "#fa2e00", "#ff7a3d"];
-const MOTE_COLOR = "255, 150, 70";
+/* Young → mature greens, then two brand purples (a few leaves turn to the brand at the end). */
+const LEAF_COLORS = ["#7e9e55", "#5f7f40", "#94b06a", "#46663a", "#4c1d95", "#8a5ad8"];
+const MOTE_COLOR = "150, 110, 230";
 const MAX_MOTES = 140;
 
 function mix(a: number[], b: number[], t: number): string {
@@ -310,7 +310,7 @@ export class TreeRenderer {
       ctx.moveTo(x, y);
       ctx.lineTo(ex, ey);
       ctx.stroke();
-      ctx.fillStyle = "rgba(214, 39, 0, 0.9)";
+      ctx.fillStyle = "rgba(61, 22, 120, 0.9)";
       ctx.beginPath();
       ctx.arc(x, y, 2.5, 0, Math.PI * 2);
       ctx.fill();

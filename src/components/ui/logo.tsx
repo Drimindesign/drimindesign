@@ -9,7 +9,7 @@ interface LogoProps {
   style?: CSSProperties;
 }
 
-/* Home link with the brand mark, in the surface's display colour (white on orange and dark). */
+/* Home link with the brand mark, in the surface's display colour (white on the brand purple and on dark). */
 export function Logo({ name, className, style }: LogoProps): React.ReactElement {
   return (
     <Link

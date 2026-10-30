@@ -118,7 +118,7 @@ export function MobileMenu({ items, action, triggerClassName, triggerStyle }: Mo
                   href={item.href}
                   onClick={close}
                   aria-current={pathname === item.href ? "page" : undefined}
-                  className={`${styles.link} flex min-h-14 items-center gap-4 px-2 text-heading-md font-semibold tracking-tight text-ink-950 aria-[current=page]:text-orange-600`}
+                  className={`${styles.link} flex min-h-14 items-center gap-4 px-2 text-heading-md font-semibold tracking-tight text-ink-950 aria-[current=page]:text-brand-600`}
                 >
                   <span className="w-6 text-label font-medium text-ink-400 tabular-nums">
                     {String(index + 1).padStart(2, "0")}

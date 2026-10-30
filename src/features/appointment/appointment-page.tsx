@@ -12,7 +12,7 @@ export function AppointmentPage(): React.ReactElement {
   return (
     <main data-surface="light" className={styles.page}>
       <div className={styles.inner}>
-        <p className="text-label font-semibold tracking-[0.08em] text-orange-600 uppercase">{appointmentCopy.eyebrow}</p>
+        <p className="text-label font-semibold tracking-[0.08em] text-brand-600 uppercase">{appointmentCopy.eyebrow}</p>
         <h1 className={`${styles.title} mt-4 font-semibold tracking-tight text-balance`}>{appointmentCopy.title}</h1>
         <p className="mt-5 max-w-[48ch] text-body-lg text-ink-700">{appointmentCopy.intro}</p>
         <Suspense

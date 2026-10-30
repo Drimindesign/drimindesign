@@ -1,7 +1,7 @@
 /*
  * The studio's story, told up the tree as it grows (section 3): one milestone per tier of
  * branches, from the first tier at the bottom to "Today" at the peak. `tag` is the big
- * orange marker (a year or a number); `text` completes it.
+ * brand-colour marker (a year or a number); `text` completes it.
  */
 
 export interface Milestone {

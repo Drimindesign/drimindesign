@@ -12,7 +12,7 @@ export function AboutTeam(): React.ReactElement {
   return (
     <section id="team" data-surface="light" aria-labelledby="team-title" className={styles.section}>
       <div className={styles.copy}>
-        <p className="text-label font-medium tracking-[0.08em] text-orange-600 uppercase">{aboutIntro.eyebrow}</p>
+        <p className="text-label font-medium tracking-[0.08em] text-brand-600 uppercase">{aboutIntro.eyebrow}</p>
         <h2 id="team-title" className="mt-4 max-w-[18ch] text-heading-xl font-semibold tracking-tight text-balance">
           {aboutIntro.title}
         </h2>

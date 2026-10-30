@@ -106,7 +106,7 @@
   .strap {
     width: 0.875rem;
     height: clamp(3rem, 12svh, 7rem);
-    background: linear-gradient(90deg, rgb(0 0 0 / 0.12), transparent 30% 70%, rgb(0 0 0 / 0.12)), var(--color-orange-500);
+    background: linear-gradient(90deg, rgb(0 0 0 / 0.12), transparent 30% 70%, rgb(0 0 0 / 0.12)), var(--color-brand-500);
   }
 
   .pass {

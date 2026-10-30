@@ -4,13 +4,13 @@ import { InquiryForm } from "@/features/inquiry";
 import styles from "./contact-page.module.css";
 
 /*
- * The Contact page: on brand orange like the home page's inquiry, a large title, the
+ * The Contact page: on the brand purple like the home page's inquiry, a large title, the
  * sentence form, and the studio's direct lines beside it. Server rendered; only the form
  * hydrates.
  */
 export function ContactPage(): React.ReactElement {
   return (
-    <main data-surface="orange" className={styles.page}>
+    <main data-surface="brand" className={styles.page}>
       <div className={styles.inner}>
         <p className="text-label font-semibold tracking-[0.08em] uppercase">{contactCopy.eyebrow}</p>
         <h1 className={`${styles.title} mt-4 font-semibold tracking-tight text-balance`}>{contactCopy.title}</h1>

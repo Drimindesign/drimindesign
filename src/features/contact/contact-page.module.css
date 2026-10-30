@@ -4,8 +4,8 @@
     min-height: 100svh;
     padding: calc(var(--header-offset) + var(--control-height) + clamp(3rem, 10svh, 7rem)) var(--gutter)
       clamp(4rem, 12svh, 8rem);
-    background: var(--color-orange-500);
-    color: var(--color-ink-950);
+    background: var(--color-brand-500);
+    color: var(--surface-fg);
   }
 
   .inner {
@@ -40,7 +40,7 @@
 
   .channels {
     display: grid;
-    border-top: 1px solid rgb(10 10 10 / 0.25);
+    border-top: 1px solid var(--surface-border);
   }
 
   .channel {
@@ -48,7 +48,7 @@
     gap: 0.35rem;
     min-height: 44px;
     padding-block: 1.25rem;
-    border-bottom: 1px solid rgb(10 10 10 / 0.25);
+    border-bottom: 1px solid var(--surface-border);
   }
 
   .label {
@@ -56,7 +56,7 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: rgb(10 10 10 / 0.7);
+    color: var(--surface-fg-muted);
   }
 
   .value {

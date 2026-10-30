@@ -183,7 +183,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
           <span data-hud="speed">0</span> km/h
         </span>
         <span className={styles.altitude}>
-          ALT <span data-hud="altitude">0</span> m
+          <span data-hud="alt-label">ALT</span> <span data-hud="altitude">0</span> m
         </span>
         <span className={styles.tank}>
           <span className={styles.tankFill} />

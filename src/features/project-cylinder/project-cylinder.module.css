@@ -7,7 +7,7 @@
   .section {
     position: relative;
     z-index: 2;
-    background: var(--color-orange-500);
+    background: var(--color-brand-500);
   }
 
   .section::after {
@@ -17,7 +17,7 @@
     left: 0;
     right: 0;
     height: clamp(56px, 10svh, 120px);
-    background: linear-gradient(180deg, rgb(60 12 0 / 0.26) 0%, rgb(60 12 0 / 0.08) 45%, transparent 100%);
+    background: linear-gradient(180deg, rgb(12 3 25 / 0.32) 0%, rgb(12 3 25 / 0.1) 45%, transparent 100%);
     pointer-events: none;
   }
 
@@ -30,7 +30,7 @@
     /* Before the canvas paints: the same hazy room, as gradients (scene/palette.ts). */
     background:
       radial-gradient(60% 40% at 50% 46%, color-mix(in srgb, var(--stage-glow) 80%, transparent), transparent 75%),
-      linear-gradient(180deg, var(--stage-zenith) 0%, var(--color-orange-500) 52%, var(--stage-floor-mid) 70%, var(--stage-floor-dark) 100%);
+      linear-gradient(180deg, var(--stage-zenith) 0%, var(--color-brand-500) 52%, var(--stage-floor-mid) 70%, var(--stage-floor-dark) 100%);
   }
 
   /* During the lift (--exit 0 → 1) the scene rises a touch faster than the page: depth. */

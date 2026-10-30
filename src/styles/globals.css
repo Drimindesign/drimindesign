@@ -152,11 +152,11 @@ html.lenis body {
 
   ::selection {
     background: var(--color-ink-950);
-    color: var(--color-orange-500);
+    color: var(--color-brand-500);
   }
 
   :focus-visible {
-    outline: 2px solid var(--surface-focus, var(--color-orange-600));
+    outline: 2px solid var(--surface-focus, var(--color-brand-600));
     outline-offset: 3px;
   }
 }

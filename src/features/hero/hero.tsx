@@ -21,7 +21,7 @@ export function Hero(): React.ReactElement {
   const cta = introItem(5);
 
   return (
-    <section data-surface="orange" aria-labelledby="hero-title" className="relative overflow-clip bg-transparent">
+    <section data-surface="brand" aria-labelledby="hero-title" className="relative overflow-clip bg-transparent">
       <IntroStage className="px-[var(--gutter)] pt-[var(--header-offset)] pb-[var(--gutter)]">
         <div className="flex items-start justify-between">
           <Logo name={site.name} className={logo.className} style={logo.style} />

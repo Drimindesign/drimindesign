@@ -16,7 +16,7 @@ export function ProjectCylinder(): React.ReactElement {
   return (
     <section
       id="work"
-      data-surface="orange"
+      data-surface="brand"
       aria-labelledby="work-title"
       className={styles.section}
       style={{ height: `${height * 100}svh` } as CSSProperties}

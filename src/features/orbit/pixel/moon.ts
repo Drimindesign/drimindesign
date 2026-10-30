@@ -15,16 +15,12 @@ const MOON = {
   shade: "#5f5e5c",
   deep: "#2e2d2c",
   pebble: "#6f6d6a",
-  ocean: "#2f64b0",
-  land: "#5a8f4c",
-  cloud: "#eef4ff",
 } as const;
 
 /*
- * The Moon: black sky with hard stars, Earth hanging over the horizon, two ranges of grey
+ * The Moon: black sky with hard stars, two ranges of grey
  * hills, and the ground lit by a low sun from the left: slopes that face it are bright, the
- * far sides of crater rims fall into shadow. No air, so no haze and no soft edges except the
- * thin glow around Earth.
+ * far sides of crater rims fall into shadow. No air, so no haze and no soft edges.
  */
 export class MoonScene {
   private width = 0;
@@ -44,25 +40,6 @@ export class MoonScene {
     p.rect(0, 0, width, height, MOON.sky);
     const rand = random(29);
     for (let i = 0; i < (width * height) / 380; i++) p.px(rand() * width, rand() * height * 0.8, MOON.star[Math.floor(rand() * 3)]);
-    // Earth: ocean, continents, clouds, its night side in shadow.
-    const ex = Math.round(width * 0.78);
-    const ey = Math.round(height * 0.2);
-    const r = Math.round(Math.min(width, height) * 0.075);
-    const g = ctx.createRadialGradient(ex, ey, r, ex, ey, r + 8);
-    g.addColorStop(0, "rgba(120, 180, 255, 0.45)");
-    g.addColorStop(1, "rgba(120, 180, 255, 0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(ex - r - 8, ey - r - 8, (r + 8) * 2, (r + 8) * 2);
-    p.disc(ex, ey, r, MOON.ocean);
-    for (let i = 0; i < 9; i++) p.disc(ex - r + rand() * r * 2, ey - r + rand() * r * 2, 1 + rand() * r * 0.35, MOON.land);
-    for (let i = 0; i < 7; i++) p.rect(ex - r + rand() * r * 2, ey - r + rand() * r * 2, 2 + rand() * r * 0.5, 1, MOON.cloud);
-    ctx.save();
-    ctx.globalCompositeOperation = "destination-out";
-    p.disc(ex + r * 2.2, ey - r * 0.2, r * 2.1, "#000");
-    ctx.restore();
-    ctx.globalCompositeOperation = "destination-over";
-    p.disc(ex, ey, r, "#0d1830");
-    ctx.globalCompositeOperation = "source-over";
     this.backdrop = canvas;
   }
 

@@ -21,7 +21,7 @@ export function SiteFooter(): React.ReactElement {
     <footer data-surface="dark" className={styles.footer}>
       <div className={styles.top}>
         <div>
-          <p className="text-label font-semibold tracking-[0.08em] text-orange-500 uppercase">{footer.eyebrow}</p>
+          <p className="text-label font-semibold tracking-[0.08em] text-brand-300 uppercase">{footer.eyebrow}</p>
           <p className="mt-4 text-heading-xl font-semibold tracking-tight text-balance">{footer.title}</p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Button href={footer.action.href} size="lg">

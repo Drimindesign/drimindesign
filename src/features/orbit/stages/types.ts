@@ -4,15 +4,16 @@ import type { InputSnapshot } from "../engine/input";
 import type { Painter } from "../pixel/painter";
 import type { Particles } from "../pixel/particles";
 
-export type StageId = "discover" | "build" | "launch" | "grow";
+export type StageId = "discover" | "build" | "launch" | "grow" | "jupiter";
 
-export const STAGE_ORDER: readonly StageId[] = ["discover", "build", "launch", "grow"];
+export const STAGE_ORDER: readonly StageId[] = ["discover", "build", "launch", "grow", "jupiter"];
 
 export const STAGE_TITLES: Record<StageId, { number: string; title: string; goal: string }> = {
   discover: { number: "01", title: "Discover", goal: "Out of the city by night. Jump the traffic, fly the broken bridges, land the flips." },
   build: { number: "02", title: "Build", goal: "The forest road to the launch pad. Logs, boars, ravines: flip it, land it, keep the combo." },
   launch: { number: "03", title: "Launch", goal: "Hold the thrusters and climb out of the sky." },
   grow: { number: "04", title: "Grow", goal: "Cross the Moon, then get out and plant the flag." },
+  jupiter: { number: "05", title: "Scale", goal: "Inside Jupiter's clouds. Heavy gravity, broken ice, storm creatures: reach the orbit gate." },
 };
 
 /** Shared by every stage for its whole life. */
@@ -46,8 +47,10 @@ export interface StageHud {
   speed: number | null;
   /** Thruster tank 0 … 1, or null when not in a vehicle. */
   tank: number | null;
-  /** Altitude in metres (launch only). */
+  /** Altitude in metres (launch), or distance to the goal (Jupiter). */
   altitude: number | null;
+  /** What the altitude gauge is called ("ALT" when omitted). */
+  altitudeLabel?: string;
   /** Hearts left on foot (null in a vehicle). */
   hearts: number | null;
   /** Seconds of thrust left in the tank (null without thrusters). */
@@ -72,6 +75,8 @@ export interface Stage {
   hud(): StageHud;
   /** Back to the last checkpoint (the R key), fade and all. */
   respawn(): void;
+  /** Releases what the stage holds outside the 2D canvas (the 3D stage's WebGL context). */
+  dispose?(): void;
 }
 
 /** Collectibles: hover, bob, get taken when something passes within reach. */

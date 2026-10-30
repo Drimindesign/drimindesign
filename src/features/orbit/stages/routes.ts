@@ -88,3 +88,44 @@ export const FOREST_RUN: RoadConfig = {
     [950, "wolf"], [954, "wolf"],
   ],
 };
+
+/**
+ * Stage 5: inside Jupiter's clouds, on a shelf of ammonia ice. Heavier gravity than Earth (so
+ * every jump is short and the tank works harder), broken shelf with drops into the cloud sea,
+ * and storm creatures that pounce from further out than anything before.
+ */
+export const JUPITER_RUN: RoadConfig = {
+  id: "jupiter",
+  scene: "jupiter",
+  seed: 47,
+  hills: 1,
+  gravity: 14,
+  finish: 960,
+  features: [
+    { kind: "ramp", x: 110, size: 12 },
+    { kind: "ravine", x: 124, size: 14 },
+    { kind: "ramp", x: 230, size: 14 },
+    { kind: "ravine", x: 246, size: 18 },
+    { kind: "ramp", x: 380, size: 12 },
+    { kind: "ravine", x: 394, size: 16 },
+    { kind: "ramp", x: 520, size: 16 },
+    { kind: "ravine", x: 538, size: 22 },
+    { kind: "ramp", x: 680, size: 12 },
+    { kind: "ravine", x: 694, size: 18 },
+    { kind: "ramp", x: 820, size: 16 },
+    { kind: "ravine", x: 838, size: 24 },
+  ],
+  checkpoints: [6, 180, 320, 460, 610, 760, 900],
+  cells: [[60, 1.2], [131, 4], [200, 1.2], [255, 5], [330, 1.2], [402, 4.5], [470, 1.2], [549, 5.5], [640, 1.2], [703, 5], [780, 1.2], [850, 6]],
+  rings: [[132, 5], [256, 6], [404, 5.5], [550, 6.5], [704, 6], [851, 7]],
+  traffic: [],
+  beasts: [
+    [70, "storm"], [76, "storm"],
+    [170, "storm"], [176, "storm"], [182, "storm"],
+    [300, "storm"], [306, "storm"],
+    [440, "storm"], [446, "storm"], [452, "storm"],
+    [600, "storm"], [606, "storm"],
+    [740, "storm"], [746, "storm"], [752, "storm"],
+    [880, "storm"], [886, "storm"], [892, "storm"], [898, "storm"],
+  ],
+};

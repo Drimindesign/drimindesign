@@ -3,7 +3,7 @@ import { AdditiveBlending, Color, RingGeometry, ShaderMaterial, SRGBColorSpace, 
 /*
  * Light spill: the floor lit by the panels. Each panel owns a floor sector (spanning twice its
  * width, so neighbours cross-fade with cos² weights that sum to 1) and adds its own average
- * colour, so a blue project throws blue light and an orange one throws orange.
+ * colour, so a blue project throws blue light and a green one throws green.
  *
  * Profile across the band (d = distance from the band, outward positive):
  *   - right at the contact line the floor gets almost nothing (light leaves the screen
@@ -71,7 +71,7 @@ export interface SpillSettings {
 
 /* Spill tuning (world units). */
 const SPILL = {
-  // Lower than on a dark floor: on the bright orange floor more would bleach toward yellow.
+  // Lower than on a dark floor: on the brand-coloured floor more would wash out the panel's own colour.
   intensity: 0.5,
   falloff: 0.7,
   tail: 0.14,

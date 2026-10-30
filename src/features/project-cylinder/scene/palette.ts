@@ -16,17 +16,17 @@ export interface StagePalette {
 function readPalette(): StagePalette {
   const styles = typeof document === "undefined" ? null : getComputedStyle(document.documentElement);
   // The scene is client-only; the base colour also provides a safe value before CSS is available.
-  const fallback = "#fa2e00";
+  const fallback = "#4c1d95";
   const colour = (token: string): string => styles?.getPropertyValue(token).trim() || fallback;
   return {
     zenith: colour("--stage-zenith"),
-    horizon: colour("--color-orange-500"),
+    horizon: colour("--color-brand-500"),
     glow: colour("--stage-glow"),
     shade: colour("--stage-shade"),
     floorLit: colour("--stage-floor-lit"),
     floorMid: colour("--stage-floor-mid"),
     floorDark: colour("--stage-floor-dark"),
-    figure: styles?.getPropertyValue("--stage-figure").trim() || "#140402",
+    figure: styles?.getPropertyValue("--stage-figure").trim() || "#06020f",
   };
 }
 

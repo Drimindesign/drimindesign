@@ -32,10 +32,10 @@
     margin-inline: 0.15em;
     padding: 0 0.1em;
     border: 0;
-    border-bottom: 2px solid rgb(10 10 10 / 0.55);
+    border-bottom: 2px solid color-mix(in srgb, var(--surface-fg) 60%, transparent);
     border-radius: 0;
     background: transparent;
-    color: var(--color-ink-950);
+    color: var(--surface-fg);
     font: inherit;
     font-weight: 600;
     line-height: 1.2;
@@ -46,23 +46,23 @@
   }
 
   .blank::placeholder {
-    color: rgb(10 10 10 / 0.42);
+    color: color-mix(in srgb, var(--surface-fg) 48%, transparent);
     font-weight: 500;
   }
 
   .blank:hover {
-    border-bottom-color: var(--color-ink-950);
+    border-bottom-color: var(--surface-fg);
   }
 
   .blank:focus-visible {
     outline: none;
-    border-bottom-color: var(--color-ink-950);
-    background: rgb(255 255 255 / 0.16);
+    border-bottom-color: var(--surface-fg);
+    background: color-mix(in srgb, var(--surface-fg) 14%, transparent);
   }
 
   .blank[aria-invalid="true"] {
     border-bottom-style: dashed;
-    border-bottom-color: var(--color-ink-950);
+    border-bottom-color: var(--surface-fg);
   }
 
   .errors {
@@ -93,7 +93,7 @@
 
   .check {
     fill: none;
-    stroke: var(--color-ink-950);
+    stroke: var(--surface-fg);
     stroke-width: 2.5;
     stroke-linecap: round;
     stroke-linejoin: round;

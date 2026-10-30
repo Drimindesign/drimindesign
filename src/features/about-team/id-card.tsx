@@ -20,7 +20,7 @@ export function IdCard({ member, index }: IdCardProps): React.ReactElement {
       <div className={styles.pass}>
         <span className={styles.slot} />
         <div className="flex items-center gap-2">
-          <BrandMark className="h-4 w-auto text-orange-500" />
+          <BrandMark className="h-4 w-auto text-brand-500" />
           <span className="text-[0.625rem] font-semibold tracking-[0.06em]">DRIMINDESIGN</span>
           <span className="ml-auto text-[0.5625rem] font-medium tracking-[0.06em] text-ink-500">STUDIO PASS</span>
         </div>

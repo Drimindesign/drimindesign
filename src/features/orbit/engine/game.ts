@@ -6,7 +6,7 @@ import type { ExplorerId } from "../pixel/explorer-sprite";
 import { Grow } from "../stages/grow";
 import { Launch } from "../stages/launch";
 import { RoadStage } from "../stages/road";
-import { CITY_RUN, FOREST_RUN } from "../stages/routes";
+import { CITY_RUN, FOREST_RUN, JUPITER_RUN } from "../stages/routes";
 import { STAGE_ORDER, STAGE_TITLES, type Stage, type StageContext, type StageId } from "../stages/types";
 import { GameAudio } from "./audio";
 import { ART, MAX_STEPS, SIM_HZ, VIEW_MIN } from "./config";
@@ -123,6 +123,7 @@ export class Game {
     this.pause();
     this.input.detach();
     document.removeEventListener("visibilitychange", this.onVisibility);
+    this.stage.dispose?.();
     this.audio.dispose();
   }
 
@@ -238,6 +239,8 @@ export class Game {
   // ---- the journey ------------------------------------------------------------
 
   private makeStage(id: StageId): Stage {
+    // The stage being replaced lets go of anything outside the canvas (the 3D stage's WebGL context).
+    (this.stage as Stage | undefined)?.dispose?.();
     this.combo.break();
     const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo };
     const stage =
@@ -247,7 +250,9 @@ export class Game {
           ? new RoadStage(context, this.look, FOREST_RUN)
           : id === "launch"
             ? new Launch(context)
-            : new Grow(context, this.look);
+            : id === "grow"
+              ? new Grow(context, this.look)
+              : new RoadStage(context, this.look, JUPITER_RUN);
     stage.resize(this.width, this.height);
     return stage;
   }
@@ -381,7 +386,10 @@ export class Game {
     this.text("score", this.score.total.toLocaleString("en"));
     this.set("vehicle", hud.speed === null ? "none" : hud.altitude !== null ? "flight" : "car");
     if (hud.speed !== null) this.text("speed", String(Math.round(hud.speed)));
-    if (hud.altitude !== null) this.text("altitude", String(Math.round(hud.altitude)));
+    if (hud.altitude !== null) {
+      this.text("altitude", String(Math.round(hud.altitude)));
+      this.text("alt-label", hud.altitudeLabel ?? "ALT");
+    }
     root.style.setProperty("--tank", (hud.tank ?? 1).toFixed(3));
     this.set("hearts", hud.hearts === null ? "none" : String(hud.hearts));
     if (hud.hearts !== null) this.text("hearts", "♥".repeat(hud.hearts) + "♡".repeat(Math.max(0, MAX_HEARTS - hud.hearts)));

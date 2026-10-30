@@ -6,7 +6,7 @@ import { BOAR, type Sprite } from "../pixel/props";
 export type BoarState = "wait" | "charge" | "stagger" | "flee" | "blasted" | "gone";
 
 /** The beasts on the roads and the Moon. */
-export type BeastKind = "boar" | "wolf" | "alien";
+export type BeastKind = "boar" | "wolf" | "alien" | "storm";
 
 interface BeastSpec {
   /** Top charging speed (m/s) and how hard it accelerates into it (m/s²). */
@@ -32,6 +32,8 @@ const SPECS: Record<BeastKind, BeastSpec> = {
   wolf: { speed: 9, accel: 16, notice: 26, leapRange: 5, leap: 6.5, health: 1, mass: 45, scale: 0.85, filter: "grayscale(1) brightness(0.75) contrast(1.3)" },
   // Moon crawlers: hop in the low gravity and glow a little.
   alien: { speed: 5, accel: 8, notice: 24, leapRange: 7, leap: 5, health: 2, mass: 60, scale: 0.95, filter: "hue-rotate(95deg) saturate(2.2) brightness(1.15)" },
+  // Jupiter's storm creatures: drawn in 3D by the scene; quick, and they pounce from further out.
+  storm: { speed: 7.5, accel: 13, notice: 26, leapRange: 8, leap: 7.5, health: 2, mass: 70, scale: 1, filter: "none" },
 };
 
 /** A blow leaves it dazed this long (s); a stomp longer. */
@@ -231,6 +233,17 @@ export class Boar {
     this.vy = 2;
     this.timer = STAGGER;
     this.state = "stagger";
+  }
+
+  /** What a 3D renderer needs to draw it: shown, tumble angle, facing, opacity and hit flash. */
+  pose(): { visible: boolean; angle: number; facing: number; alpha: number; flash: boolean } {
+    return {
+      visible: this.state !== "gone",
+      angle: this.angle,
+      facing: this.vx > 0.2 ? 1 : -1,
+      alpha: this.state === "blasted" ? Math.min(1, this.timer / BLAST_TIME + 0.1) : 1,
+      flash: this.flash > 0,
+    };
   }
 
   draw(ctx: CanvasRenderingContext2D, toScreen: ToScreen, time: number): void {

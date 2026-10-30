@@ -9,6 +9,7 @@ const STAGE_REWARDS: Partial<Record<StageId, string>> = {
   build: "breeze-and-grains",
   launch: "shreeram-milks",
   grow: "speakora-onboarding",
+  jupiter: "house-of-diams",
 };
 
 /*

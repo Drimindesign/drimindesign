@@ -1,0 +1,626 @@
+/*
+ * /play: the game fills the screen; the HUD and the cards between stages sit over it. The canvas
+ * is a low-resolution image scaled up by a whole number, drawn with hard pixel edges. Which HUD
+ * parts and which card show is driven by data attributes the game writes on the root
+ * (data-phase, data-stage, data-vehicle, data-reward, data-new-best).
+ */
+
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  /* The game owns the screen: above the site header, and the document under it never scrolls. */
+  .page {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-overlay);
+    overflow: hidden;
+    background: #0b0d1c;
+    overscroll-behavior: none;
+  }
+
+  :global(html):has(.page),
+  :global(body):has(.page) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .root {
+    position: absolute;
+    inset: 0;
+    color: #fff6dc;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .stage {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    touch-action: none;
+  }
+
+  .canvas {
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  /* ---------- HUD ---------- */
+
+  .top {
+    position: absolute;
+    top: max(0.6rem, env(safe-area-inset-top));
+    left: max(var(--gutter), env(safe-area-inset-left));
+    right: max(var(--gutter), env(safe-area-inset-right));
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    pointer-events: none;
+  }
+
+  .exit {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgb(255 246 220 / 0.35);
+    border-radius: 50%;
+    background: rgb(20 15 20 / 0.35);
+    color: inherit;
+    font-size: 1.1rem;
+    text-decoration: none;
+    pointer-events: auto;
+  }
+
+  /* Combo multiplier with a bar that drains while you're on the ground. */
+  .combo {
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+    color: #ffd25e;
+  }
+
+  .root[data-combo="on"] .combo {
+    display: inline-flex;
+  }
+
+  .comboBar {
+    display: block;
+    width: 3rem;
+    height: 0.3rem;
+    background: currentColor;
+    transform-origin: left;
+    transform: scaleX(var(--combo, 0));
+    transition: transform 60ms linear;
+  }
+
+  .title,
+  .run {
+    font-size: var(--text-label);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-shadow: 0 1px 0 rgb(20 15 20 / 0.8);
+  }
+
+  /* Phones on their side: the stage name alone, so the run line fits on one row. */
+  @media (max-width: 60rem) {
+    .brand {
+      display: none;
+    }
+
+    .top {
+      gap: 0.9rem;
+    }
+
+    .run {
+      gap: 0.75rem;
+    }
+  }
+
+  .run {
+    display: flex;
+    gap: 1rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stageName {
+    color: #f8cf98;
+  }
+
+  .mute {
+    white-space: nowrap;
+    margin-left: auto;
+    min-height: 44px;
+    padding-inline: 1rem;
+    border: 1px solid rgb(255 246 220 / 0.35);
+    border-radius: var(--radius-pill);
+    background: rgb(20 15 20 / 0.35);
+    color: inherit;
+    font-size: var(--text-label);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  .root:not([data-phase="play"], [data-phase="complete"], [data-phase="paused"]) .run {
+    visibility: hidden;
+  }
+
+  .hearts {
+    color: #ff6a5e;
+    letter-spacing: 0.1em;
+  }
+
+  .root[data-hearts="none"] .hearts {
+    display: none;
+  }
+
+  .prompt {
+    position: absolute;
+    left: 50%;
+    bottom: clamp(5.5rem, 26svh, 9rem);
+    translate: -50% 0;
+    white-space: pre;
+    font-size: var(--text-body-sm);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-shadow: 0 1px 0 rgb(20 15 20 / 0.9);
+    pointer-events: none;
+  }
+
+  /* Speed with the thruster tank (car), or speed with altitude (launch). */
+  .gauges {
+    position: absolute;
+    left: var(--gutter);
+    bottom: var(--gutter);
+    display: none;
+    align-items: center;
+    gap: 1rem;
+    font-size: var(--text-body-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 0 rgb(20 15 20 / 0.9);
+  }
+
+  .root[data-phase="play"]:not([data-vehicle="none"]) .gauges {
+    display: flex;
+  }
+
+  .altitude {
+    display: none;
+  }
+
+  .root[data-vehicle="flight"] .altitude {
+    display: inline;
+  }
+
+  .root[data-vehicle="flight"] .tank,
+  .root[data-vehicle="flight"] .fuel {
+    display: none;
+  }
+
+  .landIn {
+    display: none;
+    color: #f8cf98;
+  }
+
+  .root[data-airborne="true"] .landIn {
+    display: inline;
+  }
+
+  .tank {
+    position: relative;
+    display: block;
+    width: 6rem;
+    height: 0.5rem;
+    background: rgb(20 15 20 / 0.5);
+    box-shadow: 0 0 0 1px rgb(255 246 220 / 0.4);
+  }
+
+  .tankFill {
+    position: absolute;
+    inset: 0;
+    background: #67d3ff;
+    transform-origin: left;
+    transform: scaleX(var(--tank, 1));
+    transition: transform 60ms linear;
+  }
+
+  .hints {
+    position: absolute;
+    right: var(--gutter);
+    bottom: var(--gutter);
+    max-width: 60%;
+    text-align: right;
+    font-size: var(--text-label);
+    font-weight: 500;
+    opacity: 0.75;
+    text-shadow: 0 1px 0 rgb(20 15 20 / 0.9);
+    pointer-events: none;
+  }
+
+  .root:not([data-phase="play"]) .hints {
+    visibility: hidden;
+  }
+
+  .failed {
+    position: absolute;
+    inset: auto var(--gutter) 40%;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  /* ---------- Cards between stages ---------- */
+
+  .card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: none;
+    width: min(34rem, calc(100% - var(--gutter) * 2));
+    translate: -50% -50%;
+    padding: clamp(1.25rem, 4vw, 2.25rem);
+    border: 1px solid rgb(255 246 220 / 0.18);
+    border-radius: 1.25rem;
+    background: rgb(8 8 18 / 0.72);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    text-align: center;
+    box-shadow: 0 30px 80px -30px rgb(0 0 0 / 0.7);
+  }
+
+  .root[data-phase="title"] .titleCard,
+  .root[data-phase="paused"] .pauseCard,
+  .root[data-phase="intro"] .introCard,
+  .root[data-phase="complete"][data-reward] .rewardCard,
+  .root[data-phase="finished"] .finishCard {
+    display: grid;
+    gap: 0.75rem;
+    justify-items: center;
+    animation: card-in 500ms var(--ease-out-expo) both;
+  }
+
+  /* The stage intro is a title over the scene, not a box. */
+  .introCard {
+    border: 0;
+    background: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    text-shadow: 0 2px 0 rgb(20 15 20 / 0.9);
+  }
+
+  .kicker {
+    color: #f8cf98;
+    font-size: var(--text-label);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .logo {
+    font-family: var(--font-display);
+    font-size: clamp(2.5rem, 7vw, 4.75rem);
+    line-height: 0.95;
+    text-transform: uppercase;
+  }
+
+  .lede {
+    max-width: 34ch;
+    font-size: var(--text-body);
+    line-height: 1.5;
+    opacity: 0.9;
+  }
+
+  .small {
+    font-size: var(--text-label);
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+  }
+
+  .primary,
+  .secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding-inline: 1.25rem;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-body-sm);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .primary {
+    border: 0;
+    background: #fa2e00;
+    color: #0a0a0a;
+  }
+
+  .secondary {
+    border: 1px solid rgb(255 246 220 / 0.4);
+    background: transparent;
+    color: inherit;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+  }
+
+  .reward {
+    display: none;
+    width: min(16rem, 100%);
+    gap: 0.4rem;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .root[data-reward="discover"] .reward[data-for="discover"],
+  .root[data-reward="build"] .reward[data-for="build"],
+  .root[data-reward="launch"] .reward[data-for="launch"],
+  .root[data-reward="grow"] .reward[data-for="grow"] {
+    display: grid;
+  }
+
+  .rewardImage {
+    position: relative;
+    display: block;
+    aspect-ratio: 7 / 5;
+    overflow: hidden;
+    border-radius: 0.6rem;
+    box-shadow: 0 0 0 1px rgb(255 246 220 / 0.25);
+  }
+
+  .rewardImage img {
+    object-fit: cover;
+  }
+
+  .rewardTitle {
+    font-size: var(--text-heading-md);
+    font-weight: 600;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    width: 100%;
+    margin-block: 0.25rem;
+  }
+
+  .stats dt {
+    font-size: var(--text-label);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  .stats dd {
+    font-size: var(--text-heading-md);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .newBest {
+    display: none;
+  }
+
+  .root[data-new-best="true"] .newBest {
+    display: inline;
+  }
+
+  @keyframes card-in {
+    from {
+      opacity: 0.01;
+      translate: -50% -46%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-phase] .card {
+      animation: none;
+    }
+  }
+
+  /* Short landscape screens (phones on their side): compact cards that fit without scrolling. */
+  @media (max-height: 30rem) {
+    .card {
+      width: min(40rem, calc(100% - 9rem));
+      padding: 0.9rem 1.25rem;
+      border-radius: 1rem;
+    }
+
+    .root[data-phase] .card {
+      gap: 0.4rem;
+    }
+
+    .logo {
+      font-size: clamp(1.8rem, 9svh, 2.6rem);
+    }
+
+    .lede {
+      font-size: var(--text-body-sm);
+      line-height: 1.35;
+    }
+
+    .actions {
+      margin-top: 0.2rem;
+    }
+
+    .finishCard .actions {
+      gap: 0.4rem;
+    }
+
+    .reward {
+      grid-template-columns: 7rem 1fr;
+      align-items: center;
+      width: min(22rem, 100%);
+      text-align: left;
+    }
+
+    .rewardTitle {
+      font-size: var(--text-body);
+    }
+
+    .stats dd {
+      font-size: var(--text-body);
+    }
+  }
+
+  /* ---------- Touch pads (coarse pointers only) ---------- */
+
+  .pads,
+  .rotate {
+    display: none;
+  }
+
+  .touchOnly {
+    display: none;
+  }
+
+  @media (pointer: coarse) {
+    .touchOnly {
+      display: inline-flex;
+    }
+
+    .hints {
+      display: none;
+    }
+
+    .prompt {
+      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 7.75rem);
+    }
+
+    /* Gauges sit above the left thumb's pads. */
+    .gauges {
+      left: max(var(--gutter), env(safe-area-inset-left));
+      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 5.5rem);
+    }
+
+    /* Left thumb: brake and gas. Right thumb: a big thruster, with get-out and staff above it. */
+    .pads {
+      position: absolute;
+      inset: 0;
+      display: block;
+      pointer-events: none;
+    }
+
+    .root:not([data-phase="play"]) .pads {
+      visibility: hidden;
+    }
+
+    .pad {
+      position: absolute;
+      display: grid;
+      place-items: center;
+      width: 4.75rem;
+      height: 4.75rem;
+      border: 1px solid rgb(255 246 220 / 0.4);
+      border-radius: 50%;
+      background: rgb(20 15 20 / 0.35);
+      color: inherit;
+      font-size: 1.5rem;
+      font-weight: 700;
+      touch-action: none;
+      pointer-events: auto;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .pad:active,
+    .pad[data-held="true"] {
+      background: rgb(255 246 220 / 0.25);
+    }
+
+    .pad[data-action="left"] {
+      left: max(var(--gutter), env(safe-area-inset-left));
+      bottom: max(var(--gutter), env(safe-area-inset-bottom));
+    }
+
+    .pad[data-action="right"] {
+      left: calc(max(var(--gutter), env(safe-area-inset-left)) + 5.75rem);
+      bottom: max(var(--gutter), env(safe-area-inset-bottom));
+    }
+
+    .pad[data-action="jump"] {
+      right: max(var(--gutter), env(safe-area-inset-right));
+      bottom: max(var(--gutter), env(safe-area-inset-bottom));
+      width: 6rem;
+      height: 6rem;
+      border-color: rgb(103 211 255 / 0.6);
+      font-size: 1.9rem;
+    }
+
+    .pad[data-action="interact"],
+    .pad[data-action="attack"] {
+      width: 3.25rem;
+      height: 3.25rem;
+      font-size: 1.1rem;
+    }
+
+    .pad[data-action="interact"] {
+      right: calc(max(var(--gutter), env(safe-area-inset-right)) + 6.75rem);
+      bottom: max(var(--gutter), env(safe-area-inset-bottom));
+    }
+
+    .pad[data-action="attack"] {
+      right: calc(max(var(--gutter), env(safe-area-inset-right)) + 1.4rem);
+      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 6.75rem);
+    }
+
+    /* Get out and the staff only matter on foot or on the Moon. */
+    .root:not([data-stage="grow"]) .pad[data-action="interact"],
+    .root:not([data-stage="grow"]) .pad[data-action="attack"] {
+      display: none;
+    }
+  }
+
+  /* Phones held upright: ask for landscape. */
+  @media (pointer: coarse) and (orientation: portrait) {
+    .rotate {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: grid;
+      place-content: center;
+      justify-items: center;
+      gap: 1rem;
+      padding: var(--gutter);
+      background: #0b0d1c;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .rotateIcon {
+      font-size: 3rem;
+      animation: rotate-hint 1.6s var(--ease-out-expo) infinite;
+    }
+  }
+
+  @keyframes rotate-hint {
+    0%,
+    30% {
+      rotate: 0deg;
+    }
+
+    70%,
+    100% {
+      rotate: -90deg;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rotateIcon {
+      animation: none;
+    }
+  }
+}

@@ -44,6 +44,11 @@ export function SiteFooter(): React.ReactElement {
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link href="/play" className={`${styles.link} text-body-lg font-medium`}>
+                  Play Idea to Orbit
+                </Link>
+              </li>
             </ul>
           </div>
           <div>

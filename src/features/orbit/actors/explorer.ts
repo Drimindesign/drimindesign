@@ -11,20 +11,24 @@ const SHADOW = "rgba(12, 8, 14, 0.42)";
 export const MAX_HEARTS = 3;
 
 /*
- * The staff swing, in seconds: wind up (raise it behind the head), strike (bring it down and
- * forward; only this window can hit), recover. Angles are in character space (0 = straight
- * ahead, positive = up), for the staff held in the front hand.
+ * The sword swing, in seconds: wind up (draw the blade back), strike (only this window can
+ * hit), recover. Angles are in character space (0 = straight ahead, positive = up), for the
+ * sword in the front hand. Swings alternate: an overhead cut down, then a rising cut up.
  */
-const SWING = { windup: 0.09, strike: 0.2, end: 0.36 } as const;
-const STAFF = { rest: -1.38, raised: 1.95, struck: -0.38, length: 1.15, cooldown: 0.42 } as const;
+const SWING = { windup: 0.09, strike: 0.19, end: 0.38 } as const;
+const SWORD = { guard: 0.55, high: 2.35, low: -1.05, length: 1.05, cooldown: 0.3 } as const;
+/** Contact freezes the blade this long (s): the hit lands with weight. */
+const HIT_STOP = 0.06;
+/** Hands are never still: the guard breathes and sways (rad), and swings with the walk. */
+const SWAY = { breathe: 0.09, drift: 0.06, gait: 0.28 } as const;
 /** Invulnerable after a hit, blinking (s). */
 const MERCY = 1.4;
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
 /*
- * The explorer as one actor: physics body, procedural rig and pixel sprite, the walking staff
- * (swing, strike window and hitbox), hearts with knockback and a mercy blink, and the effects
+ * The explorer as one actor: physics body, procedural rig and pixel sprite, the sword
+ * (alternating cuts, strike window, hitbox, hit-stop), hands that are never quite still, hearts with knockback and a mercy blink, and the effects
  * that come from the body (footsteps on the gait, dust and sound on jumps and landings).
  */
 export class Explorer {
@@ -40,6 +44,11 @@ export class Explorer {
   /** Time into the current swing (s), or -1 when not swinging. */
   private swing = -1;
   private cooldown = 0;
+  /** Which cut: 0 overhead, 1 rising. */
+  private cut = 0;
+  private hitStop = 0;
+  /** Seconds alive, for the sway of the hands. */
+  private clock = 0;
   /** Each swing hits each target at most once. */
   readonly struck = new Set<object>();
 
@@ -84,7 +93,7 @@ export class Explorer {
 
   // ---- combat ---------------------------------------------------------------
 
-  /** In the strike window of a swing: the staff can hit. */
+  /** In the strike window of a swing: the blade can hit. */
   get striking(): boolean {
     return this.swing >= SWING.windup && this.swing <= SWING.strike;
   }
@@ -92,9 +101,9 @@ export class Explorer {
   /** The strike's reach in front of the explorer (world m). */
   get hitbox(): { x0: number; x1: number; y0: number; y1: number } {
     const b = this.body;
-    const a = b.x + b.facing * 0.2;
-    const c = b.x + b.facing * 1.55;
-    return { x0: Math.min(a, c), x1: Math.max(a, c), y0: b.y - 0.1, y1: b.y + 1.6 };
+    const a = b.x + b.facing * 0.15;
+    const c = b.x + b.facing * 1.75;
+    return { x0: Math.min(a, c), x1: Math.max(a, c), y0: b.y - 0.2, y1: b.y + 2.1 };
   }
 
   get vulnerable(): boolean {
@@ -122,12 +131,38 @@ export class Explorer {
     this.body.impulse(this.body.vx, 6.2);
   }
 
-  private staffAngle(): number {
+  /** Where the cut starts and ends. */
+  private get arc(): [number, number] {
+    return this.cut === 0 ? [SWORD.high, SWORD.low] : [SWORD.low, SWORD.high - 0.4];
+  }
+
+  /*
+   * The blade's angle: drawn back smoothly, then the cut accelerates through the arc (t²: the
+   * arm whips), overshoots a touch past the guard on the recovery and settles. At rest the
+   * guard breathes, drifts and swings with the walk.
+   */
+  private swordAngle(): number {
     const t = this.swing;
-    if (t < 0) return STAFF.rest;
-    if (t < SWING.windup) return STAFF.rest + (STAFF.raised - STAFF.rest) * smooth(t / SWING.windup);
-    if (t < SWING.strike) return STAFF.raised + (STAFF.struck - STAFF.raised) * smooth((t - SWING.windup) / (SWING.strike - SWING.windup));
-    return STAFF.struck + (STAFF.rest - STAFF.struck) * smooth((t - SWING.strike) / (SWING.end - SWING.strike));
+    const b = this.body;
+    const walk = Math.min(1, Math.abs(b.vx) / 3) * Math.sin(this.animator.gaitPhase * Math.PI * 2);
+    const guard =
+      SWORD.guard + Math.sin(this.clock * 1.7) * SWAY.breathe + Math.sin(this.clock * 3.1 + 1.3) * SWAY.drift + walk * SWAY.gait;
+    if (t < 0) return guard;
+    const [from, to] = this.arc;
+    if (t < SWING.windup) return guard + (from - guard) * smooth(t / SWING.windup);
+    if (t < SWING.strike) {
+      const k = (t - SWING.windup) / (SWING.strike - SWING.windup);
+      return from + (to - from) * k * k;
+    }
+    const k = (t - SWING.strike) / (SWING.end - SWING.strike);
+    const back = 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2);
+    return to + (guard - to) * back;
+  }
+
+  /** The blade bit into something: a moment's stop and a little push back through the arm. */
+  recoil(): void {
+    this.hitStop = HIT_STOP;
+    this.body.impulse(-this.body.facing * 1.2, 0);
   }
 
   // ---- simulation -------------------------------------------------------------
@@ -135,13 +170,17 @@ export class Explorer {
   step(dt: number, gravity: number, input: MoveInput & { attackPressed?: boolean }, effects = true): void {
     this.mercy = Math.max(0, this.mercy - dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
+    this.clock += dt;
     if (input.attackPressed && this.cooldown === 0 && this.swing < 0) {
       this.swing = 0;
-      this.cooldown = STAFF.cooldown;
+      this.cut = 1 - this.cut;
+      this.cooldown = SWORD.cooldown;
       this.struck.clear();
       this.audio.swing();
     }
-    if (this.swing >= 0) {
+    if (this.hitStop > 0) {
+      this.hitStop = Math.max(0, this.hitStop - dt);
+    } else if (this.swing >= 0) {
       const before = this.swing;
       this.swing += dt;
       // The strike carries the body a step forward.
@@ -195,44 +234,49 @@ export class Explorer {
     if (this.mercy > 0 && Math.floor(this.mercy * 12) % 2 === 0) return;
 
     const pose = this.animator.update(Math.min(1 / 20, dt), c, this.terrain, gravity, this.crouch);
-    const angle = this.staffAngle();
+    const angle = this.swordAngle();
     const b = this.animator.body;
     const arm = pose.arms[1];
-    if (this.swing >= 0) {
-      // The front arm follows the staff: reach from the shoulder along the swing.
-      const dx = Math.cos(angle);
-      const dy = Math.sin(angle);
-      arm.mid = { x: arm.root.x + dx * b.upperArm * 0.95 + 0.03, y: arm.root.y + dy * b.upperArm * 0.95 };
-      arm.end = { x: arm.mid.x + dx * b.forearm, y: arm.mid.y + dy * b.forearm };
-    }
+    // The sword arm reaches from the shoulder along the blade: at guard it's held forward and low,
+    // in a cut it extends with the swing.
+    const reach = this.swing >= 0 ? 0.95 : 0.7;
+    const elbow = angle * 0.55 - 0.5;
+    arm.mid = { x: arm.root.x + Math.cos(elbow) * b.upperArm * reach + 0.03, y: arm.root.y + Math.sin(elbow) * b.upperArm * reach };
+    arm.end = { x: arm.mid.x + Math.cos(angle) * b.forearm * 0.8, y: arm.mid.y + Math.sin(angle) * b.forearm * 0.8 };
+    // The free hand drifts a little, out of step with the other.
+    const free = pose.arms[0];
+    free.end = { x: free.end.x + Math.sin(this.clock * 1.3 + 2) * 0.04, y: free.end.y + Math.sin(this.clock * 2.3) * 0.03 };
     this.sprite.draw(pose, b, EXPLORERS[this.look].look, c.facing);
     const [ex, ey] = toScreen(x, y);
     ctx.globalAlpha = this.alpha;
     paste(ctx, this.sprite.canvas, ex - this.sprite.footX, ey - this.sprite.footY);
 
-    // The staff, gripped in the front hand: a short butt behind the grip, the shaft ahead.
+    // The sword in the front hand: pommel and grip behind the hand, crossguard, then the blade.
     const hx = ex + c.facing * arm.end.x * 16;
     const hy = ey - arm.end.y * 16;
     const ux = c.facing * Math.cos(angle) * 16;
     const uy = -Math.sin(angle) * 16;
-    const butt = 0.22;
-    const tip = STAFF.length - butt;
-    painter.line(hx - ux * butt, hy - uy * butt, hx + ux * tip, hy + uy * tip, "#6b4528");
-    painter.line(hx - ux * butt + 0.5, hy - uy * butt, hx + ux * tip + 0.5, hy + uy * tip, "#8c5e36");
-    painter.disc(hx + ux * tip, hy + uy * tip, 1.1, "#c9a06a");
-    ctx.globalAlpha = 1;
+    const blade = SWORD.length;
     if (this.striking) {
-      // A faint arc where the staff is cutting through the air.
+      // The smear of the cut: a pale wedge over the arc swept so far.
+      const [from] = this.arc;
+      const a0 = c.facing > 0 ? -from : Math.PI + from;
+      const a1 = c.facing > 0 ? -angle : Math.PI + angle;
       ctx.save();
-      ctx.globalAlpha = 0.25;
-      ctx.strokeStyle = "#fff6dc";
-      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = "#dcebff";
       ctx.beginPath();
-      const start = c.facing > 0 ? -STAFF.raised : Math.PI + STAFF.raised;
-      const end = c.facing > 0 ? -STAFF.struck : Math.PI + STAFF.struck;
-      ctx.arc(hx, hy, STAFF.length * 16 * 0.85, Math.min(start, end), Math.max(start, end));
-      ctx.stroke();
+      ctx.moveTo(hx, hy);
+      ctx.arc(hx, hy, blade * 16, Math.min(a0, a1), Math.max(a0, a1));
+      ctx.closePath();
+      ctx.fill();
       ctx.restore();
     }
+    painter.line(hx - ux * 0.2, hy - uy * 0.2, hx, hy, "#3a2a1e");
+    painter.disc(hx - ux * 0.22, hy - uy * 0.22, 0.8, "#c9a06a");
+    painter.line(hx - uy * 0.13, hy + ux * 0.13, hx + uy * 0.13, hy - ux * 0.13, "#c9a06a");
+    painter.line(hx + ux * 0.05, hy + uy * 0.05, hx + ux * blade, hy + uy * blade, "#e4ebf0");
+    painter.line(hx + ux * 0.05 + 0.5, hy + uy * 0.05 + 0.5, hx + ux * (blade - 0.08) + 0.5, hy + uy * (blade - 0.08) + 0.5, "#8d99a3");
+    ctx.globalAlpha = 1;
   }
 }

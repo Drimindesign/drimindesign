@@ -23,6 +23,11 @@ const TILT_RATE = 6;
 const CORRIDOR = 26;
 /** After a hit, the thrusters cut out for this long while the car tumbles (s). */
 const STUN = 0.7;
+/** Hits before the climb restarts from the pad. */
+const MAX_HITS = 3;
+/** Debris within this height of the car (m) steers toward it at up to this speed (m/s). */
+const HOMING_RANGE = 22;
+const HOMING_SPEED = 7;
 
 interface Hazard {
   kind: "bird" | "satellite" | "debris";
@@ -54,6 +59,7 @@ export class Launch implements Stage {
   private angle = 0;
   private spin = 0;
   private stunned = 0;
+  private hits = 0;
   private burning = false;
   private lifted = false;
   private done = false;
@@ -68,12 +74,12 @@ export class Launch implements Stage {
 
   constructor(private readonly context: StageContext) {
     const rand = random(17);
-    for (let i = 0; i < 9; i++) {
-      this.hazards.push({ kind: "bird", x: (rand() - 0.5) * CORRIDOR * 2, y: 45 + i * 22 + rand() * 10, vx: (rand() < 0.5 ? -1 : 1) * (3 + rand() * 3), radius: 1.1 });
+    for (let i = 0; i < 16; i++) {
+      this.hazards.push({ kind: "bird", x: (rand() - 0.5) * CORRIDOR * 2, y: 40 + i * 14 + rand() * 8, vx: (rand() < 0.5 ? -1 : 1) * (3.5 + rand() * 3.5), radius: 1.1 });
     }
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 24; i++) {
       const kind = i % 3 === 0 ? "satellite" : "debris";
-      this.hazards.push({ kind, x: (rand() - 0.5) * CORRIDOR * 2, y: 430 + i * 36 + rand() * 14, vx: (rand() < 0.5 ? -1 : 1) * (4 + rand() * 5), radius: kind === "satellite" ? 1.7 : 1 });
+      this.hazards.push({ kind, x: (rand() - 0.5) * CORRIDOR * 2, y: 300 + i * 26 + rand() * 12, vx: (rand() < 0.5 ? -1 : 1) * (4 + rand() * 6), radius: kind === "satellite" ? 1.7 : 1 });
     }
     this.cells = new Pickups(Array.from({ length: 16 }, (_, i) => [(rand() - 0.5) * CORRIDOR * 1.4, 30 + i * 54] as const));
   }
@@ -148,16 +154,25 @@ export class Launch implements Stage {
     }
 
     for (const h of this.hazards) {
+      // Debris near your height is drawn toward you: it has to be dodged, not just waited out.
+      if (h.kind === "debris" && Math.abs(h.y - this.y) < HOMING_RANGE) h.vx += ((Math.sign(this.x - h.x) || 1) * HOMING_SPEED - h.vx) * 1.4 * dt;
       h.x += h.vx * dt;
       if (Math.abs(h.x) > CORRIDOR + 8) h.x = -Math.sign(h.x) * (CORRIDOR + 8);
       if (this.stunned === 0 && Math.hypot(h.x - this.x, h.y - this.y) < h.radius + 1) {
         this.stunned = STUN;
+        this.hits++;
         this.spin = (h.x < this.x ? 1 : -1) * 7;
         this.vy = Math.min(this.vy, -6);
         this.vx += (this.x - h.x) * 3;
         this.context.audio.land(0.8);
         if (h.kind === "bird") this.context.audio.grunt();
       }
+    }
+    // Three hits and the climb is over: back to the pad.
+    if (this.hits >= MAX_HITS) {
+      this.context.score.add(0, "Knocked out of the sky", this.x, this.y + 2);
+      this.respawn();
+      return;
     }
     const got = this.cells.collect(this.x, this.y, 1.8);
     if (got > 0) {
@@ -181,6 +196,7 @@ export class Launch implements Stage {
     this.vy = 0;
     this.angle = 0;
     this.stunned = 0;
+    this.hits = 0;
     this.px = 0;
     this.py = 0;
     this.pangle = 0;
@@ -268,6 +284,6 @@ export class Launch implements Stage {
 
   hud(): StageHud {
     const prompt = !this.lifted ? "Hold Space · Lift off    ← → Lean" : this.stunned > 0 ? "Hit! Hold Space to recover" : "";
-    return { prompt, speed: Math.hypot(this.vx, this.vy) * 3.6, tank: null, altitude: this.y, hearts: null, fuel: null, landIn: null };
+    return { prompt, speed: Math.hypot(this.vx, this.vy) * 3.6, tank: null, altitude: this.y, hearts: MAX_HITS - this.hits, fuel: null, landIn: null };
   }
 }

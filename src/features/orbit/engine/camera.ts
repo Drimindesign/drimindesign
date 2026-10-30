@@ -7,12 +7,14 @@ export interface Camera {
 }
 
 /** Look-ahead per m/s of speed, capped at this share of the view's width. */
-const LOOK_AHEAD = 0.4;
-const LOOK_CAP = 0.3;
+const LOOK_AHEAD = 0.12;
+const LOOK_CAP = 0.1;
+/** The target never strays further than this share of the view's width from its centre. */
+const BAND = 0.14;
 
 /*
- * The follow camera: critically damped horizontally (steady, no overshoot) with look-ahead in
- * the direction of travel, and vertically keeping the ground ~70% down the view while
+ * The follow camera: critically damped horizontally (steady, no overshoot) with a little
+ * look-ahead in the direction of travel, never letting the target leave the middle band, and vertically keeping the ground ~70% down the view while
  * following anything that climbs into the top quarter. Drawn at whole pixels, so the world and
  * the sprites never shimmer against each other.
  */
@@ -45,10 +47,19 @@ export class FollowCamera implements Camera {
   follow(targetX: number, targetY: number, vx: number, ground: number, dt: number, groundShare = 0.7): void {
     const view = this.width / PPM;
     const ahead = Math.max(-view * LOOK_CAP, Math.min(view * LOOK_CAP, vx * LOOK_AHEAD));
-    const omega = 5;
+    const omega = 7;
     const ax = omega * omega * (targetX + ahead - this.x) - 2 * omega * this.vx;
     this.vx += ax * dt;
     this.x += this.vx * dt;
+    // However fast the car flies (a boost, a long jump), it stays near the middle of the view.
+    const band = view * BAND;
+    if (this.x < targetX - band) {
+      this.x = targetX - band;
+      this.vx = Math.max(this.vx, vx);
+    } else if (this.x > targetX + band) {
+      this.x = targetX + band;
+      this.vx = Math.min(this.vx, vx);
+    }
     this.y += (this.wantY(ground, targetY, groundShare) - this.y) * (1 - Math.exp(-6 * dt));
   }
 

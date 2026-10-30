@@ -1,3 +1,4 @@
+import { Boar } from "../actors/boar";
 import { Car } from "../actors/car";
 import { Crew } from "../actors/crew";
 import { Explorer } from "../actors/explorer";
@@ -9,21 +10,29 @@ import { MoonTerrain } from "../engine/terrain";
 import type { ExplorerId } from "../pixel/explorer-sprite";
 import { MoonScene } from "../pixel/moon";
 import { blit, CELL, drawFlag, FLAG_POLE, glow } from "../pixel/props";
+import { stepBeasts } from "./beasts";
 import { scoreCarEvents } from "./road";
 import { Pickups, type Stage, type StageContext, type StageHud, type View } from "./types";
 
-/** Moon gravity (m/s²). */
-const GRAVITY = 1.62;
+/**
+ * Gravity on this Moon (m/s²): heavier than the real 1.62, so jumps still come back down within
+ * a couple of seconds and the thrusters have to be used, not leaned on.
+ */
+const GRAVITY = 4.2;
 const LENGTH = 470;
 /** Where the flag goes (m). */
 const FLAG_X = 448;
+/** Alien crawlers along the way, in pairs, and the guard waiting around the flag (m). */
+const ALIENS: readonly number[] = [62, 66, 118, 122, 126, 176, 180, 232, 236, 240, 290, 294, 340, 344, 348, 392, 396];
+const GUARD: readonly number[] = [FLAG_X - 24, FLAG_X - 17, FLAG_X - 10, FLAG_X + 7];
 /** How long planting the flag takes (s). */
 const PLANT_TIME = 1.4;
 
 /*
- * Stage 4, Grow: the Moon. Low gravity turns every crater rim into a jump; the thrusters carry
- * the car a long way. Collect the cells, stop near the summit, get out, and plant the flag:
- * the idea has grown into something that stands on its own.
+ * Stage 4, Grow: the Moon. Light gravity turns every crater rim into a jump, and alien crawlers
+ * hop at the car in pairs: smash them at speed, fly over, or blast them with the thrusters.
+ * At the summit, get out and cut through the guard with the sword to plant the flag: the idea
+ * has grown into something that stands on its own.
  */
 export class Grow implements Stage {
   readonly id = "grow" as const;
@@ -32,6 +41,7 @@ export class Grow implements Stage {
   private readonly camera = new FollowCamera(480, 270);
   private readonly crew: Crew;
   private readonly cells: Pickups;
+  private readonly beasts: Boar[];
   private readonly sprites = { cell: CELL(), pole: FLAG_POLE() };
   private planting = -1;
   private wreck = false;
@@ -47,6 +57,7 @@ export class Grow implements Stage {
     const points: [number, number][] = [];
     for (let x = 30; x < FLAG_X - 10; x += 26) points.push([x, this.terrain.height(x) + (x % 52 === 4 ? 6 : 1.4)]);
     this.cells = new Pickups(points);
+    this.beasts = [...ALIENS, ...GUARD].map((x) => new Boar(x, this.terrain, "alien"));
     this.camera.snap(6, this.terrain.height(6), this.terrain.height(6));
   }
 
@@ -91,6 +102,13 @@ export class Grow implements Stage {
     }
     this.crew.step(dt, GRAVITY, input, { board: true, alight: true });
     this.context.particles.update(dt, this.terrain, GRAVITY);
+    // Out of hearts on foot: back on your feet beside the car, the hearts restored.
+    if (stepBeasts(this.beasts, this.crew, this.context, dt, GRAVITY)) {
+      this.context.audio.respawn();
+      this.fade = 1;
+      this.crew.explorer.place(this.crew.car.door.x - 1.5);
+      this.crew.explorer.heal();
+    }
     const car = this.crew.car.vehicle;
     // The car can't go past the summit.
     if (car.x > LENGTH - 8) {
@@ -151,6 +169,7 @@ export class Grow implements Stage {
       glow(ctx, x, y, 11, "103, 211, 255", 0.45);
       blit(ctx, this.sprites.cell, x, y);
     }
+    for (const beast of this.beasts) beast.draw(ctx, toScreen, time);
     crew.car.draw(ctx, painter, toScreen, alpha, true);
     crew.explorer.draw(ctx, painter, toScreen, alpha, dt, GRAVITY);
     this.context.particles.draw(painter, toScreen, view.frame);
@@ -163,7 +182,8 @@ export class Grow implements Stage {
     let prompt = "";
     if (this.planting >= 0) prompt = "";
     else if (this.nearFlag) prompt = "E · Plant the flag";
-    else if (driving && car.x < 20) prompt = "Low gravity: easy on the thrusters";
+    else if (driving && car.x < 24) prompt = "Aliens ahead: smash them fast, fly over, or blast them with the thrusters";
+    else if (!driving && this.beasts.some((b) => b.active && Math.abs(b.x - this.crew.explorer.body.x) < 12)) prompt = "F · Slash with the sword    Space · Jump on them";
     else if (driving && car.x > FLAG_X - 25) prompt = this.crew.canAlight ? "E · Get out and walk to the flag" : "Stop near the flag";
     else if (this.crew.nearDoor) prompt = "E · Get in";
     return {
@@ -171,7 +191,7 @@ export class Grow implements Stage {
       speed: driving ? car.speed * 3.6 : null,
       tank: driving ? car.tank / CAR.thrustTank : null,
       altitude: null,
-      hearts: null,
+      hearts: driving ? null : this.crew.explorer.hearts,
       fuel: driving ? this.crew.car.fuelSeconds : null,
       landIn: driving ? this.crew.car.landIn : null,
     };

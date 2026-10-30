@@ -17,11 +17,11 @@ export interface Reward {
   image: string;
 }
 
-/* Touch controls: brake and gas under the left thumb; thrusters (big), get out and staff under the right. */
+/* Touch controls: brake and gas under the left thumb; thrusters (big), get out and sword under the right. */
 const PADS: readonly { action: Action; label: string; glyph: string }[] = [
   { action: "left", label: "Brake, reverse, or back-flip in the air", glyph: "◀" },
   { action: "right", label: "Accelerate, or front-flip in the air", glyph: "▶" },
-  { action: "attack", label: "Swing the staff", glyph: "⚔" },
+  { action: "attack", label: "Swing the sword", glyph: "⚔" },
   { action: "interact", label: "Get in or out, plant the flag", glyph: "E" },
   { action: "jump", label: "Thrusters: tap to hop, tap again in the air to boost, hold to hover", glyph: "▲" },
 ];
@@ -196,7 +196,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         </span>
       </div>
 
-      <p className={styles.hints}>→ drive · Space hop · Space in air boost · hold hover · tap ← → in air flip · E get out · R checkpoint · Esc pause</p>
+      <p className={styles.hints}>→ drive · Space hop · Space in air boost · hold hover · tap ← → in air flip · E get out · F sword · R checkpoint · Esc pause</p>
 
       {/* ---- Cards between stages ---- */}
       <section className={`${styles.card} ${styles.titleCard}`} aria-label="Idea to Orbit">

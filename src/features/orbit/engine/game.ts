@@ -395,7 +395,7 @@ export class Game {
   }
 }
 
-/** Stage prompts are written for keys; on touch they name the pads (▲ thrusters, ◀ ▶, E). */
+/** Stage prompts are written for keys; on touch they name the pads (▲ thrusters, ◀ ▶, E, ⚔ sword). */
 function touchPrompt(prompt: string): string {
-  return prompt.replace(/Space/g, "▲").replace(/← →/g, "◀ ▶").replace(/→/g, "▶");
+  return prompt.replace(/Space/g, "▲").replace(/← →/g, "◀ ▶").replace(/→/g, "▶").replace(/F ·/g, "⚔ ·");
 }

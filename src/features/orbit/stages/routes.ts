@@ -42,10 +42,10 @@ export const CITY_RUN: RoadConfig = {
     { x: 800, speed: 10, until: 922, kind: "truck", color: "#5a4a8f" },
     { x: 955, speed: 12, until: 982, kind: "car", color: "#2b2d33" },
   ],
-  boars: [],
+  beasts: [],
 };
 
-/** Stage 2: the forest road at night to the launch pad. Logs, boars, ravines. */
+/** Stage 2: the forest road at night to the launch pad. Logs, ravines, and packs of boars and wolves. */
 export const FOREST_RUN: RoadConfig = {
   id: "build",
   scene: "forest",
@@ -74,5 +74,17 @@ export const FOREST_RUN: RoadConfig = {
   cells: [[40, 1.2], [150, 1.2], [214, 4.2], [326, 4.6], [440, 5], [520, 1.2], [660, 5.5], [810, 5], [950, 1.2]],
   rings: [[222, 5], [334, 5.5], [438, 6], [612, 4.5], [662, 7], [810, 6.5], [915, 5]],
   traffic: [],
-  boars: [92, 186, 276, 520, 740],
+  // Packs: boars charge in a line, wolves spring at the car; ram them fast, jump them or blast them.
+  beasts: [
+    [92, "boar"], [96, "boar"],
+    [186, "wolf"], [190, "wolf"], [194, "boar"],
+    [276, "boar"], [280, "boar"], [284, "boar"],
+    [370, "wolf"], [374, "wolf"],
+    [470, "boar"], [474, "wolf"], [478, "boar"],
+    [520, "wolf"], [524, "wolf"], [528, "wolf"],
+    [690, "boar"], [694, "boar"], [698, "wolf"],
+    [740, "wolf"], [744, "boar"], [748, "wolf"],
+    [860, "boar"], [864, "boar"], [868, "boar"], [872, "wolf"],
+    [950, "wolf"], [954, "wolf"],
+  ],
 };

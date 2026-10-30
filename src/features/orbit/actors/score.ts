@@ -4,7 +4,7 @@ import type { ToScreen } from "../engine/camera";
 export const POINTS = {
   spark: 10,
   cell: 10,
-  staffHit: 25,
+  swordHit: 25,
   stomp: 50,
   driveOff: 100,
   carBump: 50,
@@ -25,7 +25,7 @@ interface Popup {
 const POPUP_LIFE = 1.1;
 
 /*
- * The run's score, and the small "+25 Staff hit" labels that float up from where points were
+ * The run's score, and the small "+25 Slash" labels that float up from where points were
  * earned (drawn in the world, so they stay with what earned them).
  */
 export class Score {
@@ -66,6 +66,8 @@ export const STUNTS = {
   flip: 300,
   nearMiss: 150,
   ring: 120,
+  /** A beast caught under the thruster jet. */
+  blast: 150,
 } as const;
 
 /** The combo resets if you stay on the ground this long without a trick (s). */

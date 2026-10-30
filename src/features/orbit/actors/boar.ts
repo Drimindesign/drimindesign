@@ -3,28 +3,54 @@ import type { ToScreen } from "../engine/camera";
 import type { Terrain } from "../engine/terrain";
 import { BOAR, type Sprite } from "../pixel/props";
 
-export type BoarState = "wait" | "charge" | "stagger" | "flee" | "gone";
+export type BoarState = "wait" | "charge" | "stagger" | "flee" | "blasted" | "gone";
 
-/** Top charging speed (m/s) and how hard it accelerates into it (m/s²). */
-const CHARGE_SPEED = 6.2;
-const CHARGE_ACCEL = 10;
-/** It notices you within this distance (m). */
-const NOTICE = 20;
-/** A hit leaves it dazed this long (s); a stomp longer. */
+/** The beasts on the roads and the Moon. */
+export type BeastKind = "boar" | "wolf" | "alien";
+
+interface BeastSpec {
+  /** Top charging speed (m/s) and how hard it accelerates into it (m/s²). */
+  speed: number;
+  accel: number;
+  /** It notices you within this distance (m). */
+  notice: number;
+  /** Leaps at you from this close (m), with this take-off speed (m/s); 0 never leaps. */
+  leapRange: number;
+  leap: number;
+  /** Blows it takes before it gives up. */
+  health: number;
+  /** Mass (kg), for knockback from the sword and the car. */
+  mass: number;
+  /** Sprite scale and colour (a canvas filter), over the shared boar sprite. */
+  scale: number;
+  filter: string;
+}
+
+const SPECS: Record<BeastKind, BeastSpec> = {
+  boar: { speed: 6.2, accel: 10, notice: 20, leapRange: 0, leap: 0, health: 2, mass: 90, scale: 1, filter: "none" },
+  // Wolves: lighter and faster, and they spring at you from a few metres out.
+  wolf: { speed: 9, accel: 16, notice: 26, leapRange: 5, leap: 6.5, health: 1, mass: 45, scale: 0.85, filter: "grayscale(1) brightness(0.75) contrast(1.3)" },
+  // Moon crawlers: hop in the low gravity and glow a little.
+  alien: { speed: 5, accel: 8, notice: 24, leapRange: 7, leap: 5, health: 2, mass: 60, scale: 0.95, filter: "hue-rotate(95deg) saturate(2.2) brightness(1.15)" },
+};
+
+/** A blow leaves it dazed this long (s); a stomp longer. */
 const STAGGER = 0.7;
 const STOMP_STAGGER = 1.1;
+/** Between leaps (s). */
+const LEAP_COOLDOWN = 1.4;
+/** Blasted by the thrusters: it flies off and fades over this long (s). */
+const BLAST_TIME = 0.8;
 /** Its back: the height a jump must clear, and where a stomp lands (m above the ground). */
 export const BOAR_BACK = 0.7;
-/** Mass (kg), for knockback from staff and car. */
-const MASS = 90;
 
 let sprites: [Sprite, Sprite] | null = null;
 
 /*
- * A wild boar, as a body: it waits in the trees, notices you, and charges, accelerating to a
- * run. A staff hit knocks it back and dazes it; a jump onto its back stuns it longer; after
- * two blows it has had enough and runs away. A car that hits it sends it tumbling, the car
- * losing a little speed to the collision (momentum: the boar is ~1/14 of the car).
+ * A beast, as a body: it waits, notices you, and charges, accelerating to a run; wolves and
+ * aliens also leap at you when close. A sword blow knocks it back and dazes it; a jump onto
+ * its back stuns it longer; after enough blows it runs away. A fast car sends it tumbling
+ * (momentum: the beast is a small fraction of the car), and the thruster jet blasts it away.
  */
 export class Boar {
   x: number;
@@ -32,11 +58,13 @@ export class Boar {
   vx = 0;
   vy = 0;
   state: BoarState = "wait";
-  health = 2;
+  health: number;
+  private readonly spec: BeastSpec;
   private timer = 0;
+  private leapIn = 0;
   /** White flash after a hit (s). */
   private flash = 0;
-  /** Tumbling after a car hit: angle (rad) and spin (rad/s). */
+  /** Tumbling after a car hit or a blast: angle (rad) and spin (rad/s). */
   private angle = 0;
   private spin = 0;
   private readonly sprite: [Sprite, Sprite];
@@ -44,9 +72,10 @@ export class Boar {
   constructor(
     readonly home: number,
     private readonly terrain: Terrain,
-    /** Starts already charging (on the road) instead of waiting in the trees. */
-    private readonly eager = false,
+    readonly kind: BeastKind = "boar",
   ) {
+    this.spec = SPECS[kind];
+    this.health = this.spec.health;
     this.x = home;
     this.y = terrain.height(home);
     sprites ??= [BOAR(0), BOAR(1)];
@@ -54,42 +83,56 @@ export class Boar {
   }
 
   get active(): boolean {
-    return this.state !== "wait" && this.state !== "gone";
+    return this.state !== "wait" && this.state !== "gone" && this.state !== "blasted";
   }
 
-  /** Charging toward you: the only state that hurts. */
+  /** Charging or leaping at you: the states that hurt. */
   get dangerous(): boolean {
     return this.state === "charge";
   }
 
-  /** Sends it back to its spot in the trees (after you respawn at a checkpoint). */
+  get mass(): number {
+    return this.spec.mass;
+  }
+
+  /** Sends it back to its spot (after you respawn at a checkpoint). */
   reset(): void {
     this.x = this.home;
     this.y = this.terrain.height(this.home);
     this.vx = 0;
     this.vy = 0;
-    this.health = 2;
+    this.health = this.spec.health;
     this.state = "wait";
     this.angle = 0;
     this.spin = 0;
+    this.timer = 0;
   }
 
   /** Returns true when it starts a charge this step (for the grunt). */
   update(dt: number, gravity: number, targetX: number): boolean {
     let started = false;
+    const spec = this.spec;
     this.timer = Math.max(0, this.timer - dt);
+    this.leapIn = Math.max(0, this.leapIn - dt);
     this.flash = Math.max(0, this.flash - dt);
     switch (this.state) {
       case "wait":
-        if (this.eager || (this.x > targetX && this.x - targetX < NOTICE)) {
+        if (Math.abs(this.x - targetX) < spec.notice) {
           this.state = "charge";
           started = true;
         }
         break;
       case "charge": {
         const dir = Math.sign(targetX - this.x) || -1;
-        if (this.grounded) this.vx = approach(this.vx, dir * CHARGE_SPEED, CHARGE_ACCEL * dt);
-        if (this.x < targetX - 30) this.state = "gone";
+        if (this.grounded) {
+          this.vx = approach(this.vx, dir * spec.speed, spec.accel * dt);
+          if (spec.leap > 0 && this.leapIn === 0 && Math.abs(targetX - this.x) < spec.leapRange) {
+            this.vy = spec.leap;
+            this.vx = dir * spec.speed * 1.2;
+            this.leapIn = LEAP_COOLDOWN;
+          }
+        }
+        if (Math.abs(this.x - targetX) > 40) this.state = "gone";
         break;
       }
       case "stagger":
@@ -98,10 +141,18 @@ export class Boar {
         break;
       case "flee": {
         const away = Math.sign(this.x - targetX) || 1;
-        if (this.grounded) this.vx = approach(this.vx, away * CHARGE_SPEED * 1.3, CHARGE_ACCEL * dt);
+        if (this.grounded) this.vx = approach(this.vx, away * spec.speed * 1.3, spec.accel * dt);
         if (Math.abs(this.x - targetX) > 40) this.state = "gone";
         break;
       }
+      case "blasted":
+        // Thrown clear by the jet: no ground, just flight, and it fades out.
+        this.vy -= gravity * 0.4 * dt;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.angle += this.spin * dt;
+        if (this.timer === 0) this.state = "gone";
+        return false;
       case "gone":
         return false;
     }
@@ -127,10 +178,10 @@ export class Boar {
     return this.y <= this.terrain.height(this.x) + 0.02;
   }
 
-  /** A staff blow from direction `dir` (±1). Returns true if this blow drove it off. */
+  /** A sword blow from direction `dir` (±1). Returns true if this blow drove it off. */
   hit(dir: number, power: number): boolean {
     this.health--;
-    this.vx = dir * power;
+    this.vx = (dir * power * 90) / this.spec.mass;
     this.vy = 2.6;
     this.flash = 0.15;
     this.timer = STAGGER;
@@ -148,20 +199,38 @@ export class Boar {
     return this.health <= 0;
   }
 
+  /** Caught under the thruster jet: flung up and away, spinning, and gone. */
+  blast(dir: number): void {
+    this.health = 0;
+    this.vx = dir * 5;
+    this.vy = 10;
+    this.spin = dir * 16;
+    this.flash = 0.3;
+    this.timer = BLAST_TIME;
+    this.state = "blasted";
+  }
+
   /**
-   * Struck by the car at relative speed `vx` (m/s). Elastic-ish collision between ~1250 kg and
-   * 90 kg: the boar takes most of the speed and flies; returns the car's change in speed.
+   * Struck by the car at relative speed `vx` (m/s). Elastic-ish collision between the car and
+   * the beast: the beast takes most of the speed and flies; returns the car's change in speed.
    */
   hitByCar(carVx: number, carMass: number): number {
-    const total = carMass + MASS;
-    const boarV = ((2 * carMass) / total) * carVx * 0.7;
-    this.vx = boarV;
+    const total = carMass + this.spec.mass;
+    this.vx = ((2 * carMass) / total) * carVx * 0.7;
     this.vy = 3.5 + Math.abs(carVx) * 0.15;
     this.spin = -Math.sign(carVx) * 9;
     this.flash = 0.15;
     this.health = 0;
     this.state = "flee";
-    return -((2 * MASS) / total) * carVx * 0.7;
+    return -((2 * this.spec.mass) / total) * carVx * 0.7;
+  }
+
+  /** It rammed a slow car and bounced off, dazed. */
+  rebound(dir: number): void {
+    this.vx = dir * 3;
+    this.vy = 2;
+    this.timer = STAGGER;
+    this.state = "stagger";
   }
 
   draw(ctx: CanvasRenderingContext2D, toScreen: ToScreen, time: number): void {
@@ -170,11 +239,13 @@ export class Boar {
     const frame = this.sprite[this.grounded && Math.abs(this.vx) > 0.5 ? Math.floor(time * 10) % 2 : 0];
     // The sprite faces left; flip it when running right.
     const facing = this.vx > 0.2 ? 1 : -1;
+    const s = this.spec.scale;
     ctx.save();
     ctx.translate(x, y - (this.angle !== 0 ? 0.5 * 16 : 0));
     ctx.rotate(this.angle);
-    ctx.scale(-facing, 1);
-    if (this.flash > 0) ctx.filter = "brightness(3)";
+    ctx.scale(-facing * s, s);
+    if (this.state === "blasted") ctx.globalAlpha = Math.min(1, this.timer / BLAST_TIME + 0.1);
+    ctx.filter = this.flash > 0 ? "brightness(3)" : this.spec.filter;
     const w = frame.canvas.width / ART;
     const h = frame.canvas.height / ART;
     ctx.drawImage(frame.canvas, -frame.ax, -frame.ay + (this.angle !== 0 ? h / 2 : 1), w, h);

@@ -1,4 +1,4 @@
-import { Boar } from "../actors/boar";
+import { Boar, type BeastKind } from "../actors/boar";
 import { Car, type CarEvent } from "../actors/car";
 import { Crew } from "../actors/crew";
 import { Explorer } from "../actors/explorer";
@@ -13,6 +13,7 @@ import type { Painter } from "../pixel/painter";
 import { NIGHT } from "../pixel/palette";
 import { blit, CELL, glow, LAUNCH_PAD, TRAFFIC, type Sprite } from "../pixel/props";
 import { World } from "../pixel/world";
+import { stepBeasts } from "./beasts";
 import { checkpointBefore, Pickups, type Stage, type StageContext, type StageHud, type View } from "./types";
 
 interface TrafficSpec {
@@ -38,7 +39,8 @@ export interface RoadConfig {
   cells: readonly (readonly [number, number])[];
   rings: readonly (readonly [number, number])[];
   traffic: readonly TrafficSpec[];
-  boars: readonly number[];
+  /** Beasts along the road: where each waits (m) and what it is. */
+  beasts: readonly (readonly [number, BeastKind])[];
 }
 
 /** Below this height the car has fallen into a gap (m). */
@@ -99,7 +101,7 @@ export class RoadStage implements Stage {
     this.cells = new Pickups(config.cells.map(([x, h]) => [x, Math.max(0, this.terrain.height(x)) + h] as const));
     this.rings = config.rings.map(([x, h]) => ({ x, y: Math.max(0, this.terrain.height(x)) + h, taken: false }));
     this.traffic = config.traffic.map((t) => ({ ...t, at: t.x, moving: true, passed: false, sprite: TRAFFIC(t.kind, t.color) }));
-    this.boars = config.boars.map((x) => new Boar(x, this.terrain));
+    this.boars = config.beasts.map(([x, kind]) => new Boar(x, this.terrain, kind));
     this.reached = config.checkpoints[0];
     this.camera.snap(6, this.terrain.height(6), this.terrain.height(6));
   }
@@ -211,17 +213,9 @@ export class RoadStage implements Stage {
   }
 
   private stepBoars(dt: number): void {
-    const v = this.crew.car.vehicle;
-    for (const boar of this.boars) {
-      if (boar.update(dt, this.gravity, v.x)) this.context.audio.grunt();
-      // The car meets a boar: momentum exchange, the boar tumbles away, the car slows a touch.
-      if (boar.active && boar.state !== "flee" && Math.abs(boar.x - v.x) < 2.3 && boar.y < v.y + 0.4 && boar.y > v.y - 1.6) {
-        v.vx += boar.hitByCar(v.vx - boar.vx, CAR.mass);
-        this.context.audio.thwack();
-        this.context.score.add(POINTS.carBump, "Boar bumped", boar.x, boar.y + 1.5);
-      }
-    }
+    stepBeasts(this.boars, this.crew, this.context, dt, this.gravity);
   }
+
 
   /** Back on the road at the last checkpoint. */
   respawn(): void {
@@ -363,6 +357,7 @@ export class RoadStage implements Stage {
     if (v.x < 22) prompt = "→ Drive    Space · Hop    Space in air · Boost    Hold · Hover    Tap ← → in air · Flip";
     else if (car.wrecked > 0) prompt = "Wrecked: land on your wheels";
     else if (gap) prompt = "Gap ahead: hop, boost, hover";
+    else if (this.boars.some((b) => b.active && b.x - v.x > 0 && b.x - v.x < 30)) prompt = "Beasts: hit them fast, fly over, or blast them with the thrusters";
     else if (car.airborne && car.flipsInAir > 0) prompt = `${car.flipsInAir} flip${car.flipsInAir > 1 ? "s" : ""}: land it level`;
     return {
       prompt,

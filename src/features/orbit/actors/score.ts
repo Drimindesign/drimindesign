@@ -45,22 +45,32 @@ export class Score {
     while (this.popups.length && this.popups[0].age > POPUP_LIFE) this.popups.shift();
   }
 
+  /*
+   * Popups pop in (an overshooting scale), float up and fade. Bigger scores are bigger text and
+   * gold; penalties are red.
+   */
   draw(ctx: CanvasRenderingContext2D, toScreen: ToScreen): void {
     ctx.save();
-    ctx.font = "700 6px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = "rgba(15, 10, 20, 0.85)";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(15, 10, 20, 0.9)";
     for (const popup of this.popups) {
       const t = popup.age / POPUP_LIFE;
-      const [x, y] = toScreen(popup.x, popup.y + t * 1.4);
+      const [x, y] = toScreen(popup.x, popup.y + t * 1.6);
+      const value = Number.parseInt(popup.text, 10) || 0;
+      const size = value >= 500 ? 9 : value >= 150 ? 7.5 : 6;
+      // Pop: overshoot to 1.25× in the first tenth of its life, settle to 1.
+      const pop = t < 0.1 ? 0.6 + (t / 0.1) * 0.65 : 1 + 0.25 * Math.max(0, 1 - (t - 0.1) / 0.15);
+      ctx.font = `800 ${(size * pop).toFixed(1)}px system-ui, sans-serif`;
+      ctx.lineWidth = 2;
       ctx.globalAlpha = 1 - t * t;
       ctx.strokeText(popup.text, x, y);
-      ctx.fillStyle = "#fff6dc";
+      ctx.fillStyle = value < 0 ? "#ff6a5e" : value >= 150 ? "#ffd25e" : "#fff6dc";
       ctx.fillText(popup.text, x, y);
     }
     ctx.restore();
   }
+
 }
 
 /** Points for stunts (before the combo multiplier). */

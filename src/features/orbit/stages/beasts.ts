@@ -51,6 +51,7 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
         particles.dust(beast.x, beast.y, 0, 24, 1.3);
         combo.add(1);
         score.add(STUNTS.blast * combo.multiplier, "Blasted", beast.x, beast.y + 2);
+        context.fx.punch(0.06);
         continue;
       }
       if (car.wrecked > 0 || beast.state === "flee") continue;
@@ -63,6 +64,7 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
           v.vx += beast.hitByCar(v.vx - beast.vx, CAR.mass);
           audio.thwack();
           score.add(POINTS.carBump, "Smashed", beast.x, beast.y + 1.5);
+          context.fx.punch(0.05);
         }
       }
       continue;
@@ -76,6 +78,7 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
         audio.thwack();
         const off = beast.hit(b.facing, SWORD_POWER);
         score.add(off ? POINTS.swordHit * 2 : POINTS.swordHit, off ? "Driven off" : "Slash", beast.x, beast.y + 1.6);
+        context.fx.punch(off ? 0.07 : 0.04);
         continue;
       }
     }
@@ -121,6 +124,7 @@ function cowMeetsCar(cow: Boar, crew: Crew, context: StageContext): void {
     v.vx += cow.hitByCar(v.vx - cow.vx, CAR.mass);
     context.audio.thwack();
     context.combo.break();
+    context.fx.punch(0.08);
     if (closing > COW_WRECK) car.crash();
     context.score.add(-150, "Hit a cow", cow.x, cow.y + 2.2);
   }

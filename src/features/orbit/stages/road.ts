@@ -197,6 +197,7 @@ export class RoadStage implements Stage {
       v.tank = Math.min(CAR.thrustTank, v.tank + CAR.thrustTank / 3);
       this.context.audio.pickup();
       this.context.score.add(STUNTS.ring * combo.multiplier, `Ring ×${combo.multiplier}`, ring.x, ring.y + 2);
+      this.context.fx.punch(0.03);
     }
   }
 
@@ -229,6 +230,7 @@ export class RoadStage implements Stage {
         combo.add(1);
         this.context.audio.pickup();
         this.context.score.add(STUNTS.nearMiss * combo.multiplier, `Near miss ×${combo.multiplier}`, t.at, top + 1.5);
+        this.context.fx.punch(0.03);
       }
     }
   }
@@ -423,6 +425,9 @@ export function scoreCarEvents(events: readonly CarEvent[], car: Car, context: S
     if (event.kind === "crash") {
       combo.break();
       score.add(0, "Wrecked", v.x, v.y + 2);
+      // The crash lands hard: a punch in and a moment of slow motion.
+      context.fx.punch(0.12);
+      context.fx.slowmo(0.45);
     } else if (event.kind === "land") {
       const air = Math.round(event.air * POINTS.airPerSecond);
       if (event.clean) {
@@ -430,6 +435,7 @@ export function scoreCarEvents(events: readonly CarEvent[], car: Car, context: S
         const points = (air + event.flips * STUNTS.flip + POINTS.cleanLanding) * combo.multiplier;
         const label = event.flips > 0 ? `${event.flips} flip${event.flips > 1 ? "s" : ""} · ×${combo.multiplier}` : `Air ${event.air.toFixed(1)}s · ×${combo.multiplier}`;
         score.add(points, label, v.x, v.y + 2);
+        context.fx.punch(0.03 + 0.03 * event.flips);
       } else {
         combo.break();
         score.add(air, "Rough landing", v.x, v.y + 2);

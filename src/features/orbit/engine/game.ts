@@ -5,7 +5,7 @@ import { Particles } from "../pixel/particles";
 import type { ExplorerId } from "../pixel/explorer-sprite";
 import { RoadStage } from "../stages/road";
 import { CITY_RUN, FOREST_RUN, VILLAGE_RUN } from "../stages/routes";
-import { STAGE_ORDER, STAGE_TITLES, type Stage, type StageContext, type StageId } from "../stages/types";
+import { STAGE_ORDER, STAGE_TITLES, type Stage, type StageContext, type StageFx, type StageId } from "../stages/types";
 import { GameAudio } from "./audio";
 import { ART, MAX_STEPS, SIM_HZ, VIEW_MIN } from "./config";
 import { Input, type InputSnapshot } from "./input";
@@ -20,6 +20,11 @@ export interface Hud {
   fields(name: string): Iterable<HTMLElement>;
 }
 
+/**
+ * Camera zoom: how close it sits when slow, the speed (km/h) where it's fully opened out, the
+ * spring (1/s) that carries it, how hard a punch of strength 1 kicks it, and the closest it gets.
+ */
+const ZOOM = { close: 1.07, fullSpeed: 110, omega: 9, punch: 9, max: 1.25 } as const;
 const STEP = 1 / SIM_HZ;
 /** How long a stage card stays up before play starts on its own (s). */
 const INTRO_TIME = 2.6;
@@ -86,6 +91,23 @@ export class Game {
   private accumulator = 0;
   private time = 0;
   private frame = 0;
+  /** Camera zoom (1 = the normal view), its spring velocity, and the sim's time scale for slow motion. */
+  private zoom = 1;
+  private zoomVelocity = 0;
+  private timeScale = 1;
+  private slowFor = 0;
+  private slowScale = 1;
+  /* Effects the stages ask for at big moments; reduced motion turns them off. */
+  private readonly fx: StageFx = {
+    punch: (strength) => {
+      if (!this.still) this.zoomVelocity += strength * ZOOM.punch;
+    },
+    slowmo: (seconds, scale = 0.35) => {
+      if (this.still) return;
+      this.slowFor = Math.max(this.slowFor, seconds);
+      this.slowScale = scale;
+    },
+  };
   private frameDt = 1 / 60;
   private raf = 0;
   private last = 0;
@@ -207,7 +229,14 @@ export class Game {
     if (!this.running) return;
     const elapsed = Math.min((now - this.last) / 1000, MAX_STEPS * STEP);
     this.last = now;
-    this.accumulator += elapsed;
+    // Slow motion: the simulation runs on scaled time, easing back to full speed afterwards.
+    if (this.slowFor > 0) {
+      this.slowFor = Math.max(0, this.slowFor - elapsed);
+      this.timeScale = this.slowScale;
+    } else {
+      this.timeScale += (1 - this.timeScale) * Math.min(1, elapsed * 5);
+    }
+    this.accumulator += elapsed * this.timeScale;
     let input = this.input.read();
     this.flow(input, elapsed);
     let steps = 0;
@@ -240,7 +269,7 @@ export class Game {
     // The stage being replaced lets go of anything outside the canvas (the 3D stage's WebGL context).
     (this.stage as Stage | undefined)?.dispose?.();
     this.combo.break();
-    const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo };
+    const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo, fx: this.fx };
     const route = id === "village" ? VILLAGE_RUN : id === "city" ? CITY_RUN : FOREST_RUN;
     const stage = new RoadStage(context, this.look, route);
     stage.resize(this.width, this.height);
@@ -351,9 +380,21 @@ export class Game {
 
   private draw(alpha: number): void {
     const ctx = this.ctx;
-    ctx.setTransform(ART, 0, 0, ART, 0, 0);
+    // Zoom: a little closer when slow, opening out with speed and in the air; punches spring in
+    // and settle (critically damped). Scaled about a point just below the middle, never under 1×.
+    const hud = this.stage.hud();
+    const fast = Math.min(1, (hud.speed ?? 0) / ZOOM.fullSpeed);
+    const target = this.phase === "play" && hud.landIn === null ? ZOOM.close - (ZOOM.close - 1) * fast : 1;
+    const dt = Math.min(this.frameDt, 1 / 20);
+    this.zoomVelocity += (ZOOM.omega * ZOOM.omega * (target - this.zoom) - 2 * ZOOM.omega * this.zoomVelocity) * dt;
+    this.zoom = Math.max(1, Math.min(ZOOM.max, this.zoom + this.zoomVelocity * dt));
+    const z = this.zoom;
+    const cx = this.width / 2;
+    const cy = this.height * 0.56;
+    ctx.setTransform(ART * z, 0, 0, ART * z, ART * cx * (1 - z), ART * cy * (1 - z));
     ctx.imageSmoothingEnabled = false;
     this.stage.draw({ ctx, painter: this.painter, width: this.width, height: this.height, time: this.time, frame: this.frame, dt: this.frameDt }, alpha);
+    ctx.setTransform(ART, 0, 0, ART, 0, 0);
     if (this.stage.fade > 0) {
       ctx.fillStyle = `rgba(4, 4, 10, ${this.stage.fade})`;
       ctx.fillRect(0, 0, this.width, this.height);

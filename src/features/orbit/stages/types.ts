@@ -24,6 +24,15 @@ export interface StageContext {
   score: Score;
   /** The stunt combo (multiplier on stunt points). */
   combo: Combo;
+  /** Camera and time effects for big moments. */
+  fx: StageFx;
+}
+
+export interface StageFx {
+  /** A quick zoom-in that springs back: 0.03 a nudge, 0.1 a big hit. */
+  punch(strength: number): void;
+  /** Slow time to `scale` for `seconds` of real time (a crash). */
+  slowmo(seconds: number, scale?: number): void;
 }
 
 /** What the stage draws into, per frame. */

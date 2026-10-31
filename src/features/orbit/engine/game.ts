@@ -104,7 +104,8 @@ export class Game {
       if (!this.still) this.zoomVelocity += strength * ZOOM.punch;
     },
     buzz: (ms) => {
-      if (!this.still) navigator.vibrate?.(ms);
+      // Phones only: the browser refuses vibration from keyboard play, and a mouse has nothing to shake.
+      if (!this.still && this.touch) navigator.vibrate?.(ms);
     },
     focus: (zoom) => {
       if (!this.still) this.focusZoom = Math.max(this.focusZoom, zoom);

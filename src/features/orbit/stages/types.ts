@@ -9,7 +9,7 @@ export type StageId = "village" | "city" | "forest";
 export const STAGE_ORDER: readonly StageId[] = ["village", "city", "forest"];
 
 export const STAGE_TITLES: Record<StageId, { number: string; title: string; goal: string }> = {
-  village: { number: "01", title: "Discover", goal: "Out of the village in the monsoon. Mud steals your grip, cows own the road, the bridges are broken." },
+  village: { number: "01", title: "Discover", goal: "Out of the village in the monsoon. Mud steals your grip, a bull rules the road, the bridges are broken." },
   city: { number: "02", title: "Build", goal: "Through the city by night. Jump the traffic, fly the broken flyovers, land the flips." },
   forest: { number: "03", title: "Launch", goal: "The forest road to the launch pad. Boars and wolves, ravines: reach the pad and lift off." },
 };

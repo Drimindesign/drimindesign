@@ -479,7 +479,7 @@ export class RoadStage implements Stage {
     this.drawBarricades(painter, toScreen);
     this.drawProps(painter, toScreen, time);
     this.debris.draw(ctx, toScreen, this.width);
-    for (const boar of this.boars) if (!boar.fighter || !this.fighters.ready) boar.draw(ctx, toScreen, time);
+    for (const boar of this.boars) if (!(boar.fighter || boar.animal3D) || !this.fighters.ready) boar.draw(ctx, toScreen, time);
     this.context.particles.draw(painter, toScreen, view.frame);
     car.draw(ctx, painter, toScreen, alpha, true);
     // The people, in 3D and in front of the truck: the hero when out of it, and the raiders.

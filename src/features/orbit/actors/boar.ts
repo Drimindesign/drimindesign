@@ -2,12 +2,12 @@ import { ART } from "../engine/config";
 import type { ToScreen } from "../engine/camera";
 import { Ragdoll, type Joint } from "../engine/ragdoll";
 import type { Terrain } from "../engine/terrain";
-import { BOAR, COW, type Sprite } from "../pixel/props";
+import { BOAR, type Sprite } from "../pixel/props";
 
 export type BoarState = "wait" | "charge" | "circle" | "attack" | "block" | "stagger" | "knocked" | "getup" | "flee" | "down" | "blasted" | "gone";
 
-/** The beasts on the roads and the Moon. */
-export type BeastKind = "boar" | "wolf" | "alien" | "storm" | "cow" | "dog" | "raider" | "brute";
+/** The creatures on the roads: animals, raiders and brutes. */
+export type BeastKind = "boar" | "wolf" | "dog" | "raider" | "brute" | "bull";
 
 interface BeastSpec {
   /** Top charging speed (m/s) and how hard it accelerates into it (m/s²). */
@@ -31,17 +31,13 @@ const SPECS: Record<BeastKind, BeastSpec> = {
   boar: { speed: 6.2, accel: 10, notice: 20, leapRange: 0, leap: 0, health: 2, mass: 90, scale: 1, filter: "none" },
   // Wolves: lighter and faster, and they spring at you from a few metres out.
   wolf: { speed: 9, accel: 16, notice: 26, leapRange: 5, leap: 6.5, health: 1, mass: 45, scale: 0.85, filter: "grayscale(1) brightness(0.75) contrast(1.3)" },
-  // Moon crawlers: hop in the low gravity and glow a little.
-  alien: { speed: 5, accel: 8, notice: 24, leapRange: 7, leap: 5, health: 2, mass: 60, scale: 0.95, filter: "hue-rotate(95deg) saturate(2.2) brightness(1.15)" },
-  // Jupiter's storm creatures: drawn in 3D by the scene; quick, and they pounce from further out.
-  storm: { speed: 7.5, accel: 13, notice: 26, leapRange: 8, leap: 7.5, health: 2, mass: 70, scale: 1, filter: "none" },
-  // Village cows: never hostile, they graze and wander; heavy enough to wreck a car that hits one.
   // Village dogs: chase the car barking, too light to hurt it; a fright sends them running.
   dog: { speed: 8.5, accel: 14, notice: 22, leapRange: 0, leap: 0, health: 1, mass: 25, scale: 0.62, filter: "sepia(1) saturate(1.4) brightness(0.8)" },
   // Fighters on foot (drawn as 3D models): they walk up, wind up and strike; they don't run off.
   raider: { speed: 2.8, accel: 10, notice: 16, leapRange: 0, leap: 0, health: 3, mass: 90, scale: 1, filter: "none" },
   brute: { speed: 2.1, accel: 7, notice: 16, leapRange: 0, leap: 0, health: 5, mass: 125, scale: 1, filter: "none" },
-  cow: { speed: 1.1, accel: 2.5, notice: 0, leapRange: 0, leap: 0, health: 99, mass: 420, scale: 1, filter: "none" },
+  // A bull: charges whatever moves; massive, it wrecks a slow truck and is only ever knocked over, never killed.
+  bull: { speed: 7.5, accel: 9, notice: 24, leapRange: 0, leap: 0, health: 99, mass: 650, scale: 1, filter: "none" },
 };
 /**
  * A fighter's swing (s): wind up, the strike window (the only time it hurts), recover. It swings
@@ -67,8 +63,6 @@ const KNOCK_MAX = 2.6;
 export const GETUP_TIME = 1.5;
 /** A fighter's standing height (m), for its ragdoll. */
 const FIGHTER_HEIGHT: Partial<Record<BeastKind, number>> = { raider: 1.9, brute: 2.05 };
-/** A cow wanders within this distance of where it grazes (m). */
-const GRAZE = 4;
 
 /** A blow leaves it dazed this long (s); a stomp longer. */
 const STAGGER = 0.7;
@@ -80,11 +74,11 @@ const BLAST_TIME = 0.8;
 /** Its back: the height a jump must clear, and where a stomp lands (m above the ground). */
 export const BOAR_BACK = 0.7;
 
-const sprites: Partial<Record<"boar" | "cow", [Sprite, Sprite]>> = {};
+let sprites: [Sprite, Sprite] | null = null;
 
 /*
- * A beast, as a body: it waits, notices you, and charges, accelerating to a run; wolves and
- * aliens also leap at you when close. A sword blow knocks it back and dazes it; a jump onto
+ * A beast, as a body: it waits, notices you, and charges, accelerating to a run;
+ * wolves leap at you when close. A sword blow knocks it back and dazes it; a jump onto
  * its back stuns it longer; after enough blows it runs away. A fast car sends it tumbling
  * (momentum: the beast is a small fraction of the car), and the thruster jet blasts it away.
  */
@@ -106,8 +100,6 @@ export class Boar {
   /** Seconds into a fighter's swing, and which way it's facing (±1). */
   private attackTime = 0;
   facing = -1;
-  /** Where a cow is ambling to (m). */
-  private wander = 0;
   /** White flash after a hit (s). */
   private flash = 0;
   /** Tumbling after a car hit or a blast: angle (rad) and spin (rad/s). */
@@ -124,7 +116,8 @@ export class Boar {
     this.health = this.spec.health;
     this.x = home;
     this.y = terrain.height(home);
-    this.sprite = kind === "cow" ? (sprites.cow ??= [COW(0), COW(1)]) : (sprites.boar ??= [BOAR(0), BOAR(1)]);
+    sprites ??= [BOAR(0), BOAR(1)];
+    this.sprite = sprites;
   }
 
   get active(): boolean {
@@ -215,6 +208,16 @@ export class Boar {
     this.state = "stagger";
   }
 
+  /** Drawn as a 3D animal (the wolf, the dogs, the bull) rather than a 2D sprite. */
+  get animal3D(): boolean {
+    return this.kind === "wolf" || this.kind === "dog" || this.kind === "bull";
+  }
+
+  /** Can't be killed: knocked about, it always gets back up (cattle). */
+  get unkillable(): boolean {
+    return this.kind === "bull";
+  }
+
   /** Fights on foot with a weapon (drawn in 3D) rather than charging like an animal. */
   get fighter(): boolean {
     return this.kind === "raider" || this.kind === "brute";
@@ -263,9 +266,7 @@ export class Boar {
     this.blockFlinch = Math.max(0, this.blockFlinch - dt);
     this.leapIn = Math.max(0, this.leapIn - dt);
     this.flash = Math.max(0, this.flash - dt);
-    if (this.kind === "cow") {
-      this.graze(dt);
-    } else switch (this.state) {
+    switch (this.state) {
       case "wait":
         if (Math.abs(this.x - targetX) < spec.notice) {
           this.state = "charge";
@@ -347,7 +348,9 @@ export class Boar {
         return started;
       case "stagger":
         if (this.grounded) this.vx = approach(this.vx, 0, 14 * dt);
-        if (this.timer === 0) this.state = this.health > 0 ? "charge" : "flee";
+        if (this.timer === 0) this.state = this.health > 0 || this.unkillable ? "charge" : this.kind === "wolf" ? "down" : "flee";
+        // A wolf that's taken its last blow drops and lies still before fading.
+        if (this.state === "down") this.timer = DOWN_TIME;
         break;
       case "flee": {
         const away = Math.sign(this.x - targetX) || 1;
@@ -384,37 +387,11 @@ export class Boar {
     return started;
   }
 
-  /*
-   * A cow: picks a new spot near where it grazes every few seconds and ambles there; after a
-   * knock (stagger) it gets back up and carries on. It's never "gone".
-   */
-  private graze(dt: number): void {
-    if (this.state === "stagger") {
-      if (this.grounded) this.vx = approach(this.vx, 0, 6 * dt);
-      if (this.timer === 0) this.state = "wait";
-      return;
-    }
-    if (this.leapIn === 0) {
-      this.leapIn = 2 + Math.random() * 3;
-      this.wander = this.home + (Math.random() * 2 - 1) * GRAZE;
-    }
-    const to = this.wander - this.x;
-    const target = Math.abs(to) < 0.3 ? 0 : Math.sign(to) * this.spec.speed;
-    if (this.grounded) this.vx = approach(this.vx, target, this.spec.accel * dt);
-  }
-
   /** Frightened off (a dog by the thrusters or the car): it runs away and doesn't come back. */
   scare(dir: number): void {
     this.vx = dir * this.spec.speed * 1.3;
     this.vy = 1.5;
     this.state = "flee";
-  }
-
-  /** Startled by the thrusters: it trots off, away from the noise. */
-  startle(dir: number): void {
-    this.wander = this.x + dir * GRAZE * 1.5;
-    this.leapIn = 3;
-    this.vx = dir * 3;
   }
 
   get grounded(): boolean {
@@ -428,7 +405,7 @@ export class Boar {
    * drops it for good. The blow's momentum goes into the joint it hit, scaled by the body's mass.
    */
   hit(dir: number, power: number, joint: Joint = "chest", heavy = false): boolean {
-    this.health--;
+    if (!this.unkillable) this.health--;
     const share = 90 / this.spec.mass;
     this.vx = dir * power * share;
     // A stumble back, not a hop.
@@ -456,6 +433,15 @@ export class Boar {
 
   /** Caught under the thruster jet: flung up and away, spinning, and gone. */
   blast(dir: number): void {
+    if (this.unkillable) {
+      // The jet only rocks a bull back on its heels.
+      this.vx = dir * 3;
+      this.vy = 2;
+      this.flash = 0.2;
+      this.timer = STAGGER * 2;
+      this.state = "stagger";
+      return;
+    }
     if (this.fighter) {
       // Thrown by the jet: up and away as a ragdoll, and down for good.
       this.health = 0;
@@ -493,7 +479,7 @@ export class Boar {
       this.ragdoll?.impulse("pelvis", this.vx * 0.8, this.vy);
       return -((2 * this.spec.mass) / total) * carVx * 0.7;
     }
-    if (this.kind === "cow") {
+    if (this.unkillable) {
       // Knocked over, not killed: it gets back up.
       this.timer = 2.5;
       this.state = "stagger";

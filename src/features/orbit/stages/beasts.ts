@@ -35,10 +35,6 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
     if (beast.update(dt, gravity, driving ? v.x : e.body.x, engaged.has(beast))) audio.grunt();
     // The hero starts a swing: fighters in reach may raise a guard or step back.
     if (!driving && e.swingStarted && beast.fighter && Math.abs(beast.x - e.body.x) < 2.8) beast.react(e.body.x);
-    if (beast.kind === "cow") {
-      if (driving) cowMeetsCar(beast, crew, context);
-      continue;
-    }
     if (!beast.active) continue;
     if (driving) {
       const side = Math.sign(beast.x - v.x) || 1;
@@ -128,7 +124,7 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
     const reach = beast.fighter ? beast.reach : 0.8;
     const facing = !beast.fighter || Math.sign(b.x - beast.x) === beast.facing;
     // A brute's blow takes the hero off their feet.
-    if (beast.dangerous && facing && Math.abs(beast.x - b.x) < reach && b.y < beast.y + 1.4 && b.y > beast.y - 0.5 && e.hurt(beast.x, beast.kind === "brute")) {
+    if (beast.dangerous && facing && Math.abs(beast.x - b.x) < reach && b.y < beast.y + 1.4 && b.y > beast.y - 0.5 && e.hurt(beast.x, beast.kind === "brute" || beast.kind === "bull")) {
       context.fx.buzz(beast.kind === "brute" ? 70 : 35);
       context.fx.punch(beast.kind === "brute" ? 0.09 : 0.05);
       beast.rebound(Math.sign(beast.x - b.x) || 1);
@@ -137,38 +133,4 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
     }
   }
   return down;
-}
-
-/** Above this speed (m/s) hitting a cow wrecks the car. */
-const COW_WRECK = 5;
-/** Cows already cleared in the air this run, so each pays once. */
-const cleared = new WeakSet<Boar>();
-
-/*
- * A cow and the car. The thrusters startle it into trotting off. Flying over one pays. Driving
- * into one is a 420 kg collision: the car loses a third of its speed or more, and above walking
- * pace it's wrecked; the cow is knocked down and gets back up.
- */
-function cowMeetsCar(cow: Boar, crew: Crew, context: StageContext): void {
-  const car = crew.car;
-  const v = car.vehicle;
-  const dx = cow.x - v.x;
-  if (v.thrust > 0.25 && Math.abs(dx) < JET_HALF_WIDTH * 1.6 && v.y - cow.y < JET_REACH) cow.startle(Math.sign(dx) || 1);
-  if (!v.grounded && Math.abs(dx) < 1 && v.y - cow.y > 1.6 && !cleared.has(cow)) {
-    cleared.add(cow);
-    context.combo.add(1);
-    context.score.add(STUNTS.nearMiss * context.combo.multiplier, "Over the cow", cow.x, cow.y + 2.5);
-    if (v.gainBooster()) context.score.add(0, "+1 Booster", cow.x, cow.y + 3.7);
-  }
-  if (car.wrecked > 0 || cow.state === "stagger") return;
-  if (Math.abs(dx) < 2.4 && v.y - cow.y < 1.9 && v.y > cow.y - 0.5) {
-    const closing = Math.abs(v.vx - cow.vx);
-    v.vx += cow.hitByCar(v.vx - cow.vx, CAR.mass);
-    context.audio.thwack();
-    context.combo.break();
-    context.fx.punch(0.08);
-    car.hurt(0.15);
-    if (closing > COW_WRECK) car.crash();
-    context.score.add(-150, "Hit a cow", cow.x, cow.y + 2.2);
-  }
 }

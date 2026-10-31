@@ -86,15 +86,15 @@ export const FOREST_RUN: RoadConfig = {
   ],
   props: [[100, "fence"], [175, "crates"], [290, "fence"], [505, "crates"], [570, "fence"], [700, "crates"], [850, "fence"]],
   beasts: [
-    [92, "boar"], [96, "boar"],
-    [186, "wolf"], [190, "wolf"], [194, "boar"],
-    [276, "boar"], [280, "boar"], [284, "boar"],
+    [92, "wolf"], [96, "wolf"],
+    [186, "wolf"], [190, "wolf"], [194, "wolf"],
+    [276, "wolf"], [280, "wolf"], [284, "wolf"],
     [370, "wolf"], [374, "wolf"],
-    [470, "boar"], [474, "wolf"], [478, "boar"],
+    [470, "wolf"], [474, "wolf"], [478, "wolf"],
     [520, "wolf"], [524, "wolf"], [528, "wolf"],
-    [690, "boar"], [694, "boar"], [698, "wolf"],
-    [740, "wolf"], [744, "boar"], [748, "wolf"],
-    [860, "boar"], [864, "boar"], [868, "boar"], [872, "wolf"],
+    [692, "bull"],
+    [740, "wolf"], [744, "wolf"], [748, "wolf"],
+    [860, "wolf"], [864, "wolf"], [868, "wolf"], [872, "wolf"],
     [950, "wolf"], [954, "wolf"],
   ],
 };
@@ -102,8 +102,7 @@ export const FOREST_RUN: RoadConfig = {
 /**
  * Stage 1: out of a village in the monsoon, at night. Mud stretches that steal two-thirds of the
  * grip (brake early, don't spin the wheels), broken bridges over flooded ravines, auto-rickshaws
- * and painted lorries, cows standing in the road (hit one and the car is wrecked; fly over for
- * points) and village dogs that chase the car.
+ * and painted lorries, a bull that charges the truck, and village dogs that chase it.
  */
 export const VILLAGE_RUN: RoadConfig = {
   id: "village",
@@ -145,7 +144,7 @@ export const VILLAGE_RUN: RoadConfig = {
   stops: [{ x: 472, fighters: [[456, "raider"], [463, "raider"]] }],
   props: [[45, "crates"], [190, "fence"], [255, "stall"], [300, "crates"], [560, "stall"], [680, "crates"], [750, "fence"], [820, "stall"], [960, "crates"], [1040, "fence"]],
   beasts: [
-    [95, "cow"], [270, "cow"], [395, "dog"], [399, "dog"], [455, "cow"], [645, "cow"], [770, "cow"],
-    [840, "dog"], [844, "dog"], [848, "dog"], [935, "cow"], [1020, "cow"], [1125, "cow"],
+    [395, "dog"], [399, "dog"], [655, "bull"],
+    [840, "dog"], [844, "dog"], [848, "dog"], [1020, "bull"],
   ],
 };

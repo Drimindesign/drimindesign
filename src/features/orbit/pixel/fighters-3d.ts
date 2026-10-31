@@ -65,6 +65,10 @@ const DRIVES: readonly { bone: string; from: Joint; to: Joint; toward: string }[
 ];
 /** Mixamo bones load as "mixamorig" + name (the loader drops the colon). */
 const bone = (name: string): string => `mixamorig${name}`;
+/** The animals (Quaternius Ultimate Animated Animals, CC0), each with its own clips, and their standing heights (m). */
+type AnimalKind = "wolf" | "dog" | "bull";
+const ANIMALS: Record<AnimalKind, string> = { wolf: "/game/animals/wolf.glb", dog: "/game/animals/husky.glb", bull: "/game/animals/bull.glb" };
+const ANIMAL_HEIGHT: Record<AnimalKind, number> = { wolf: 0.95, dog: 0.7, bull: 1.65 };
 /** Turned this far from side-on toward the camera (rad): a three-quarter view reads better than a profile. */
 const THREE_QUARTER = 0.4;
 /** Cross-fade between animations (s). */
@@ -103,6 +107,7 @@ export class Fighters3D {
     scene: Three.Scene;
     camera: Three.OrthographicCamera;
     make: (kind: Kind) => Actor;
+    makeAnimal: (kind: AnimalKind) => Actor;
     hero: Actor;
     enemies: Map<Boar, Actor>;
   } | null = null;
@@ -158,6 +163,10 @@ export class Fighters3D {
     }
 
     for (const beast of beasts) {
+      if (beast.animal3D) {
+        any = this.drawAnimal(t, beast, camera, dt) || any;
+        continue;
+      }
       if (!beast.fighter) continue;
       let actor = t.enemies.get(beast);
       const pose = beast.pose();
@@ -204,6 +213,46 @@ export class Fighters3D {
   }
 
   // ---------------------------------------------------------------------------
+
+  /* An animal: placed on its 2D body, turned three-quarters to where it's heading, playing its own clips. */
+  private drawAnimal(t: NonNullable<Fighters3D["three"]>, beast: Boar, camera: Camera, dt: number): boolean {
+    let actor = t.enemies.get(beast);
+    const pose = beast.pose();
+    if (!pose.visible || Math.abs(beast.x - camera.x) > this.width / PPM / 2 + 4) {
+      if (actor) actor.root.visible = false;
+      return false;
+    }
+    if (!actor) {
+      actor = t.makeAnimal(beast.kind === "bull" ? "bull" : beast.kind === "dog" ? "dog" : "wolf");
+      t.enemies.set(beast, actor);
+    }
+    actor.root.visible = true;
+    actor.root.position.set(beast.x, beast.y, -0.3);
+    actor.root.rotation.set(0, pose.facing > 0 ? Math.PI / 2 - THREE_QUARTER * 0.6 : -Math.PI / 2 + THREE_QUARTER * 0.6, pose.angle);
+    setOpacity(actor, pose.alpha);
+    for (const m of actor.materials) (m as Three.MeshToonMaterial).emissiveIntensity = pose.flash ? 1.2 : 0;
+    const speed = Math.abs(beast.vx);
+    switch (beast.state) {
+      case "down":
+      case "blasted":
+        play(actor, "Death");
+        break;
+      case "stagger":
+        play(actor, "Idle_HitReact1");
+        break;
+      case "wait":
+        play(actor, beast.kind === "wolf" ? "Idle" : "Eating");
+        break;
+      default:
+        if (!beast.grounded) play(actor, "Gallop_Jump");
+        else if (beast.dangerous && speed < 1) play(actor, beast.kind === "bull" ? "Attack_Headbutt" : "Attack");
+        else if (speed > 3) play(actor, "Gallop", speed / 6);
+        else if (speed > 0.3) play(actor, "Walk", speed / 1.6);
+        else play(actor, "Idle");
+    }
+    actor.mixer.update(dt);
+    return true;
+  }
 
   /*
    * A limp body: its bones follow the ragdoll. The body is turned exactly side-on (the ragdoll
@@ -312,12 +361,15 @@ export class Fighters3D {
       const loader = new GLTFLoader();
       loader.setMeshoptDecoder(MeshoptDecoder);
       const kinds = Object.keys(MODELS) as Kind[];
+      const animalKinds = Object.keys(ANIMALS) as AnimalKind[];
       const props = [...new Set(kinds.flatMap((kind) => WEAPONS[kind].map((w) => w.file)))];
-      const [models, clips, held] = await Promise.all([
+      const [models, clips, held, animalModels] = await Promise.all([
         Promise.all(kinds.map(async (kind) => [kind, await loader.loadAsync(BASE + MODELS[kind])] as const)),
         Promise.all(CLIPS.map(async (name) => named(await loader.loadAsync(`${BASE}${name}.glb`), name))),
         Promise.all(props.map(async (file) => [file, await loader.loadAsync(`/game/kaykit/${file}`)] as const)),
+        Promise.all(animalKinds.map(async (kind) => [kind, await loader.loadAsync(ANIMALS[kind])] as const)),
       ]);
+      const animalSources = new Map(animalModels);
       if (this.disposed) return;
       const animations = clips.filter((c): c is Three.AnimationClip => c !== null);
       const weaponScenes = new Map(held);
@@ -398,12 +450,46 @@ export class Fighters3D {
         play(actor, kind === "hero" ? "hero_idle" : "foe_idle");
         return actor;
       };
+      // An animal: toon-shaded in its own colours, with the clips that came with it.
+      const makeAnimal = (kind: AnimalKind): Actor => {
+        const source = animalSources.get(kind);
+        if (!source) throw new Error(`Missing animal ${kind}`);
+        const model = clone(source.scene) as Three.Group;
+        const materials: Three.Material[] = [];
+        model.traverse((node) => {
+          const mesh = node as Three.Mesh;
+          if (!mesh.isMesh) return;
+          const original = mesh.material as Three.MeshStandardMaterial;
+          const toon = new THREE.MeshToonMaterial({ color: original.color, map: original.map, vertexColors: original.vertexColors, gradientMap: bands, emissive: 0xffffff, emissiveIntensity: 0 });
+          mesh.material = toon;
+          mesh.frustumCulled = false;
+          materials.push(toon);
+        });
+        const box = new THREE.Box3().setFromObject(source.scene);
+        model.scale.setScalar(ANIMAL_HEIGHT[kind] / Math.max(0.01, box.max.y - box.min.y));
+        const root = new THREE.Group();
+        root.add(model);
+        scene.add(root);
+        const mixer = new THREE.AnimationMixer(model);
+        const actions = new Map<string, Three.AnimationAction>();
+        for (const clip of source.animations) {
+          const action = mixer.clipAction(clip);
+          if (clip.name === "Death") {
+            action.setLoop(THREE.LoopOnce, 1);
+            action.clampWhenFinished = true;
+          }
+          actions.set(clip.name, action);
+        }
+        const actor: Actor = { root, mixer, actions, current: "", materials, swing: -1, cut: 0, drives: [], state: "", blend: null };
+        play(actor, "Idle");
+        return actor;
+      };
       const hero = make("hero");
       if (this.disposed) {
         renderer.dispose();
         return;
       }
-      this.three = { THREE, renderer, scene, camera, make, hero, enemies: new Map() };
+      this.three = { THREE, renderer, scene, camera, make, makeAnimal, hero, enemies: new Map() };
     } catch {
       // No WebGL or the models didn't load: the 2D explorer stays.
     }

@@ -8,6 +8,7 @@ import { CAR, PLANETS, PPM } from "../engine/config";
 import type { InputSnapshot } from "../engine/input";
 import { RoadTerrain, type RoadFeature } from "../engine/terrain";
 import { City } from "../pixel/city";
+import { Fighters3D } from "../pixel/fighters-3d";
 import { Village } from "../pixel/village";
 import type { ExplorerId } from "../pixel/explorer-sprite";
 import type { Painter } from "../pixel/painter";
@@ -41,6 +42,8 @@ export interface RoadConfig {
   /** Energy cells and stunt rings: x, height above the ground (m). */
   cells: readonly (readonly [number, number])[];
   rings: readonly (readonly [number, number])[];
+  /** Barricades across the road (m): get out, fight the raiders guarding it, and cut it down. */
+  stops?: readonly { x: number; fighters: readonly (readonly [number, BeastKind])[] }[];
   traffic: readonly TrafficSpec[];
   /** Beasts along the road: where each waits (m) and what it is. */
   beasts: readonly (readonly [number, BeastKind])[];
@@ -54,6 +57,10 @@ const RING_HIT = 1.4;
 /** Traffic is this tall (m) for collisions and near misses. */
 const HEIGHT = { car: 1.45, truck: 3.1, rickshaw: 1.75 } as const;
 const LENGTH = { car: 4.4, truck: 7, rickshaw: 2.8 } as const;
+/** Sword blows a barricade takes, its height (m), and the speed (m/s) above which hitting it wrecks the car. */
+const BARRICADE = { health: 4, height: 6, wreck: 7 } as const;
+/** Within this distance before a barricade (m), the car can be left. */
+const STOP_ZONE = 16;
 /** The finale: the launch rig lifts the car off the pad for this long (s) before the stage ends. */
 const LIFTOFF_TIME = 3.2;
 
@@ -82,6 +89,8 @@ export class RoadStage implements Stage {
   private readonly rings: { x: number; y: number; taken: boolean }[];
   private readonly traffic: Traffic[];
   private readonly boars: Boar[];
+  private readonly stops: { x: number; health: number; broken: boolean }[];
+  private readonly fighters = new Fighters3D();
   private readonly sprites = { cell: CELL(), pad: LAUNCH_PAD() };
   private reached: number;
   private respawnIn = 0;
@@ -112,6 +121,8 @@ export class RoadStage implements Stage {
     this.rings = config.rings.map(([x, h]) => ({ x, y: Math.max(0, this.terrain.height(x)) + h, taken: false }));
     this.traffic = config.traffic.map((t) => ({ ...t, at: t.x, moving: true, passed: false, sprite: TRAFFIC(t.kind, t.color) }));
     this.boars = config.beasts.map(([x, kind]) => new Boar(x, this.terrain, kind));
+    this.stops = (config.stops ?? []).map((s) => ({ x: s.x, health: BARRICADE.health, broken: false }));
+    for (const s of config.stops ?? []) for (const [x, kind] of s.fighters) this.boars.push(new Boar(x, this.terrain, kind));
     this.reached = config.checkpoints[0];
     this.camera.snap(6, this.terrain.height(6), this.terrain.height(6));
   }
@@ -139,6 +150,16 @@ export class RoadStage implements Stage {
     this.world?.resize(width, height, this.camera.y);
     this.city?.resize(width, height);
     this.village?.resize(width, height);
+    this.fighters.resize(width, height);
+  }
+
+  dispose(): void {
+    this.fighters.dispose();
+  }
+
+  /** The first barricade still standing within reach ahead of x (m), if any. */
+  private stopAhead(x: number, within: number): { x: number; health: number; broken: boolean } | undefined {
+    return this.stops.find((s) => !s.broken && s.x - x > -1 && s.x - x < within);
   }
 
   step(dt: number, input: InputSnapshot): void {
@@ -150,9 +171,11 @@ export class RoadStage implements Stage {
       this.stepLiftoff(dt, input);
       return;
     }
-    this.crew.step(dt, this.gravity, input, { board: false, alight: false });
+    // At a barricade the car can be left; on foot you can always climb back in at the door.
+    this.crew.step(dt, this.gravity, input, { board: true, alight: this.stopAhead(v.x, STOP_ZONE) !== undefined });
     this.context.particles.update(dt, this.terrain, this.gravity);
     this.context.combo.update(dt, v.grounded);
+    this.stepStops();
     scoreCarEvents(car.drainEvents(), car, this.context);
 
     if (car.wrecked > 0 && this.respawnIn === 0) this.respawnIn = car.wrecked;
@@ -236,7 +259,58 @@ export class RoadStage implements Stage {
   }
 
   private stepBoars(dt: number): void {
-    stepBeasts(this.boars, this.crew, this.context, dt, this.gravity);
+    // Out of hearts on foot: back on your feet beside the truck, hearts restored.
+    if (stepBeasts(this.boars, this.crew, this.context, dt, this.gravity)) {
+      this.context.audio.respawn();
+      this.fade = 1;
+      this.crew.explorer.place(this.crew.car.door.x - 1.5);
+      this.crew.explorer.heal();
+    }
+    // A fight on foot pulls the camera in.
+    const e = this.crew.explorer.body;
+    if (this.crew.mode === "foot" && this.boars.some((b) => b.fighter && b.active && Math.abs(b.x - e.x) < 10)) this.context.fx.focus(1.16);
+  }
+
+  /*
+   * Barricades: a wall of logs and spikes. The car stops against it, or is wrecked if it comes
+   * in fast; flying over is too high. On foot it's cut down with the sword, blow by blow.
+   */
+  private stepStops(): void {
+    const car = this.crew.car;
+    const v = car.vehicle;
+    const e = this.crew.explorer;
+    for (const stop of this.stops) {
+      if (stop.broken) continue;
+      const ground = this.terrain.height(stop.x);
+      const front = stop.x - 0.6;
+      if (v.x + 2.4 > front && v.x < stop.x + 1 && v.y < ground + BARRICADE.height) {
+        if (car.wrecked === 0 && v.vx > BARRICADE.wreck) car.crash();
+        v.x = front - 2.4;
+        v.vx = Math.min(0, v.vx) - 0.5;
+      }
+      if (this.crew.mode !== "foot") continue;
+      const b = e.body;
+      if (b.x > front - 0.3 && b.x < stop.x + 1) {
+        b.x = front - 0.3;
+        b.vx = Math.min(0, b.vx);
+      }
+      const box = e.hitbox;
+      if (e.striking && !e.struck.has(stop) && box.x1 > front && box.x0 < stop.x + 0.6) {
+        e.struck.add(stop);
+        e.recoil();
+        stop.health--;
+        this.context.audio.thwack();
+        this.context.particles.dust(front, ground + 1.2, -3, 18, 1.4);
+        this.context.fx.punch(0.05);
+        if (stop.health <= 0) {
+          stop.broken = true;
+          this.context.audio.land(1);
+          this.context.particles.dust(stop.x, ground + 1, 4, 60, 2.2);
+          this.context.fx.punch(0.1);
+          this.context.score.add(POINTS.stageClear / 2, "Road cleared", stop.x, ground + 3);
+        }
+      }
+    }
   }
 
 
@@ -262,6 +336,9 @@ export class RoadStage implements Stage {
     this.respawnIn = 0;
     const at = checkpointBefore(this.config.checkpoints, this.reached) + 1;
     this.crew.car.reset(at);
+    this.crew.seat();
+    // Guards of a barricade still standing are back at their posts.
+    for (const b of this.boars) if (b.fighter && b.state !== "down" && b.state !== "gone") b.reset();
   }
 
   draw(view: View, alpha: number): void {
@@ -269,9 +346,11 @@ export class RoadStage implements Stage {
     const car = this.crew.car;
     const v = car.vehicle;
     // Follow the car where it's drawn (between physics steps), or it shudders against the scene.
-    const fx = v.px + (v.x - v.px) * alpha;
-    const fy = v.py + (v.y - v.py) * alpha;
-    this.camera.follow(fx, fy, v.vx, Math.max(-2, this.terrain.height(fx)), Math.min(dt, 1 / 20));
+    const foot = this.crew.mode !== "car";
+    const target = foot ? this.crew.explorer.body : v;
+    const fx = target.px + (target.x - target.px) * alpha;
+    const fy = target.py + (target.y - target.py) * alpha;
+    this.camera.follow(fx, fy, target.vx, Math.max(-2, this.terrain.height(fx)), Math.min(dt, 1 / 20));
     const snapped = this.camera.snapped();
     // Shake from ignitions, boosts and crashes (decays in the car).
     const shake = car.shake / PPM;
@@ -311,9 +390,14 @@ export class RoadStage implements Stage {
       blit(ctx, t.sprite, x, y + 1);
       glow(ctx, x - LENGTH[t.kind] * 8, y - (t.kind === "truck" ? 9 : 10), t.moving ? 6 : 9, "255, 60, 60", t.moving ? 0.5 : 0.85);
     }
-    for (const boar of this.boars) boar.draw(ctx, toScreen, time);
+    this.drawBarricades(painter, toScreen);
+    for (const boar of this.boars) if (!boar.fighter || !this.fighters.ready) boar.draw(ctx, toScreen, time);
     this.context.particles.draw(painter, toScreen, view.frame);
     car.draw(ctx, painter, toScreen, alpha, true);
+    // The people, in 3D and in front of the truck: the hero when out of it, and the raiders.
+    // Until the models have loaded, the 2D explorer.
+    const hero = foot ? this.crew.explorer : null;
+    if (!this.fighters.draw(ctx, camera, dt, alpha, hero, this.boars) && hero) hero.draw(ctx, painter, toScreen, alpha, dt, this.gravity);
     this.drawRings(ctx, toScreen, time, true);
     if (this.world) this.world.drawFront(ctx, camera, time, this.context.still);
     this.village?.drawRain(ctx, time, this.context.still);
@@ -359,6 +443,24 @@ export class RoadStage implements Stage {
     glow(ctx, x, y - 46, 40, "250, 46, 0", 0.35);
   }
 
+  /* A barricade: logs lashed upright, sharpened stakes, a red rag; it sheds logs as it's cut. */
+  private drawBarricades(painter: Painter, toScreen: ToScreen): void {
+    for (const stop of this.stops) {
+      if (stop.broken) continue;
+      const [x, y] = toScreen(stop.x, this.terrain.height(stop.x));
+      if (x < -40 || x > this.width + 40) continue;
+      const logs = 2 + stop.health;
+      for (let i = 0; i < logs; i++) {
+        const h = 26 + ((i * 7) % 11);
+        painter.rect(x - 10 + i * 4, y - h, 3, h, i % 2 ? "#5a4232" : "#6b4f3a");
+        painter.poly([[x - 10 + i * 4, y - h], [x - 8.5 + i * 4, y - h - 4], [x - 7 + i * 4, y - h]], "#7a5c43");
+      }
+      painter.rect(x - 11, y - 18, logs * 4 + 2, 2, "#3a2a1c");
+      painter.rect(x - 11, y - 8, logs * 4 + 2, 2, "#3a2a1c");
+      painter.rect(x - 2, y - 24, 4, 5, "#b5452a");
+    }
+  }
+
   /* Logs, barriers, ramp lips and gap warnings drawn over the shapes they make in the ground. */
   private drawObstacles(painter: Painter, toScreen: ToScreen): void {
     for (const f of this.config.features) {
@@ -399,7 +501,13 @@ export class RoadStage implements Stage {
     const v = car.vehicle;
     const gap = this.config.features.find((f) => f.kind === "ravine" && f.x - v.x > 0 && f.x - v.x < 35);
     let prompt = "";
+    const foot = this.crew.mode !== "car";
+    const stop = this.stopAhead(foot ? this.crew.explorer.body.x : v.x, STOP_ZONE);
     if (this.liftoff >= 0) prompt = "Lift-off";
+    else if (foot && this.crew.nearDoor && !stop) prompt = "E · Back in the truck";
+    else if (foot) prompt = "F · Sword: cut down the barricade and its guards    Space · Jump";
+    else if (stop && this.crew.canAlight) prompt = "Barricade! E · Get out and break it";
+    else if (stop) prompt = "Barricade ahead: stop the truck";
     else if (v.x < 22) prompt = "→ Drive    Space · Hop    Space in air · Boost    Hold · Hover    Tap ← → in air · Flip";
     else if (car.wrecked > 0) prompt = "Wrecked: land on your wheels";
     else if (gap) prompt = "Gap ahead: hop, boost, hover";
@@ -412,7 +520,8 @@ export class RoadStage implements Stage {
       altitude: null,
       hearts: null,
       fuel: car.fuelSeconds,
-      landIn: this.liftoff >= 0 ? null : car.landIn,
+      landIn: this.liftoff >= 0 || foot ? null : car.landIn,
+      actions: foot || stop !== undefined,
     };
   }
 }

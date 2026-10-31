@@ -42,6 +42,7 @@ export const CITY_RUN: RoadConfig = {
     { x: 800, speed: 10, until: 922, kind: "truck", color: "#5a4a8f" },
     { x: 955, speed: 12, until: 982, kind: "car", color: "#2b2d33" },
   ],
+  stops: [{ x: 612, fighters: [[596, "raider"], [603, "brute"]] }],
   beasts: [],
 };
 
@@ -75,6 +76,10 @@ export const FOREST_RUN: RoadConfig = {
   rings: [[222, 5], [334, 5.5], [438, 6], [612, 4.5], [662, 7], [810, 6.5], [915, 5]],
   traffic: [],
   // Packs: boars charge in a line, wolves spring at the car; ram them fast, jump them or blast them.
+  stops: [
+    { x: 362, fighters: [[348, "raider"], [354, "raider"]] },
+    { x: 880, fighters: [[862, "brute"], [868, "raider"], [873, "raider"]] },
+  ],
   beasts: [
     [92, "boar"], [96, "boar"],
     [186, "wolf"], [190, "wolf"], [194, "boar"],
@@ -132,6 +137,7 @@ export const VILLAGE_RUN: RoadConfig = {
     { x: 815, speed: 9, until: 872, kind: "rickshaw", color: "#24302a" },
     { x: 1000, speed: 7, until: 1052, kind: "truck", color: "#b5452a" },
   ],
+  stops: [{ x: 472, fighters: [[456, "raider"], [463, "raider"]] }],
   beasts: [
     [95, "cow"], [270, "cow"], [395, "dog"], [399, "dog"], [455, "cow"], [645, "cow"], [770, "cow"],
     [840, "dog"], [844, "dog"], [848, "dog"], [935, "cow"], [1020, "cow"], [1125, "cow"],

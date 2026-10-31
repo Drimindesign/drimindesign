@@ -55,6 +55,16 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
         continue;
       }
       if (car.wrecked > 0 || beast.state === "flee") continue;
+      if (beast.fighter) {
+        // A raider can't hurt a truck; a truck going faster than a jog knocks it flying.
+        if (Math.abs(v.vx) > 4 && Math.abs(beast.x - v.x) < 2.3 && beast.y < v.y + 0.4 && beast.y > v.y - 1.8) {
+          v.vx += beast.hitByCar(v.vx - beast.vx, CAR.mass);
+          audio.thwack();
+          score.add(POINTS.carBump, "Run down", beast.x, beast.y + 2);
+          context.fx.punch(0.06);
+        }
+        continue;
+      }
       if (Math.abs(beast.x - v.x) < 2.3 && beast.y < v.y + 0.4 && beast.y > v.y - 1.6) {
         if (beast.dangerous && v.grounded && Math.abs(v.vx) < RAM_SPEED) {
           car.crash();
@@ -89,7 +99,10 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
       score.add(POINTS.stomp, "Stomp", beast.x, beast.y + 1.6);
       continue;
     }
-    if (beast.dangerous && Math.abs(beast.x - b.x) < 0.8 && b.y < beast.y + 0.9 && b.y > beast.y - 0.5 && e.hurt(beast.x)) {
+    // An animal hurts on contact; a raider only in the strike of its swing, within its reach, facing you.
+    const reach = beast.fighter ? beast.reach : 0.8;
+    const facing = !beast.fighter || Math.sign(b.x - beast.x) === beast.facing;
+    if (beast.dangerous && facing && Math.abs(beast.x - b.x) < reach && b.y < beast.y + 1.4 && b.y > beast.y - 0.5 && e.hurt(beast.x)) {
       beast.rebound(Math.sign(beast.x - b.x) || 1);
       combo.break();
       if (e.hearts === 0) down = true;

@@ -97,10 +97,14 @@ export class Game {
   private timeScale = 1;
   private slowFor = 0;
   private slowScale = 1;
+  private focusZoom = 0;
   /* Effects the stages ask for at big moments; reduced motion turns them off. */
   private readonly fx: StageFx = {
     punch: (strength) => {
       if (!this.still) this.zoomVelocity += strength * ZOOM.punch;
+    },
+    focus: (zoom) => {
+      if (!this.still) this.focusZoom = Math.max(this.focusZoom, zoom);
     },
     slowmo: (seconds, scale = 0.35) => {
       if (this.still) return;
@@ -384,7 +388,10 @@ export class Game {
     // and settle (critically damped). Scaled about a point just below the middle, never under 1×.
     const hud = this.stage.hud();
     const fast = Math.min(1, (hud.speed ?? 0) / ZOOM.fullSpeed);
-    const target = this.phase === "play" && hud.landIn === null ? ZOOM.close - (ZOOM.close - 1) * fast : 1;
+    const travel = this.phase === "play" && hud.landIn === null ? ZOOM.close - (ZOOM.close - 1) * fast : 1;
+    // A fight on foot pulls the camera in close.
+    const target = Math.max(travel, this.focusZoom);
+    this.focusZoom = 0;
     const dt = Math.min(this.frameDt, 1 / 20);
     this.zoomVelocity += (ZOOM.omega * ZOOM.omega * (target - this.zoom) - 2 * ZOOM.omega * this.zoomVelocity) * dt;
     this.zoom = Math.max(1, Math.min(ZOOM.max, this.zoom + this.zoomVelocity * dt));
@@ -426,6 +433,7 @@ export class Game {
     if (hud.hearts !== null) this.text("hearts", "♥".repeat(hud.hearts) + "♡".repeat(Math.max(0, MAX_HEARTS - hud.hearts)));
     if (hud.fuel !== null) this.text("fuel", `${hud.fuel.toFixed(1)}s`);
     this.set("airborne", hud.landIn === null ? "false" : "true");
+    this.set("actions", hud.actions ? "true" : "false");
     if (hud.landIn !== null) this.text("land-in", `${hud.landIn.toFixed(1)}s`);
     // The combo: multiplier and its drain bar.
     this.set("combo", this.combo.chain > 0 ? "on" : "off");

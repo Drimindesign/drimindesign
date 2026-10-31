@@ -3,10 +3,10 @@ import type { ToScreen } from "../engine/camera";
 import type { Terrain } from "../engine/terrain";
 import { BOAR, COW, type Sprite } from "../pixel/props";
 
-export type BoarState = "wait" | "charge" | "stagger" | "flee" | "blasted" | "gone";
+export type BoarState = "wait" | "charge" | "attack" | "stagger" | "flee" | "down" | "blasted" | "gone";
 
 /** The beasts on the roads and the Moon. */
-export type BeastKind = "boar" | "wolf" | "alien" | "storm" | "cow" | "dog";
+export type BeastKind = "boar" | "wolf" | "alien" | "storm" | "cow" | "dog" | "raider" | "brute";
 
 interface BeastSpec {
   /** Top charging speed (m/s) and how hard it accelerates into it (m/s²). */
@@ -37,8 +37,18 @@ const SPECS: Record<BeastKind, BeastSpec> = {
   // Village cows: never hostile, they graze and wander; heavy enough to wreck a car that hits one.
   // Village dogs: chase the car barking, too light to hurt it; a fright sends them running.
   dog: { speed: 8.5, accel: 14, notice: 22, leapRange: 0, leap: 0, health: 1, mass: 25, scale: 0.62, filter: "sepia(1) saturate(1.4) brightness(0.8)" },
+  // Fighters on foot (drawn as 3D models): they walk up, wind up and strike; they don't run off.
+  raider: { speed: 2.8, accel: 10, notice: 16, leapRange: 0, leap: 0, health: 3, mass: 90, scale: 1, filter: "none" },
+  brute: { speed: 2.1, accel: 7, notice: 16, leapRange: 0, leap: 0, health: 5, mass: 125, scale: 1, filter: "none" },
   cow: { speed: 1.1, accel: 2.5, notice: 0, leapRange: 0, leap: 0, health: 99, mass: 420, scale: 1, filter: "none" },
 };
+/**
+ * A fighter's swing (s): wind up, the strike window (the only time it hurts), recover. It swings
+ * from this close (m) and its blow reaches this far.
+ */
+const ATTACK = { windup: 0.42, strike: 0.16, recover: 0.6, range: 1.15, reach: 1.45 } as const;
+/** A fallen fighter lies this long before fading out (s). */
+const DOWN_TIME = 5;
 /** A cow wanders within this distance of where it grazes (m). */
 const GRAZE = 4;
 
@@ -70,6 +80,9 @@ export class Boar {
   private readonly spec: BeastSpec;
   private timer = 0;
   private leapIn = 0;
+  /** Seconds into a fighter's swing, and which way it's facing (±1). */
+  private attackTime = 0;
+  facing = -1;
   /** Where a cow is ambling to (m). */
   private wander = 0;
   /** White flash after a hit (s). */
@@ -92,12 +105,28 @@ export class Boar {
   }
 
   get active(): boolean {
-    return this.state !== "wait" && this.state !== "gone" && this.state !== "blasted";
+    return this.state !== "wait" && this.state !== "gone" && this.state !== "blasted" && this.state !== "down";
+  }
+
+  /** Fights on foot with a weapon (drawn in 3D) rather than charging like an animal. */
+  get fighter(): boolean {
+    return this.kind === "raider" || this.kind === "brute";
+  }
+
+  /** 0 … 1 through the current swing, or -1 when not attacking. */
+  get swing(): number {
+    return this.state === "attack" ? this.attackTime / (ATTACK.windup + ATTACK.strike + ATTACK.recover) : -1;
   }
 
   /** Charging or leaping at you: the states that hurt. */
   get dangerous(): boolean {
+    if (this.fighter) return this.state === "attack" && this.attackTime >= ATTACK.windup && this.attackTime < ATTACK.windup + ATTACK.strike;
     return this.state === "charge";
+  }
+
+  /** How far a fighter's blow reaches (m). */
+  get reach(): number {
+    return ATTACK.reach;
   }
 
   get mass(): number {
@@ -135,6 +164,13 @@ export class Boar {
         break;
       case "charge": {
         const dir = Math.sign(targetX - this.x) || -1;
+        // A fighter closes to sword range, plants its feet and swings.
+        if (this.fighter && Math.abs(targetX - this.x) < ATTACK.range && this.grounded) {
+          this.state = "attack";
+          this.attackTime = 0;
+          this.facing = dir;
+          break;
+        }
         if (this.grounded) {
           this.vx = approach(this.vx, dir * spec.speed, spec.accel * dt);
           if (spec.leap > 0 && this.leapIn === 0 && Math.abs(targetX - this.x) < spec.leapRange) {
@@ -143,9 +179,22 @@ export class Boar {
             this.leapIn = LEAP_COOLDOWN;
           }
         }
-        if (Math.abs(this.x - targetX) > 40) this.state = "gone";
+        // Left far behind: an animal gives up; a fighter goes back to its post.
+        if (Math.abs(this.x - targetX) > 40) {
+          if (this.fighter) this.reset();
+          else this.state = "gone";
+        }
         break;
       }
+      case "attack":
+        if (this.grounded) this.vx = approach(this.vx, 0, 16 * dt);
+        this.attackTime += dt;
+        if (this.attackTime > ATTACK.windup + ATTACK.strike + ATTACK.recover) this.state = "charge";
+        break;
+      case "down":
+        if (this.grounded) this.vx = approach(this.vx, 0, 8 * dt);
+        if (this.timer === 0) this.state = "gone";
+        break;
       case "stagger":
         if (this.grounded) this.vx = approach(this.vx, 0, 14 * dt);
         if (this.timer === 0) this.state = this.health > 0 ? "charge" : "flee";
@@ -226,10 +275,15 @@ export class Boar {
   hit(dir: number, power: number): boolean {
     this.health--;
     this.vx = (dir * power * 90) / this.spec.mass;
-    this.vy = 2.6;
+    this.vy = 2.6 * (90 / this.spec.mass) + 1;
     this.flash = 0.15;
     this.timer = STAGGER;
     this.state = "stagger";
+    // A fighter that takes its last blow falls where it stands, and stays down a while.
+    if (this.fighter && this.health <= 0) {
+      this.state = "down";
+      this.timer = DOWN_TIME;
+    }
     return this.health <= 0;
   }
 
@@ -264,6 +318,13 @@ export class Boar {
     this.vy = 3.5 + Math.abs(carVx) * 0.15;
     this.spin = -Math.sign(carVx) * 9 * (90 / this.spec.mass);
     this.flash = 0.15;
+    if (this.fighter) {
+      // Run down: thrown with the car's momentum, and down for good.
+      this.health = 0;
+      this.timer = DOWN_TIME;
+      this.state = "down";
+      return -((2 * this.spec.mass) / total) * carVx * 0.7;
+    }
     if (this.kind === "cow") {
       // Knocked over, not killed: it gets back up.
       this.timer = 2.5;
@@ -285,11 +346,12 @@ export class Boar {
 
   /** What a 3D renderer needs to draw it: shown, tumble angle, facing, opacity and hit flash. */
   pose(): { visible: boolean; angle: number; facing: number; alpha: number; flash: boolean } {
+    if (Math.abs(this.vx) > 0.2) this.facing = Math.sign(this.vx);
     return {
       visible: this.state !== "gone",
       angle: this.angle,
-      facing: this.vx > 0.2 ? 1 : -1,
-      alpha: this.state === "blasted" ? Math.min(1, this.timer / BLAST_TIME + 0.1) : 1,
+      facing: Math.abs(this.vx) > 0.2 ? Math.sign(this.vx) : this.facing,
+      alpha: this.state === "blasted" ? Math.min(1, this.timer / BLAST_TIME + 0.1) : this.state === "down" ? Math.min(1, this.timer) : 1,
       flash: this.flash > 0,
     };
   }

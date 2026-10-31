@@ -33,6 +33,8 @@ export interface StageFx {
   punch(strength: number): void;
   /** Slow time to `scale` for `seconds` of real time (a crash). */
   slowmo(seconds: number, scale?: number): void;
+  /** Hold the camera this close (1.1–1.2) for this frame: a fight on foot. */
+  focus(zoom: number): void;
 }
 
 /** What the stage draws into, per frame. */
@@ -64,6 +66,8 @@ export interface StageHud {
   fuel: number | null;
   /** Seconds until the car touches down if the thrusters stop now (null on the ground). */
   landIn: number | null;
+  /** On foot or about to be: the get-out and sword pads show. */
+  actions?: boolean;
 }
 
 export interface Stage {

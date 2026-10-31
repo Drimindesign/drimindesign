@@ -576,9 +576,9 @@
       bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 6.75rem);
     }
 
-    /* Get out and the staff only matter on foot or on the Moon. */
-    .root:not([data-stage="grow"]) .pad[data-action="interact"],
-    .root:not([data-stage="grow"]) .pad[data-action="attack"] {
+    /* Get out and the sword only matter at a barricade or on foot. */
+    .root:not([data-actions="true"]) .pad[data-action="interact"],
+    .root:not([data-actions="true"]) .pad[data-action="attack"] {
       display: none;
     }
   }

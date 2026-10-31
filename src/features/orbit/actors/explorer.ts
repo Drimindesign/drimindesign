@@ -102,6 +102,21 @@ export class Explorer {
 
   // ---- combat ---------------------------------------------------------------
 
+  /** 0 … 1 through the current swing, or -1 when not swinging (for the 3D model's animation). */
+  get swingProgress(): number {
+    return this.swing < 0 ? -1 : this.swing / SWING.end;
+  }
+
+  /** How long a whole swing takes (s). */
+  get swingDuration(): number {
+    return SWING.end;
+  }
+
+  /** Just hit: the flinch plays. */
+  get hurting(): boolean {
+    return this.mercy > MERCY - 0.4;
+  }
+
   /** In the strike window of a swing: the blade can hit. */
   get striking(): boolean {
     return this.swing >= SWING.strike && this.swing <= SWING.extended;

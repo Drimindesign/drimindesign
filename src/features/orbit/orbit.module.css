@@ -222,6 +222,24 @@
     box-shadow: 0 0 0 1px rgb(255 246 220 / 0.4);
   }
 
+  /* Booster charges: bright pips in brand violet, dim when spent. */
+  .boosters {
+    color: #b48eec;
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    text-shadow: 0 0 6px rgb(145 96 220 / 0.8);
+  }
+
+  .root[data-boosters="0"] .boosters {
+    color: #6b5a85;
+    text-shadow: none;
+  }
+
+  .root[data-boosters="none"] .boosters,
+  .root[data-actions="true"] .boosters {
+    display: none;
+  }
+
   /* The truck's condition: green to red as it takes damage. */
   .hull {
     position: relative;
@@ -253,7 +271,7 @@
   .tankFill {
     position: absolute;
     inset: 0;
-    background: #67d3ff;
+    background: #b48eec;
     transform-origin: left;
     transform: scaleX(var(--tank, 1));
     transition: transform 60ms linear;

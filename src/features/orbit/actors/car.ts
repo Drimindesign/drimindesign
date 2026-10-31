@@ -416,9 +416,10 @@ export class Car {
     ctx.save();
     ctx.globalCompositeOperation = "screen";
     const g = ctx.createLinearGradient(sx, sy, ex, ey);
+    // White-hot at the throat, going brand violet as it expands.
     g.addColorStop(0, "rgba(255, 255, 255, 0.95)");
-    g.addColorStop(0.35, "rgba(190, 225, 255, 0.7)");
-    g.addColorStop(1, "rgba(120, 170, 255, 0)");
+    g.addColorStop(0.35, "rgba(196, 160, 245, 0.75)");
+    g.addColorStop(1, "rgba(145, 96, 220, 0)");
     ctx.fillStyle = g;
     for (const [w0, w1] of [[1.6, 5], [0.7, 2]] as const) {
       ctx.beginPath();
@@ -430,7 +431,7 @@ export class Car {
       ctx.fill();
     }
     ctx.restore();
-    this.glow(ctx, sx, sy, 7 * Math.min(1, power), "170, 210, 255", 0.55);
+    this.glow(ctx, sx, sy, 7 * Math.min(1, power), "180, 142, 236", 0.6);
   }
 
   /* A soft cone of cool-white light ahead of the car (smooth, screen-composited). */

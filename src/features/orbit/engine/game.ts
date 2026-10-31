@@ -436,6 +436,9 @@ export class Game {
     this.set("actions", hud.actions ? "true" : "false");
     root.style.setProperty("--hull", (1 - (hud.damage ?? 0)).toFixed(3));
     this.set("hull", (hud.damage ?? 0) > 0.6 ? "low" : "ok");
+    // Booster charges as pips: filled for each in hand.
+    if (hud.boosters) this.text("boosters", "◆".repeat(hud.boosters.have) + "◇".repeat(Math.max(0, hud.boosters.max - hud.boosters.have)));
+    this.set("boosters", hud.boosters ? String(hud.boosters.have) : "none");
     if (hud.landIn !== null) this.text("land-in", `${hud.landIn.toFixed(1)}s`);
     // The combo: multiplier and its drain bar.
     this.set("combo", this.combo.chain > 0 ? "on" : "off");

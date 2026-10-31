@@ -70,6 +70,8 @@ export interface StageHud {
   actions?: boolean;
   /** The truck's damage, 0 … 1 (road stages). */
   damage?: number;
+  /** Booster charges in hand, and how many it can hold. */
+  boosters?: { have: number; max: number };
 }
 
 export interface Stage {

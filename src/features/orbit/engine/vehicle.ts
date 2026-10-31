@@ -63,6 +63,8 @@ export class Vehicle {
   /** A boost fired this step (for the exhaust burst and sound). */
   boosted = false;
   tank: number = CAR.thrustTank;
+  /** Booster charges in hand (whole numbers). */
+  boosters: number = CAR.boostersAtStart;
   /** 0 … 1: how hard the thrusters are firing this step (the driver's or the landing burn). */
   thrust = 0;
   /** Height of the floor above the ground (m). */
@@ -294,9 +296,9 @@ export class Vehicle {
     }
     // The boost: a burst along the nose, with a little lift so it carries you over a gap.
     this.boosted = false;
-    if (input.boost && !this.grounded && !input.parked && this.tank >= CAR.boostCost && this.push < 0) {
+    if (input.boost && !this.grounded && !input.parked && this.boosters >= 1 && this.push < 0) {
       this.push = 0;
-      this.tank -= CAR.boostCost;
+      this.boosters -= 1;
       this.boosted = true;
     }
 
@@ -313,6 +315,13 @@ export class Vehicle {
     if (this.upsideDown > CAR.flipReset) this.reset(this.x);
   }
 
+  /** A booster charge earned (a stunt); false when already full. */
+  gainBooster(): boolean {
+    if (this.boosters >= CAR.boosters) return false;
+    this.boosters += 1;
+    return true;
+  }
+
   reset(x: number): void {
     this.x = x;
     this.y = this.terrain.height(x) + 0.8;
@@ -325,6 +334,7 @@ export class Vehicle {
     this.push = -1;
     this.flipTurns = null;
     this.queued = 0;
+    this.boosters = Math.max(1, this.boosters);
     this.px = this.x;
     this.py = this.y;
     this.pangle = this.angle;

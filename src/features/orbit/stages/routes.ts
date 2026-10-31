@@ -2,7 +2,7 @@ import type { RoadConfig } from "./road";
 
 /*
  * The two road runs. Gaps are sized to the tank: a hop alone clears the short ones at speed;
- * the long ones need a ramp, a boost or some hover; the tank (3.5 s) refills slowly on the road,
+ * the long ones need the ramp at their lip plus a boost or some hover; the tank (4 s) refills slowly on the road,
  * so fuel is a choice. Traffic stops before ramps, so there's always something to jump.
  */
 
@@ -21,13 +21,16 @@ export const CITY_RUN: RoadConfig = {
     { kind: "barrier", x: 330, size: 0 },
     { kind: "barrier", x: 348, size: 0 },
     { kind: "ramp", x: 420, size: 14 },
+    { kind: "ramp", x: 456, size: 12 },
     { kind: "ravine", x: 470, size: 20 },
     { kind: "ramp", x: 560, size: 8 },
     { kind: "barrier", x: 640, size: 0 },
     { kind: "ramp", x: 700, size: 16 },
-    { kind: "ravine", x: 760, size: 26 },
+    { kind: "ramp", x: 744, size: 14 },
+    { kind: "ravine", x: 760, size: 22 },
     { kind: "barrier", x: 860, size: 0 },
     { kind: "ramp", x: 930, size: 12 },
+    { kind: "ramp", x: 976, size: 12 },
     { kind: "ravine", x: 990, size: 18 },
   ],
   checkpoints: [6, 200, 300, 440, 600, 740, 880, 975],
@@ -61,12 +64,12 @@ export const FOREST_RUN: RoadConfig = {
     { kind: "log", x: 262, size: 0 },
     { kind: "ramp", x: 312, size: 11 },
     { kind: "ravine", x: 325, size: 15 },
-    { kind: "ramp", x: 400, size: 12 },
+    { kind: "ramp", x: 416, size: 12 },
     { kind: "ravine", x: 430, size: 18 },
     { kind: "log", x: 480, size: 0 },
     { kind: "log", x: 540, size: 0 },
-    { kind: "ramp", x: 600, size: 14 },
-    { kind: "ravine", x: 650, size: 24 },
+    { kind: "ramp", x: 634, size: 14 },
+    { kind: "ravine", x: 650, size: 21 },
     { kind: "log", x: 720, size: 0 },
     { kind: "ramp", x: 780, size: 10 },
     { kind: "ravine", x: 800, size: 20 },

@@ -252,6 +252,7 @@ export class RoadStage implements Stage {
       this.context.audio.pickup();
       this.context.score.add(STUNTS.ring * combo.multiplier, `Ring ×${combo.multiplier}`, ring.x, ring.y + 2);
       this.context.fx.punch(0.03);
+      if (this.crew.car.vehicle.gainBooster()) this.context.score.add(0, "+1 Booster", ring.x, ring.y + 3.2);
     }
   }
 
@@ -285,6 +286,7 @@ export class RoadStage implements Stage {
         this.context.audio.pickup();
         this.context.score.add(STUNTS.nearMiss * combo.multiplier, `Near miss ×${combo.multiplier}`, t.at, top + 1.5);
         this.context.fx.punch(0.03);
+        if (v.gainBooster()) this.context.score.add(0, "+1 Booster", t.at, top + 2.7);
       }
     }
   }
@@ -621,9 +623,9 @@ export class RoadStage implements Stage {
     else if (foot) prompt = "F · Sword: cut down the barricade and its guards    Space · Jump";
     else if (stop && this.crew.canAlight) prompt = "Barricade! E · Get out and break it";
     else if (stop) prompt = "Barricade ahead: stop the truck";
-    else if (v.x < 22) prompt = "→ Drive    Space · Hop    Space in air · Boost    Hold · Hover    Tap ← → in air · Flip";
+    else if (v.x < 22) prompt = "→ Drive    Space · Hop    Space in air · Booster ◆    Hold · Hover    Tap ← → in air · Flip";
     else if (car.wrecked > 0) prompt = "Wrecked: land on your wheels";
-    else if (gap) prompt = "Gap ahead: hop, boost, hover";
+    else if (gap) prompt = "Gap ahead: hit the ramp fast and hop · short? Booster ◆";
     else if (this.boars.some((b) => b.active && b.x - v.x > 0 && b.x - v.x < 30)) prompt = "Beasts: hit them fast, fly over, or blast them with the thrusters";
     else if (car.airborne && car.flipsInAir > 0) prompt = `${car.flipsInAir} flip${car.flipsInAir > 1 ? "s" : ""}: land it level`;
     return {
@@ -636,6 +638,7 @@ export class RoadStage implements Stage {
       landIn: this.liftoff >= 0 || foot ? null : car.landIn,
       actions: foot || stop !== undefined,
       damage: car.damage,
+      boosters: { have: v.boosters, max: CAR.boosters },
     };
   }
 }
@@ -659,6 +662,8 @@ export function scoreCarEvents(events: readonly CarEvent[], car: Car, context: S
         const label = event.flips > 0 ? `${event.flips} flip${event.flips > 1 ? "s" : ""} · ×${combo.multiplier}` : `Air ${event.air.toFixed(1)}s · ×${combo.multiplier}`;
         score.add(points, label, v.x, v.y + 2);
         context.fx.punch(0.03 + 0.03 * event.flips);
+        // Flips landed clean earn a booster charge.
+        if (event.flips > 0 && v.gainBooster()) score.add(0, "+1 Booster", v.x, v.y + 3.2);
       } else {
         combo.break();
         score.add(air, "Rough landing", v.x, v.y + 2);

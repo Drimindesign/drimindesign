@@ -130,6 +130,7 @@ function cowMeetsCar(cow: Boar, crew: Crew, context: StageContext): void {
     cleared.add(cow);
     context.combo.add(1);
     context.score.add(STUNTS.nearMiss * context.combo.multiplier, "Over the cow", cow.x, cow.y + 2.5);
+    if (v.gainBooster()) context.score.add(0, "+1 Booster", cow.x, cow.y + 3.7);
   }
   if (car.wrecked > 0 || cow.state === "stagger") return;
   if (Math.abs(dx) < 2.4 && v.y - cow.y < 1.9 && v.y > cow.y - 0.5) {

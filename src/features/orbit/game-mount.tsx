@@ -188,6 +188,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         <span className={styles.hull} title="Truck condition">
           <span className={styles.hullFill} />
         </span>
+        <span className={styles.boosters} title="Booster charges: tap thrust in the air" data-hud="boosters" />
         <span className={styles.tank}>
           <span className={styles.tankFill} />
         </span>

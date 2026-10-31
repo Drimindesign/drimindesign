@@ -67,6 +67,9 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
   const arena = useSyncExternalStore(noSubscription, arenaRequested, () => false);
   // A barricade fight handed to the 3D arena: how to report back to the game when it's over.
   const [arenaFight, setArenaFight] = useState<{ finish: (won: boolean) => void } | null>(null);
+  // The title screen's shortcut straight into the 3D arena (devices that can run it).
+  const [arenaDirect, setArenaDirect] = useState(false);
+  const arenaCapable = useSyncExternalStore(noSubscription, canRunArena, () => false);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -163,6 +166,14 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         <canvas ref={canvasRef} className={styles.canvas} aria-hidden="true" />
       </div>
       {arena ? <ArenaMount /> : null}
+      {arenaDirect ? (
+        <ArenaMount
+          onExit={() => {
+            setArenaDirect(false);
+            gameRef.current?.holdForArena(false);
+          }}
+        />
+      ) : null}
       {arenaFight ? (
         <ArenaMount
           onExit={(result) => {
@@ -240,6 +251,18 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
           <button type="button" data-command="start" className={styles.primary} onClick={command}>
             Press Space to start
           </button>
+          {arenaCapable ? (
+            <button
+              type="button"
+              className={styles.secondary}
+              onClick={() => {
+                gameRef.current?.holdForArena(true);
+                setArenaDirect(true);
+              }}
+            >
+              3D Arena fight
+            </button>
+          ) : null}
           <button type="button" className={`${styles.secondary} ${styles.touchOnly}`} onClick={() => void playFullscreen()}>
             Full screen
           </button>

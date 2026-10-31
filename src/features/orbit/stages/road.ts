@@ -88,6 +88,8 @@ const REPAIR = 0.5;
 const BARRICADE = { health: 4, height: 6, wreck: 7 } as const;
 /** Within this distance before a barricade (m), the car can be left. */
 const STOP_ZONE = 16;
+/** Brake assist before a barricade: how far out it starts (m), the speed allowed per metre left (1/s), its braking (m/s²), the crawl at the wall (m/s). */
+const STOP_ASSIST = { range: 40, slope: 0.55, brake: 18, crawl: 1.2 } as const;
 /** The finale: the launch rig lifts the car off the pad for this long (s) before the stage ends. */
 const LIFTOFF_TIME = 3.2;
 
@@ -216,7 +218,7 @@ export class RoadStage implements Stage {
     this.crew.step(dt, this.gravity, input, { board: true, alight: true });
     this.context.particles.update(dt, this.terrain, this.gravity);
     this.context.combo.update(dt, v.grounded);
-    this.stepStops();
+    this.stepStops(dt);
     this.stepProps();
     this.stepDialogue(dt);
     this.debris.update(dt, this.terrain, this.gravity);
@@ -434,7 +436,7 @@ export class RoadStage implements Stage {
    * Barricades: a wall of logs and spikes. The car stops against it, or is wrecked if it comes
    * in fast; flying over is too high. On foot it's cut down with the sword, blow by blow.
    */
-  private stepStops(): void {
+  private stepStops(dt: number): void {
     const car = this.crew.car;
     const v = car.vehicle;
     const e = this.crew.explorer;
@@ -442,6 +444,12 @@ export class RoadStage implements Stage {
       if (stop.broken) continue;
       const ground = this.terrain.height(stop.x);
       const front = stop.x - 0.6;
+      // Brake assist: on the approach the truck slows itself to roll up to the wall, never into it.
+      const gap = front - 2.4 - v.x;
+      if (car.occupied && v.grounded && gap > 0 && gap < STOP_ASSIST.range) {
+        const allowed = Math.max(STOP_ASSIST.crawl, gap * STOP_ASSIST.slope);
+        if (v.vx > allowed) v.vx = Math.max(allowed, v.vx - STOP_ASSIST.brake * dt);
+      }
       if (v.x + 2.4 > front && v.x < stop.x + 1 && v.y < ground + BARRICADE.height) {
         if (car.wrecked === 0 && v.vx > BARRICADE.wreck) car.crash();
         v.x = front - 2.4;
@@ -725,8 +733,9 @@ export class RoadStage implements Stage {
     else if (foot && this.crew.nearDoor && !stop) prompt = "E · Back in the truck";
     else if (foot && stop) prompt = "F · Sword: cut down the barricade and its guards    Space · Jump";
     else if (foot) prompt = "F · Sword    Space · Jump    E at the door · Back in the truck";
-    else if (stop && this.crew.canAlight) prompt = "Barricade! E · Get out and break it";
+    else if (stop && this.crew.canAlight) prompt = "Barricade! Press E · step out and fight";
     else if (stop) prompt = "Barricade ahead: stop the truck";
+    else if (v.x < 22 && this.stops[0] && !this.stops[0].broken) prompt = "→ Drive to the barricade ahead, then press E to step out and fight";
     else if (v.x < 22) prompt = "→ Drive    Space · Hop    Space in air · Booster ◆    Hold · Hover    Tap ← → in air · Flip";
     else if (car.wrecked > 0) prompt = "Wrecked: land on your wheels";
     else if (gap) prompt = "Gap ahead: hit the ramp fast and hop · short? Booster ◆";

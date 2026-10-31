@@ -134,7 +134,6 @@ export const VILLAGE_RUN: RoadConfig = {
   hills: 0.45,
   finish: 1150,
   features: [
-    { kind: "mud", x: 60, size: 25 },
     { kind: "ramp", x: 140, size: 12 },
     { kind: "ravine", x: 154, size: 13 },
     { kind: "mud", x: 225, size: 30 },
@@ -157,7 +156,7 @@ export const VILLAGE_RUN: RoadConfig = {
   cells: [[40, 1.2], [161, 4], [290, 1.2], [345, 4.5], [460, 1.2], [522, 4.2], [660, 1.2], [728, 5], [850, 1.2], [905, 5], [1030, 1.2], [1089, 5.5]],
   rings: [[160, 4.6], [344, 5.4], [521, 5], [727, 6], [904, 5.6], [1088, 6.4]],
   traffic: [
-    { x: 30, speed: 7, until: 132, kind: "rickshaw", color: "#2e7d4f" },
+    { x: 112, speed: 7, until: 136, kind: "rickshaw", color: "#2e7d4f" },
     { x: 250, speed: 8, until: 312, kind: "rickshaw", color: "#24302a" },
     { x: 430, speed: 6, until: 492, kind: "truck", color: "#c9a23a" },
     { x: 620, speed: 8, until: 692, kind: "rickshaw", color: "#2e7d4f" },
@@ -166,15 +165,16 @@ export const VILLAGE_RUN: RoadConfig = {
   ],
   stops: [
     {
-      x: 472,
-      fighters: [[456, "raider"], [463, "raider"]],
+      // Close to the start: the first fight (in the 3D arena where the device runs it) comes up fast.
+      x: 95,
+      fighters: [[82, "raider"], [88, "raider"]],
       dialogue: [
         { who: "Raider", clip: "raider_road", text: "Turn back. This road belongs to us.", at: 0.3 },
         { who: "Kachujin", clip: "hero_take", text: "Then I'll take it from you.", at: 2.8 },
       ],
     },
   ],
-  props: [[45, "crates"], [190, "fence"], [255, "stall"], [300, "crates"], [560, "stall"], [680, "crates"], [750, "fence"], [820, "stall"], [960, "crates"], [1040, "fence"]],
+  props: [[190, "fence"], [255, "stall"], [300, "crates"], [560, "stall"], [680, "crates"], [750, "fence"], [820, "stall"], [960, "crates"], [1040, "fence"]],
   beasts: [
     [395, "dog"], [399, "dog"], [655, "bull"],
     [840, "dog"], [844, "dog"], [848, "dog"], [1020, "bull"],

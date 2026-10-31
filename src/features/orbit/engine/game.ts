@@ -235,15 +235,24 @@ export class Game {
   private requestArena(done: (won: boolean) => void): boolean {
     if (!this.onArena || this.arenaOpen) return false;
     const accepted = this.onArena((won) => {
-      this.arenaOpen = false;
-      this.resume();
+      this.holdForArena(false);
       done(won);
     });
-    if (accepted) {
-      this.arenaOpen = true;
-      this.pause();
-    }
+    if (accepted) this.holdForArena(true);
     return accepted;
+  }
+
+  /** The 3D arena is over the game: hold everything, and stop listening to keys, until it closes. */
+  holdForArena(open: boolean): void {
+    if (open === this.arenaOpen) return;
+    this.arenaOpen = open;
+    if (open) {
+      this.pause();
+      this.input.detach();
+    } else {
+      this.input.attach();
+      this.resume();
+    }
   }
 
   private resume(): void {

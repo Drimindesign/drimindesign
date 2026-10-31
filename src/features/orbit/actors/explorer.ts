@@ -28,6 +28,17 @@ const KEYS: readonly (readonly [number, number, number])[] = [
 ];
 const SWING = { strike: 0.16, extended: 0.32, end: 0.62 } as const;
 const SWORD = { guard: -1.0, length: 1.15, cooldown: 0.5 } as const;
+/**
+ * The combo: a chop, a slice, then a stab driven through with the whole body. A swing started
+ * within COMBO_WINDOW (s) of the last one's end continues it. Each blow's knockback (m/s), where
+ * it lands, and whether it knocks the target off its feet.
+ */
+const COMBO_WINDOW = 0.45;
+const BLOWS = [
+  { power: 2.4, joint: "head", heavy: false },
+  { power: 3, joint: "chest", heavy: false },
+  { power: 4.5, joint: "chest", heavy: true },
+] as const;
 /** Contact freezes the blade this long (s): the hit lands with weight. */
 const HIT_STOP = 0.06;
 /** Hands are never still: the guard breathes and sways (rad), and swings with the walk. */
@@ -51,9 +62,16 @@ export class Explorer {
   alpha = 1;
   crouch = 0;
   hearts = MAX_HEARTS;
+  /** Getting into or out of the car, and how far along (for the 3D model's sit and stand clips). */
+  transition: { kind: "in" | "out"; progress: number } | null = null;
   private mercy = 0;
   /** Time into the current swing (s), or -1 when not swinging. */
   private swing = -1;
+  /** Which blow of the combo (0 … 2) the current or last swing is, and when the last one ended (s). */
+  private combo = 0;
+  private sinceSwing = 99;
+  /** A press during a swing, held to chain the next blow straight after it. */
+  private queued = false;
   private cooldown = 0;
   private hitStop = 0;
   /** Seconds alive, for the sway of the hands. */
@@ -103,6 +121,15 @@ export class Explorer {
   // ---- combat ---------------------------------------------------------------
 
   /** 0 … 1 through the current swing, or -1 when not swinging (for the 3D model's animation). */
+  /** The current blow of the combo: 0 chop, 1 slice, 2 stab; and what it does. */
+  get comboIndex(): number {
+    return this.combo;
+  }
+
+  get blow(): (typeof BLOWS)[number] {
+    return BLOWS[this.combo];
+  }
+
   get swingProgress(): number {
     return this.swing < 0 ? -1 : this.swing / SWING.end;
   }
@@ -206,8 +233,13 @@ export class Explorer {
     this.mercy = Math.max(0, this.mercy - dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.clock += dt;
-    if (input.attackPressed && this.cooldown === 0 && this.swing < 0) {
+    if (this.swing < 0) this.sinceSwing += dt;
+    // Pressed during a swing (after its strike): the next blow of the combo follows straight on.
+    if (input.attackPressed && this.swing >= SWING.strike) this.queued = true;
+    if ((input.attackPressed || this.queued) && this.swing < 0 && (this.cooldown === 0 || this.queued)) {
+      this.queued = false;
       this.swing = 0;
+      this.combo = this.sinceSwing < COMBO_WINDOW ? (this.combo + 1) % BLOWS.length : 0;
       this.cooldown = SWORD.cooldown;
       this.struck.clear();
       this.audio.swing();
@@ -219,7 +251,10 @@ export class Explorer {
       this.swing += dt;
       // The cut carries the body forward into the lunge.
       if (before < SWING.strike && this.swing >= SWING.strike && this.body.grounded) this.body.vx += this.body.facing * 2.2;
-      if (this.swing > SWING.end) this.swing = -1;
+      if (this.swing > SWING.end) {
+        this.swing = -1;
+        this.sinceSwing = 0;
+      }
     }
     this.body.step(dt, gravity, input);
     if (effects) this.effects();

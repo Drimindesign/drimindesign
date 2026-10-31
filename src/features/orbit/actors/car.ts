@@ -83,6 +83,8 @@ export class Car {
   private braking = false;
   private reversing = false;
   private boostFlash = 0;
+  /** The driver's door: 0 shut … 1 swung open (getting in or out). */
+  doorOpen = 0;
   /** Accumulated damage, 0 (new) … 1 (finished). */
   damage = 0;
 
@@ -360,6 +362,7 @@ export class Car {
     const body = this.occupied ? this.sprite.occupied : this.sprite.empty;
     if (this.wrecked > 0) ctx.filter = "brightness(0.6) saturate(0.5)";
     ctx.drawImage(body, -this.sprite.ox, -this.sprite.oy, body.width / ART, body.height / ART);
+    if (this.doorOpen > 0) this.drawDoor(ctx);
     ctx.restore();
     for (const wheel of car.wheels) {
       const [wx, wy] = toScreen(wheel.cx + x - car.x, wheel.cy + y - car.y);
@@ -374,6 +377,38 @@ export class Car {
     // The nose light bar.
     const [nx, ny] = toScreen(x + 2.34 * Math.cos(angle) + 0.06 * Math.sin(angle), y + 2.34 * Math.sin(angle) - 0.06 * Math.cos(angle));
     this.glow(ctx, nx, ny, 5, "235, 244, 255", 0.6);
+  }
+
+  /*
+   * The open door, in car space (drawn inside the car's transform): the dark cabin where it was,
+   * and the panel swung out on its front hinge toward the viewer, foreshortened as it turns.
+   */
+  private drawDoor(ctx: CanvasRenderingContext2D): void {
+    const at = (x: number, y: number): [number, number] => [x * PPM, -y * PPM];
+    const hinge = 0.95;
+    const back = -0.25;
+    const outline: [number, number][] = [[hinge, -0.38], [hinge, 0.3], [back, 0.52], [back, -0.38]];
+    ctx.fillStyle = "#0b0e12";
+    ctx.beginPath();
+    for (const [x, y] of outline) ctx.lineTo(...at(x, y));
+    ctx.closePath();
+    ctx.fill();
+    // The panel: its width shrinks with the swing (cos of up to 75°), its edge catches light.
+    const width = (hinge - back) * Math.cos(this.doorOpen * 1.3);
+    const edge = hinge - width;
+    const drop = this.doorOpen * 0.03;
+    ctx.fillStyle = "#d4d9de";
+    ctx.beginPath();
+    ctx.lineTo(...at(hinge, -0.4 - drop));
+    ctx.lineTo(...at(hinge, 0.3 - drop));
+    ctx.lineTo(...at(edge, 0.3 + (0.22 * width) / (hinge - back) - drop));
+    ctx.lineTo(...at(edge, -0.4 - drop));
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#111820";
+    ctx.fillRect(...at(edge + 0.04, 0.27 - drop), Math.max(0, (width - 0.1) * PPM), 0.16 * PPM);
+    ctx.fillStyle = "#f7f9fb";
+    ctx.fillRect(...at(edge, 0.3 - drop), 0.6, 0.7 * PPM);
   }
 
   private glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rgb: string, alpha: number): void {

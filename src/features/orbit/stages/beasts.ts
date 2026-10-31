@@ -9,8 +9,6 @@ const RAM_SPEED = 10;
 /** The thruster jet reaches this far below the car (m) and this far either side of it. */
 const JET_REACH = 7;
 const JET_HALF_WIDTH = 2.4;
-/** A sword blow's knockback (m/s, for a 90 kg beast). */
-const SWORD_POWER = 6;
 
 /*
  * Beasts against the crew, shared by every stage that has them. In the car: the thruster jet
@@ -86,7 +84,8 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
         e.struck.add(beast);
         e.recoil();
         audio.thwack();
-        const off = beast.hit(b.facing, SWORD_POWER);
+        const blow = e.blow;
+        const off = beast.hit(b.facing, blow.power, blow.joint, blow.heavy);
         score.add(off ? POINTS.swordHit * 2 : POINTS.swordHit, off ? "Driven off" : "Slash", beast.x, beast.y + 1.6);
         context.fx.punch(off ? 0.07 : 0.04);
         continue;

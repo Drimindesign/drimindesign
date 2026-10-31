@@ -7,9 +7,15 @@ import type { Explorer } from "./explorer";
 
 export type CrewMode = "foot" | "walkToDoor" | "boarding" | "car" | "alighting";
 
-/** Seconds to slip into the seat, and to climb back out. */
-const BOARD_TIME = 0.55;
-const ALIGHT_TIME = 0.45;
+/**
+ * Getting in and out, as real as a door allows (s): the door swings open over DOOR_SWING, the
+ * driver sits down into (or rises out of) the seat, steps clear, and the door swings shut.
+ */
+const BOARD_TIME = 1;
+const ALIGHT_TIME = 1.1;
+const DOOR_SWING = 0.25;
+/** How far the driver steps back from the door on the way out (m). */
+const STEP_CLEAR = 0.9;
 /** Give up walking to the door after this long and board anyway (s). */
 const WALK_TIMEOUT = 3;
 const IDLE = { move: 0, jumpPressed: false, jumpHeld: false };
@@ -78,24 +84,30 @@ export class Crew {
         }
         break;
       }
-      case "boarding":
+      case "boarding": {
+        // Door opens, the driver sits down into the seat, the door shuts.
+        const t = this.modeTime;
         e.step(dt, gravity, IDLE);
-        e.crouch = Math.min(1, this.modeTime / BOARD_TIME);
-        e.alpha = 1 - e.crouch;
-        if (this.modeTime >= BOARD_TIME) {
+        e.transition = { kind: "in", progress: Math.min(1, t / BOARD_TIME) };
+        e.alpha = 1 - smooth01((t - BOARD_TIME * 0.55) / (BOARD_TIME * 0.35));
+        this.car.doorOpen = door(t, BOARD_TIME);
+        if (t >= BOARD_TIME) {
           this.audio.door();
           this.car.occupied = true;
+          this.car.doorOpen = 0;
           e.alpha = 0;
+          e.transition = null;
           this.set("car");
         }
         break;
+      }
       case "car": {
         // The driver rides along (hidden), so getting out puts them back at the door.
         const seat = this.car.seat;
         e.body.place(seat.x, seat.y);
         if (rules.alight && input.interactPressed && this.canAlight) {
           const x = this.car.door.x;
-          e.body.facing = 1;
+          e.body.facing = -1;
           e.place(x, this.terrain.height(x));
           this.car.occupied = false;
           this.audio.door();
@@ -103,16 +115,35 @@ export class Crew {
         }
         break;
       }
-      case "alighting":
+      case "alighting": {
+        // Door opens, the driver rises out of the seat and steps clear, the door shuts behind.
+        const t = this.modeTime;
+        const out = Math.min(1, t / ALIGHT_TIME);
         e.step(dt, gravity, IDLE);
-        e.crouch = 1 - Math.min(1, this.modeTime / ALIGHT_TIME);
-        e.alpha = 1 - e.crouch;
-        if (this.modeTime >= ALIGHT_TIME) {
-          e.crouch = 0;
+        e.transition = { kind: "out", progress: out };
+        e.alpha = smooth01((t - DOOR_SWING * 0.6) / 0.25);
+        const x = this.car.door.x - STEP_CLEAR * smooth01((t - ALIGHT_TIME * 0.45) / (ALIGHT_TIME * 0.4));
+        e.body.place(x, this.terrain.height(x));
+        this.car.doorOpen = door(t, ALIGHT_TIME);
+        if (t >= ALIGHT_TIME) {
           e.alpha = 1;
+          e.transition = null;
+          this.car.doorOpen = 0;
+          this.audio.door();
           this.set("foot");
         }
         break;
+      }
     }
   }
+}
+
+function smooth01(t: number): number {
+  const k = Math.max(0, Math.min(1, t));
+  return k * k * (3 - 2 * k);
+}
+
+/* The door over a get-in or get-out of `total` seconds: swings open, stays, swings shut at the end. */
+function door(t: number, total: number): number {
+  return Math.min(smooth01(t / DOOR_SWING), smooth01((total - t) / DOOR_SWING));
 }

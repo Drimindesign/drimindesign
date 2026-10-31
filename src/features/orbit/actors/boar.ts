@@ -1,9 +1,10 @@
 import { ART } from "../engine/config";
 import type { ToScreen } from "../engine/camera";
+import { Ragdoll, type Joint } from "../engine/ragdoll";
 import type { Terrain } from "../engine/terrain";
 import { BOAR, COW, type Sprite } from "../pixel/props";
 
-export type BoarState = "wait" | "charge" | "attack" | "stagger" | "flee" | "down" | "blasted" | "gone";
+export type BoarState = "wait" | "charge" | "attack" | "stagger" | "knocked" | "getup" | "flee" | "down" | "blasted" | "gone";
 
 /** The beasts on the roads and the Moon. */
 export type BeastKind = "boar" | "wolf" | "alien" | "storm" | "cow" | "dog" | "raider" | "brute";
@@ -48,7 +49,13 @@ const SPECS: Record<BeastKind, BeastSpec> = {
  */
 const ATTACK = { windup: 0.42, strike: 0.16, recover: 0.6, range: 1.15, reach: 1.45 } as const;
 /** A fallen fighter lies this long before fading out (s). */
-const DOWN_TIME = 5;
+const DOWN_TIME = 6;
+/** Knocked down but alive: it lies at least this long (s), at most KNOCK_MAX, then gets up over GETUP_TIME. */
+const KNOCK_MIN = 0.7;
+const KNOCK_MAX = 2.6;
+export const GETUP_TIME = 1.5;
+/** A fighter's standing height (m), for its ragdoll. */
+const FIGHTER_HEIGHT: Partial<Record<BeastKind, number>> = { raider: 1.9, brute: 2.05 };
 /** A cow wanders within this distance of where it grazes (m). */
 const GRAZE = 4;
 
@@ -80,6 +87,9 @@ export class Boar {
   private readonly spec: BeastSpec;
   private timer = 0;
   private leapIn = 0;
+  /** The body as a ragdoll while it's limp, and how long it's been down. */
+  ragdoll: Ragdoll | null = null;
+  private knockedFor = 0;
   /** Seconds into a fighter's swing, and which way it's facing (±1). */
   private attackTime = 0;
   facing = -1;
@@ -105,7 +115,48 @@ export class Boar {
   }
 
   get active(): boolean {
-    return this.state !== "wait" && this.state !== "gone" && this.state !== "blasted" && this.state !== "down";
+    return this.state !== "wait" && this.state !== "gone" && this.state !== "blasted" && this.state !== "down" && this.state !== "knocked" && this.state !== "getup";
+  }
+
+  /** Limp (a ragdoll): knocked down or fallen for good. */
+  get limp(): boolean {
+    return this.state === "knocked" || this.state === "down";
+  }
+
+  /*
+   * Goes limp: a ragdoll seeded in a standing pose at the body's place, carrying its velocity,
+   * with a blow at `joint`. Alive (`knocked`) it gets back up; otherwise it stays down.
+   */
+  private fall(alive: boolean, joint: Joint, ix: number, iy: number): void {
+    const height = FIGHTER_HEIGHT[this.kind] ?? 1.8;
+    const f = this.facing;
+    const ground = this.terrain.height(this.x);
+    const at = (dx: number, share: number): { x: number; y: number } => ({ x: this.x + dx * f, y: ground + share * height });
+    this.ragdoll = new Ragdoll(
+      {
+        head: at(0.02, 0.93),
+        chest: at(0, 0.72),
+        pelvis: at(0, 0.5),
+        elbowL: at(0.06, 0.56),
+        handL: at(0.14, 0.44),
+        elbowR: at(-0.05, 0.56),
+        handR: at(-0.02, 0.42),
+        kneeL: at(0.06, 0.27),
+        footL: at(0.08, 0.03),
+        kneeR: at(-0.03, 0.27),
+        footR: at(-0.07, 0.03),
+      },
+      this.vx,
+      Math.min(this.vy, 0.5),
+    );
+    // The blow drives the struck joint back; the feet slide the other way, so the body topples
+    // over its heels instead of flying.
+    this.ragdoll.impulse(joint, ix, iy);
+    this.ragdoll.impulse("footL", -ix * 0.35, 0);
+    this.ragdoll.impulse("footR", -ix * 0.35, 0);
+    this.state = alive ? "knocked" : "down";
+    this.timer = alive ? KNOCK_MAX : DOWN_TIME;
+    this.knockedFor = 0;
   }
 
   /** Fights on foot with a weapon (drawn in 3D) rather than charging like an animal. */
@@ -135,6 +186,7 @@ export class Boar {
 
   /** Sends it back to its spot (after you respawn at a checkpoint). */
   reset(): void {
+    this.ragdoll = null;
     this.x = this.home;
     this.y = this.terrain.height(this.home);
     this.vx = 0;
@@ -191,10 +243,34 @@ export class Boar {
         this.attackTime += dt;
         if (this.attackTime > ATTACK.windup + ATTACK.strike + ATTACK.recover) this.state = "charge";
         break;
-      case "down":
-        if (this.grounded) this.vx = approach(this.vx, 0, 8 * dt);
-        if (this.timer === 0) this.state = "gone";
-        break;
+      case "knocked":
+      case "down": {
+        // Limp: the ragdoll falls and settles; the body's place follows its hips.
+        if (this.ragdoll) {
+          this.ragdoll.step(dt, gravity, this.terrain);
+          this.x = this.ragdoll.points.pelvis.x;
+          this.y = this.terrain.height(this.x);
+          this.vx = 0;
+          this.vy = 0;
+        }
+        this.knockedFor += dt;
+        if (this.state === "down") {
+          if (this.timer === 0) this.state = "gone";
+        } else if ((this.ragdoll?.resting && this.knockedFor > KNOCK_MIN) || this.timer === 0) {
+          // Back up: it faces the way its head lies (the get-up rolls it over its feet).
+          const r = this.ragdoll;
+          if (r) this.facing = r.points.head.x > r.points.pelvis.x ? -1 : 1;
+          this.state = "getup";
+          this.timer = GETUP_TIME;
+        }
+        return started;
+      }
+      case "getup":
+        if (this.timer === 0) {
+          this.ragdoll = null;
+          this.state = "charge";
+        }
+        return started;
       case "stagger":
         if (this.grounded) this.vx = approach(this.vx, 0, 14 * dt);
         if (this.timer === 0) this.state = this.health > 0 ? "charge" : "flee";
@@ -272,17 +348,24 @@ export class Boar {
   }
 
   /** A sword blow from direction `dir` (±1). Returns true if this blow drove it off. */
-  hit(dir: number, power: number): boolean {
+  /**
+   * A blow from direction `dir` (±1) with knockback `power` (m/s for a 90 kg body), landing at
+   * `joint`. A fighter staggers back; a `heavy` blow knocks it down (it gets up); its last blow
+   * drops it for good. The blow's momentum goes into the joint it hit, scaled by the body's mass.
+   */
+  hit(dir: number, power: number, joint: Joint = "chest", heavy = false): boolean {
     this.health--;
-    this.vx = (dir * power * 90) / this.spec.mass;
-    this.vy = 2.6 * (90 / this.spec.mass) + 1;
+    const share = 90 / this.spec.mass;
+    this.vx = dir * power * share;
+    // A stumble back, not a hop.
+    this.vy = 0.6 * share;
     this.flash = 0.15;
     this.timer = STAGGER;
     this.state = "stagger";
-    // A fighter that takes its last blow falls where it stands, and stays down a while.
-    if (this.fighter && this.health <= 0) {
-      this.state = "down";
-      this.timer = DOWN_TIME;
+    if (this.fighter) {
+      this.facing = -dir;
+      if (this.health <= 0) this.fall(false, joint, dir * power * 2.2 * share, 0.8 * share);
+      else if (heavy) this.fall(true, joint, dir * power * 2 * share, 0.6 * share);
     }
     return this.health <= 0;
   }
@@ -299,6 +382,15 @@ export class Boar {
 
   /** Caught under the thruster jet: flung up and away, spinning, and gone. */
   blast(dir: number): void {
+    if (this.fighter) {
+      // Thrown by the jet: up and away as a ragdoll, and down for good.
+      this.health = 0;
+      this.vx = dir * 4;
+      this.vy = 6;
+      this.fall(false, "pelvis", dir * 6, 9);
+      this.flash = 0.3;
+      return;
+    }
     this.health = 0;
     this.vx = dir * 5;
     this.vy = 10;
@@ -319,10 +411,12 @@ export class Boar {
     this.spin = -Math.sign(carVx) * 9 * (90 / this.spec.mass);
     this.flash = 0.15;
     if (this.fighter) {
-      // Run down: thrown with the car's momentum, and down for good.
+      // Run down: the bumper takes the legs, the body folds over and is thrown with the car's momentum.
       this.health = 0;
-      this.timer = DOWN_TIME;
-      this.state = "down";
+      this.facing = -Math.sign(carVx) || 1;
+      this.fall(false, "kneeL", this.vx * 1.2, 1.5);
+      this.ragdoll?.impulse("kneeR", this.vx * 1.2, 1.5);
+      this.ragdoll?.impulse("pelvis", this.vx * 0.8, this.vy);
       return -((2 * this.spec.mass) / total) * carVx * 0.7;
     }
     if (this.kind === "cow") {

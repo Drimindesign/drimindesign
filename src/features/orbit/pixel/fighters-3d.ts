@@ -1,8 +1,9 @@
 import type * as Three from "three";
-import type { Boar } from "../actors/boar";
+import { GETUP_TIME, type Boar } from "../actors/boar";
 import type { Explorer } from "../actors/explorer";
 import type { Camera } from "../engine/camera";
 import { ART, PPM } from "../engine/config";
+import type { Joint } from "../engine/ragdoll";
 
 type ThreeModule = typeof Three;
 type Kind = "hero" | "raider" | "brute";
@@ -10,8 +11,39 @@ type Kind = "hero" | "raider" | "brute";
 /** KayKit Adventurers (CC0): the models, the shared Rig_Medium animations and the sword. */
 const BASE = "/game/kaykit/";
 const MODELS: Record<Kind, string> = { hero: "Rogue_Hooded.glb", raider: "Knight.glb", brute: "Barbarian.glb" };
-const ANIMATIONS = ["Rig_Medium_General.glb", "Rig_Medium_MovementBasic.glb"] as const;
-const SWORD = "sword_2handed.gltf";
+const ANIMATIONS = [
+  "Rig_Medium_General.glb",
+  "Rig_Medium_MovementBasic.glb",
+  "Rig_Medium_CombatMelee.glb",
+  "Rig_Medium_Simulation.glb",
+  "Rig_Medium_MovementAdvanced.glb",
+] as const;
+/** What each one carries in its right hand. */
+const WEAPONS: Record<Kind, string> = { hero: "sword_2handed.gltf", raider: "sword_1handed.gltf", brute: "axe_2handed.gltf" };
+/** The hero's combo, blow by blow, and each fighter's own swing. */
+const HERO_COMBO = ["Melee_2H_Attack_Chop", "Melee_2H_Attack_Slice", "Melee_2H_Attack_Stab"] as const;
+const ENEMY_ATTACK: Record<Exclude<Kind, "hero">, string> = { raider: "Melee_1H_Attack_Chop", brute: "Melee_2H_Attack_Chop" };
+/** An enemy's whole swing (s), matching its 2D wind-up, strike and recovery. */
+const ENEMY_SWING = 1.18;
+/** Getting up blends out of the ragdoll's pose over this long (s). */
+const GETUP_BLEND = 0.4;
+/**
+ * Bones the ragdoll drives, parent before child: each follows the segment between two ragdoll
+ * joints, and its rest direction is measured toward `toward` (the next bone down the chain).
+ */
+const DRIVES: readonly { bone: string; from: Joint; to: Joint; toward: string }[] = [
+  { bone: "hips", from: "pelvis", to: "chest", toward: "chest" },
+  { bone: "spine", from: "pelvis", to: "chest", toward: "chest" },
+  { bone: "chest", from: "chest", to: "head", toward: "head" },
+  { bone: "upperarm.l", from: "chest", to: "elbowL", toward: "lowerarm.l" },
+  { bone: "lowerarm.l", from: "elbowL", to: "handL", toward: "wrist.l" },
+  { bone: "upperarm.r", from: "chest", to: "elbowR", toward: "lowerarm.r" },
+  { bone: "lowerarm.r", from: "elbowR", to: "handR", toward: "wrist.r" },
+  { bone: "upperleg.l", from: "pelvis", to: "kneeL", toward: "lowerleg.l" },
+  { bone: "lowerleg.l", from: "kneeL", to: "footL", toward: "foot.l" },
+  { bone: "upperleg.r", from: "pelvis", to: "kneeR", toward: "lowerleg.r" },
+  { bone: "lowerleg.r", from: "kneeR", to: "footR", toward: "foot.r" },
+];
 /** Standing height of each in the world (m). */
 const HEIGHT: Record<Kind, number> = { hero: 1.8, raider: 1.9, brute: 2.05 };
 /** Turned this far from side-on toward the camera (rad): a three-quarter view reads better than a profile. */
@@ -19,7 +51,20 @@ const THREE_QUARTER = 0.4;
 /** Cross-fade between animations (s). */
 const FADE = 0.16;
 /** One-shot clips: they play once and hold their last frame. */
-const ONCE = new Set(["Throw", "Hit_A", "Hit_B", "Death_A", "Death_B", "Jump_Land"]);
+const ONCE = new Set([
+  "Throw",
+  "Hit_A",
+  "Hit_B",
+  "Death_A",
+  "Death_B",
+  "Jump_Land",
+  "Lie_StandUp",
+  "Sit_Chair_StandUp",
+  "Sit_Chair_Down",
+  "Melee_Block_Hit",
+  ...HERO_COMBO,
+  ...Object.values(ENEMY_ATTACK),
+]);
 
 interface Actor {
   root: Three.Group;
@@ -29,6 +74,11 @@ interface Actor {
   materials: Three.Material[];
   /** The swing being played, so a new swing restarts the clip. */
   swing: number;
+  /** Ragdoll driving: each driven bone with its rest orientation and rest direction in the body's side plane. */
+  drives: { bone: Three.Bone; from: Joint; to: Joint; rest: Three.Quaternion; restDir: Three.Vector3 }[];
+  /** The beast state last frame (to catch the moment it starts getting up), and the get-up blend. */
+  state: string;
+  blend: { t: number; from: Map<Three.Bone, Three.Quaternion>; hips: Three.Vector3 } | null;
 }
 
 /*
@@ -103,13 +153,38 @@ export class Fighters3D {
         t.enemies.set(beast, actor);
       }
       actor.root.visible = true;
-      actor.root.position.set(beast.x, beast.y, -0.5);
-      actor.root.rotation.set(0, pose.facing > 0 ? Math.PI / 2 - THREE_QUARTER : -Math.PI / 2 + THREE_QUARTER, pose.angle);
-      this.animateEnemy(actor, beast);
       setOpacity(actor, pose.alpha);
       for (const m of actor.materials) (m as Three.MeshToonMaterial).emissiveIntensity = pose.flash ? 1.5 : 0;
-      actor.mixer.update(dt);
       any = true;
+      if (beast.limp && beast.ragdoll) {
+        this.drive(t.THREE, actor, beast);
+        actor.state = beast.state;
+        continue;
+      }
+      actor.root.position.set(beast.x, beast.y, -0.5);
+      actor.root.rotation.set(0, pose.facing > 0 ? Math.PI / 2 - THREE_QUARTER : -Math.PI / 2 + THREE_QUARTER, pose.angle);
+      if (beast.state === "getup" && actor.state !== "getup") {
+        // The moment it starts to rise: remember the fallen pose, to blend out of it.
+        const from = new Map<Three.Bone, Three.Quaternion>();
+        for (const d of actor.drives) from.set(d.bone, d.bone.quaternion.clone());
+        const hips = actor.drives[0]?.bone.position.clone() ?? new t.THREE.Vector3();
+        actor.blend = { t: 0, from, hips };
+        play(actor, "Lie_StandUp", clipLength(actor, "Lie_StandUp") / GETUP_TIME, true);
+      } else if (beast.state !== "getup") {
+        this.animateEnemy(actor, beast);
+      }
+      actor.state = beast.state;
+      actor.mixer.update(dt);
+      if (actor.blend) {
+        actor.blend.t += dt;
+        const k = Math.min(1, actor.blend.t / GETUP_BLEND);
+        for (const d of actor.drives) {
+          const from = actor.blend.from.get(d.bone);
+          if (from) d.bone.quaternion.slerpQuaternions(from, d.bone.quaternion.clone(), k);
+        }
+        actor.drives[0]?.bone.position.lerpVectors(actor.blend.hips, actor.drives[0].bone.position.clone(), k);
+        if (k >= 1) actor.blend = null;
+      }
     }
     if (!any) return true;
 
@@ -129,12 +204,52 @@ export class Fighters3D {
 
   // ---------------------------------------------------------------------------
 
+  /*
+   * A limp body: its bones follow the ragdoll. The body is turned exactly side-on (the ragdoll
+   * lives in the side plane); each driven bone is turned from its
+   * rest direction onto its ragdoll segment's direction, parent before child, and the hips are put
+   * at the ragdoll's pelvis.
+   */
+  private drive(THREE: ThreeModule, actor: Actor, beast: Boar): void {
+    const r = beast.ragdoll;
+    if (!r) return;
+    const f = beast.facing;
+    const pelvis = r.points.pelvis;
+    actor.root.position.set(pelvis.x, pelvis.y, -0.5);
+    actor.root.rotation.set(0, f > 0 ? Math.PI / 2 : -Math.PI / 2, 0);
+    actor.root.updateMatrixWorld(true);
+    const parentQ = new THREE.Quaternion();
+    const turn = new THREE.Quaternion();
+    const want = new THREE.Vector3();
+    for (const d of actor.drives) {
+      const a = r.points[d.from];
+      const b = r.points[d.to];
+      // In the body's own frame the side plane is z (forward) by y (up): turn the bone's rest
+      // direction (arms out in a T, legs down) onto its ragdoll segment.
+      want.set(0, b.y - a.y, (b.x - a.x) * f).normalize();
+      turn.setFromUnitVectors(d.restDir, want);
+      const world = actor.root.quaternion.clone().multiply(turn.multiply(d.rest));
+      d.bone.parent?.getWorldQuaternion(parentQ);
+      d.bone.quaternion.copy(parentQ.invert().multiply(world));
+      if (d.bone.name === "hips" && d.bone.parent) d.bone.position.copy(d.bone.parent.worldToLocal(new THREE.Vector3(pelvis.x, pelvis.y, -0.5)));
+      d.bone.updateMatrixWorld(true);
+    }
+  }
+
   private animateHero(actor: Actor, hero: Explorer): void {
     const b = hero.body;
+    // Out of the seat or down into it: the real sit-to-stand and stand-to-sit clips.
+    const transition = hero.transition;
+    if (transition) {
+      const clip = transition.kind === "out" ? "Sit_Chair_StandUp" : "Sit_Chair_Down";
+      if (actor.current !== clip) play(actor, clip, clipLength(actor, clip) / (transition.kind === "out" ? 0.8 : 0.6), true);
+      return;
+    }
     const swing = hero.swingProgress;
     if (swing >= 0) {
-      // The sword cut: the overhead throw clip, timed to the swing and restarted for each new one.
-      if (swing < actor.swing || actor.current !== "Throw") play(actor, "Throw", 1 / (hero.swingDuration * 1.0), true);
+      // The combo: chop, slice, stab, each clip timed to the swing and restarted for each new blow.
+      const clip = HERO_COMBO[hero.comboIndex] ?? HERO_COMBO[0];
+      if (swing < actor.swing || actor.current !== clip) play(actor, clip, clipLength(actor, clip) / hero.swingDuration, true);
       actor.swing = swing;
       return;
     }
@@ -149,7 +264,8 @@ export class Fighters3D {
   private animateEnemy(actor: Actor, beast: Boar): void {
     const swing = beast.swing;
     if (swing >= 0) {
-      if (swing < actor.swing || actor.current !== "Throw") play(actor, "Throw", 1 / 1.18, true);
+      const clip = ENEMY_ATTACK[beast.kind === "brute" ? "brute" : "raider"];
+      if (swing < actor.swing || actor.current !== clip) play(actor, clip, clipLength(actor, clip) / ENEMY_SWING, true);
       actor.swing = swing;
       return;
     }
@@ -195,11 +311,13 @@ export class Fighters3D {
       ]);
       if (this.disposed) return;
       const loader = new GLTFLoader();
-      const [models, clips, sword] = await Promise.all([
-        Promise.all((Object.keys(MODELS) as Kind[]).map(async (kind) => [kind, await loader.loadAsync(BASE + MODELS[kind])] as const)),
+      const kinds = Object.keys(MODELS) as Kind[];
+      const [models, clips, weapons] = await Promise.all([
+        Promise.all(kinds.map(async (kind) => [kind, await loader.loadAsync(BASE + MODELS[kind])] as const)),
         Promise.all(ANIMATIONS.map((file) => loader.loadAsync(BASE + file))),
-        loader.loadAsync(BASE + SWORD),
+        Promise.all(kinds.map(async (kind) => [kind, await loader.loadAsync(BASE + WEAPONS[kind])] as const)),
       ]);
+      const weapon = new Map(weapons);
       if (this.disposed) return;
       const animations = clips.flatMap((gltf) => gltf.animations);
       const renderer = new THREE.WebGLRenderer({ canvas: document.createElement("canvas"), alpha: true, antialias: false, premultipliedAlpha: false });
@@ -255,13 +373,24 @@ export class Fighters3D {
           mesh.frustumCulled = false;
           materials.push(toon);
         });
-        if (kind === "hero") {
-          const slot = model.getObjectByName("handslot.r");
-          slot?.add(sword.scene.clone());
-        }
+        const held = weapon.get(kind);
+        if (held) model.getObjectByName("handslot.r")?.add(held.scene.clone());
         const root = new THREE.Group();
         model.scale.setScalar(HEIGHT[kind] / (heights.get(kind) ?? 1));
         root.add(model);
+        // Rest data for the ragdoll, measured with the body unturned (its frame = the world here).
+        root.updateMatrixWorld(true);
+        const drives: Actor["drives"] = [];
+        const at = new THREE.Vector3();
+        const next = new THREE.Vector3();
+        for (const d of DRIVES) {
+          const bone = model.getObjectByName(d.bone) as Three.Bone | undefined;
+          const toward = model.getObjectByName(d.toward);
+          if (!bone || !toward) continue;
+          bone.getWorldPosition(at);
+          toward.getWorldPosition(next);
+          drives.push({ bone, from: d.from, to: d.to, rest: bone.getWorldQuaternion(new THREE.Quaternion()), restDir: next.clone().sub(at).normalize() });
+        }
         scene.add(root);
         const mixer = new THREE.AnimationMixer(model);
         const actions = new Map<string, Three.AnimationAction>();
@@ -273,7 +402,7 @@ export class Fighters3D {
           }
           actions.set(clip.name, action);
         }
-        const actor: Actor = { root, mixer, actions, current: "", materials, swing: -1 };
+        const actor: Actor = { root, mixer, actions, current: "", materials, swing: -1, drives, state: "", blend: null };
         play(actor, "Idle_A");
         return actor;
       };
@@ -331,12 +460,17 @@ function charcoal(THREE: ThreeModule, source: Three.Texture | null): Three.Textu
 function play(actor: Actor, name: string, speed = 1, restart = false): void {
   const next = actor.actions.get(name);
   if (!next) return;
-  next.timeScale = Math.max(0.2, Math.min(2.5, speed));
+  next.timeScale = Math.max(0.2, Math.min(4, speed));
   if (actor.current === name && !restart) return;
   const previous = actor.actions.get(actor.current);
   next.reset().play();
   if (previous && previous !== next) previous.crossFadeTo(next, FADE, false);
   actor.current = name;
+}
+
+/** A clip's length (s), or 1 if it's missing. */
+function clipLength(actor: Actor, name: string): number {
+  return actor.actions.get(name)?.getClip().duration ?? 1;
 }
 
 function setOpacity(actor: Actor, alpha: number): void {

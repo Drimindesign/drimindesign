@@ -262,11 +262,13 @@ export class RoadStage implements Stage {
     const v = car.vehicle;
     for (const t of this.traffic) {
       if (t.moving) {
-        t.at += t.speed * dt;
-        if (t.at >= t.until) {
-          t.at = t.until;
-          t.moving = false;
-        }
+        // Drivers brake: for a barricade across the road, and for the player stopped ahead.
+        const front = t.at + LENGTH[t.kind] / 2;
+        const wall = this.stops.find((stop) => !stop.broken && stop.x > front - 1);
+        const until = Math.min(t.until, wall ? wall.x - LENGTH[t.kind] / 2 - 1 : Infinity);
+        const playerAhead = v.x > t.at && v.x - 2.4 - front < 2;
+        if (!playerAhead) t.at = Math.min(until, t.at + t.speed * dt);
+        if (t.at >= t.until) t.moving = false;
       }
       const ground = this.terrain.height(t.at);
       const top = ground + HEIGHT[t.kind];

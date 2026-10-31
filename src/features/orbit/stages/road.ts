@@ -533,7 +533,10 @@ export class RoadStage implements Stage {
     // The people, in 3D and in front of the truck: the hero when out of it, and the raiders.
     // Until the models have loaded, the 2D explorer.
     const hero = foot ? this.crew.explorer : null;
-    if (!this.fighters.draw(ctx, camera, dt, alpha, hero, this.boars) && hero) hero.draw(ctx, painter, toScreen, alpha, dt, this.gravity);
+    if (this.fighters.ready) this.drawShadows(ctx, toScreen, hero);
+    const nose = car.vehicle.toWorld(2.3, 0.1);
+    const lamps = car.wrecked === 0 ? { x: nose.x, y: nose.y, dir: Math.cos(car.vehicle.angle) >= 0 ? 1 : -1 } : null;
+    if (!this.fighters.draw(ctx, camera, dt, alpha, hero, this.boars, lamps) && hero) hero.draw(ctx, painter, toScreen, alpha, dt, this.gravity);
     this.drawRings(ctx, toScreen, time, true);
     if (this.world) this.world.drawFront(ctx, camera, time, this.context.still);
     this.village?.drawRain(ctx, time, this.context.still);
@@ -606,6 +609,29 @@ export class RoadStage implements Stage {
         painter.rect(x - 24, y - 8, 50, 2, "#7a5c43");
       }
     }
+  }
+
+  /*
+   * Contact shadows under everyone drawn in 3D, so they stand on the road rather than float:
+   * soft dark ovals, wider under a body lying down, fading as it lifts off the ground.
+   */
+  private drawShadows(ctx: CanvasRenderingContext2D, toScreen: ToScreen, hero: Explorer | null): void {
+    const oval = (x: number, y: number, width: number, height: number): void => {
+      const ground = this.terrain.height(x);
+      const lift = Math.max(0, y - ground);
+      if (lift > 3) return;
+      const [sx, sy] = toScreen(x, ground);
+      ctx.fillStyle = `rgba(6, 5, 10, ${0.42 * (1 - lift / 3)})`;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, (width * PPM) / 2, height, 0, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    for (const b of this.boars) {
+      if (!(b.fighter || b.animal3D) || b.state === "gone" || b.state === "wait" && Math.abs(b.x - this.camera.x) > 20) continue;
+      const width = b.limp ? 1.7 : b.kind === "bull" ? 2.2 : b.animal3D ? 1.2 : 0.9;
+      oval(b.ragdoll?.points.pelvis.x ?? b.x, b.ragdoll?.points.pelvis.y ?? b.y, width, 1.5);
+    }
+    if (hero) oval(hero.ragdoll?.points.pelvis.x ?? hero.body.x, hero.body.y, hero.ragdoll ? 1.7 : 0.8, 1.5);
   }
 
   /* A barricade: logs lashed upright, sharpened stakes, a red rag; it sheds logs as it's cut. */

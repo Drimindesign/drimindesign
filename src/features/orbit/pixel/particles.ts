@@ -21,6 +21,8 @@ interface Particle {
   life: number;
   size: number;
   gas: boolean;
+  /** A spark: a bright fleck of steel (drawn as a streak, dies fast). */
+  spark: boolean;
   seed: number;
 }
 
@@ -31,6 +33,7 @@ const INHERIT = 0.1;
 const PUFF = { born: 2, grown: 15 } as const;
 const GAS = ["#ffffff", "#f1f4f6", "#dde3e8", "#c3ccd3", "#a6b1ba"] as const;
 const DUST = ["#9a8a7a", "#7a6a5c", "#5a4c42"] as const;
+const SPARK = ["#fffbe8", "#ffe39a", "#ffb04d", "#e0481c"] as const;
 /** Puff sprites are cached at these diameters (art px). */
 const SIZES = 14;
 
@@ -50,7 +53,7 @@ function puffSprites(): HTMLCanvasElement[][] {
 
 export class Particles {
   private readonly pool: Particle[] = Array.from({ length: POOL }, (_, i) => ({
-    x: 0, y: 0, vx: 0, vy: 0, age: 1, life: 0, size: 1, gas: true, seed: i,
+    x: 0, y: 0, vx: 0, vy: 0, age: 1, life: 0, size: 1, gas: true, spark: false, seed: i,
   }));
   private next = 0;
 
@@ -75,9 +78,28 @@ export class Particles {
     p.gas = true;
   }
 
+  /** Steel striking steel at (x, y): flecks thrown in a cone around `dir` (±1) and upward. */
+  sparks(x: number, y: number, dir: number, count: number): void {
+    for (let i = 0; i < count; i++) {
+      const p = this.take();
+      const a = (Math.random() - 0.3) * 1.4;
+      const speed = 5 + Math.random() * 7;
+      p.x = x;
+      p.y = y;
+      p.vx = dir * Math.cos(a) * speed;
+      p.vy = Math.sin(a) * speed + 1.5;
+      p.age = 0;
+      p.life = 0.15 + Math.random() * 0.25;
+      p.size = 1;
+      p.gas = false;
+      p.spark = true;
+    }
+  }
+
   dust(x: number, y: number, vx: number, count: number, force: number): void {
     for (let i = 0; i < count; i++) {
       const p = this.take();
+      p.spark = false;
       p.x = x + (Math.random() - 0.5) * 0.6;
       p.y = y + 0.02;
       p.vx = vx * 0.2 + (Math.random() - 0.5) * 3 * force;
@@ -134,6 +156,10 @@ export class Particles {
         const w = sprite.width / ART;
         ctx.globalAlpha = (1 - t) ** 1.6 * 0.8;
         ctx.drawImage(sprite, Math.round((x - w / 2) * ART) / ART, Math.round((y - w / 2) * ART) / ART, w, w);
+      } else if (p.spark) {
+        // A streak along its flight, white-hot cooling to orange.
+        ctx.globalAlpha = 1 - t * 0.5;
+        painter.line(x, y, x - p.vx * 0.012 * 16, y + p.vy * 0.012 * 16, SPARK[Math.min(SPARK.length - 1, Math.floor(t * SPARK.length))]);
       } else {
         if (hash(p.seed * 7 + frame, 9) < t * t) continue;
         painter.rect(x, y, 0.5, 0.5, DUST[Math.min(DUST.length - 1, Math.floor(t * DUST.length))]);

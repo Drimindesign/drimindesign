@@ -300,6 +300,10 @@ export class Explorer {
       } else {
         this.ragdoll.step(dt, gravity, this.terrain);
         this.knockedFor += dt;
+        if (this.ragdoll.impact > 3) {
+          this.particles.dust(this.ragdoll.points.pelvis.x, this.body.y, 0, Math.round(6 + this.ragdoll.impact * 2), 0.9);
+          this.audio.land(Math.min(1, this.ragdoll.impact / 9));
+        }
         const pelvis = this.ragdoll.points.pelvis;
         this.body.place(pelvis.x, this.terrain.height(pelvis.x));
         if ((this.ragdoll.resting && this.knockedFor > KNOCK.min) || this.knockedFor > KNOCK.max) this.getup = KNOCK.getup;

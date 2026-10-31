@@ -104,8 +104,8 @@ export class Game {
       if (!this.still) this.zoomVelocity += strength * ZOOM.punch;
     },
     buzz: (ms) => {
-      // Phones only: the browser refuses vibration from keyboard play, and a mouse has nothing to shake.
-      if (!this.still && this.touch && navigator.userActivation?.hasBeenActive) navigator.vibrate?.(ms);
+      // Phones only, once the player has touched the screen: browsers refuse vibration before a tap.
+      if (!this.still && this.tapped) navigator.vibrate?.(ms);
     },
     focus: (zoom) => {
       if (!this.still) this.focusZoom = Math.max(this.focusZoom, zoom);
@@ -125,6 +125,10 @@ export class Game {
   onFrame: (() => void) | null = null;
   /** Phones and tablets: prompts name the on-screen pads instead of keys. */
   private readonly touch = matchMedia("(pointer: coarse)").matches;
+  private tapped = false;
+  private readonly onTap = (event: PointerEvent): void => {
+    if (event.pointerType === "touch") this.tapped = true;
+  };
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -143,6 +147,7 @@ export class Game {
   start(): void {
     this.input.attach();
     document.addEventListener("visibilitychange", this.onVisibility);
+    if (this.touch) window.addEventListener("pointerdown", this.onTap, { passive: true });
     this.setPhase("title");
     this.resume();
   }
@@ -151,6 +156,7 @@ export class Game {
     this.pause();
     this.input.detach();
     document.removeEventListener("visibilitychange", this.onVisibility);
+    window.removeEventListener("pointerdown", this.onTap);
     this.stage.dispose?.();
     this.audio.dispose();
   }

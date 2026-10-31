@@ -62,6 +62,8 @@ export class Ragdoll {
   private readonly bones: { a: Point; b: Point; length: number }[];
   private readonly limits: { a: Point; b: Point; min: number }[];
   private still = 0;
+  /** The hardest a joint hit the ground in the last step (m/s), 0 if none did. */
+  impact = 0;
 
   constructor(pose: Record<Joint, { x: number; y: number }>, vx: number, vy: number, dt = 1 / 120) {
     const points = {} as Record<Joint, Point>;
@@ -105,6 +107,7 @@ export class Ragdoll {
 
   step(dt: number, gravity: number, terrain: Terrain): void {
     let fastest = 0;
+    this.impact = 0;
     for (const j of JOINTS) {
       const p = this.points[j];
       const vx = (p.x - p.px) * DAMPING;
@@ -124,6 +127,7 @@ export class Ragdoll {
         const floor = terrain.height(p.x) + GROUND.radius;
         if (p.y < floor) {
           const vy = p.y - p.py;
+          if (k === 0) this.impact = Math.max(this.impact, -vy / dt);
           p.y = floor;
           p.py = floor + vy * GROUND.bounce;
           p.px = p.x - (p.x - p.px) * GROUND.friction;

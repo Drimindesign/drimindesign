@@ -71,6 +71,8 @@ const ANIMALS: Record<AnimalKind, string> = { wolf: "/game/animals/wolf.glb", do
 const ANIMAL_HEIGHT: Record<AnimalKind, number> = { wolf: 0.95, dog: 0.7, bull: 1.65 };
 /** Turned this far from side-on toward the camera (rad): a three-quarter view reads better than a profile. */
 const THREE_QUARTER = 0.4;
+/** The truck's headlights as a light in the scene: how bright, how far it reaches (m), and how far ahead of the nose it sits. */
+const HEADLIGHT = { intensity: 30, reach: 12, ahead: 2.5 } as const;
 /** Cross-fade between animations (s). */
 const FADE = 0.16;
 
@@ -108,6 +110,7 @@ export class Fighters3D {
     camera: Three.OrthographicCamera;
     make: (kind: Kind) => Actor;
     makeAnimal: (kind: AnimalKind) => Actor;
+    headlight: Three.PointLight;
     hero: Actor;
     enemies: Map<Boar, Actor>;
   } | null = null;
@@ -132,9 +135,12 @@ export class Fighters3D {
   }
 
   /** Draws the hero (when on foot) and the fighters; returns false when not ready, so the caller draws the 2D explorer. */
-  draw(ctx: CanvasRenderingContext2D, camera: Camera, dt: number, alpha: number, hero: Explorer | null, beasts: readonly Boar[]): boolean {
+  /** `headlight`: the truck's lamps (where, and which way they face), lighting whoever stands in front. */
+  draw(ctx: CanvasRenderingContext2D, camera: Camera, dt: number, alpha: number, hero: Explorer | null, beasts: readonly Boar[], headlight: { x: number; y: number; dir: number } | null = null): boolean {
     const t = this.three;
     if (!t) return false;
+    t.headlight.intensity = headlight ? HEADLIGHT.intensity : 0;
+    if (headlight) t.headlight.position.set(headlight.x + headlight.dir * HEADLIGHT.ahead, headlight.y + 0.7, 1.2);
     const view = this.width / PPM / 2 + 3;
     let any = false;
 
@@ -385,6 +391,8 @@ export class Fighters3D {
       const rim = new THREE.DirectionalLight(0xffc89a, 1.6);
       rim.position.set(2, 2, -3);
       scene.add(key, rim, new THREE.HemisphereLight(0x9fb4d8, 0x2a1e18, 0.9));
+      const headlight = new THREE.PointLight(0xeaf2ff, 0, HEADLIGHT.reach, 1.4);
+      scene.add(headlight);
       const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
       this.frame(camera);
 
@@ -489,7 +497,7 @@ export class Fighters3D {
         renderer.dispose();
         return;
       }
-      this.three = { THREE, renderer, scene, camera, make, makeAnimal, hero, enemies: new Map() };
+      this.three = { THREE, renderer, scene, camera, make, makeAnimal, headlight, hero, enemies: new Map() };
     } catch {
       // No WebGL or the models didn't load: the 2D explorer stays.
     }

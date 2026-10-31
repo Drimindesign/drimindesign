@@ -33,6 +33,12 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
   );
   for (const beast of beasts) {
     if (beast.update(dt, gravity, driving ? v.x : e.body.x, engaged.has(beast))) audio.grunt();
+    // A body hitting the road: dust thrown up and the thud of the fall, by how hard it landed.
+    const thrown = beast.ragdoll?.impact ?? 0;
+    if (thrown > 3 && beast.ragdoll) {
+      particles.dust(beast.ragdoll.points.pelvis.x, beast.y, 0, Math.round(6 + thrown * 2), 0.6 + thrown * 0.08);
+      audio.land(Math.min(1, thrown / 9));
+    }
     // The hero starts a swing: fighters in reach may raise a guard or step back.
     if (!driving && e.swingStarted && beast.fighter && Math.abs(beast.x - e.body.x) < 2.8) beast.react(e.body.x);
     if (!beast.active) continue;
@@ -92,6 +98,7 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
         if (beast.covers(b.facing)) {
           // Steel on the guard: a kick knocks it open, a cut bounces off and throws the blade back.
           audio.clang(blow.guardBreak ? 0.6 : 1);
+          particles.sparks(beast.x - b.facing * 0.45, beast.y + 1.3, -b.facing, blow.guardBreak ? 6 : 14);
           context.fx.punch(0.05);
           context.fx.buzz(25);
           if (blow.guardBreak) {
@@ -107,7 +114,10 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
         e.recoil();
         audio.thwack();
         // Steel on armour as well as the body under it (the knights wear plate).
-        if (beast.kind === "raider") audio.clang(0.3);
+        if (beast.kind === "raider") {
+          audio.clang(0.3);
+          particles.sparks(beast.x - b.facing * 0.3, beast.y + 1.2, b.facing, 5);
+        }
         context.fx.buzz(blow.heavy ? 45 : 20);
         const off = beast.hit(b.facing, blow.power, blow.joint, blow.heavy);
         score.add(off ? POINTS.swordHit * 2 : POINTS.swordHit, off ? "Driven off" : "Slash", beast.x, beast.y + 1.6);

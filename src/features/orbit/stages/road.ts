@@ -124,6 +124,9 @@ export class RoadStage implements Stage {
   private scene: { lines: readonly Line[]; t: number; next: number } | null = null;
   private line: { who: string; text: string; left: number } | null = null;
   private wasFoot = false;
+  /** Each barricade's guards (by the barricade's position), and whether the 3D arena was offered here yet. */
+  private readonly guards = new Map<number, Boar[]>();
+  private arenaOffered = false;
   private readonly sprites = { cell: CELL(), pad: LAUNCH_PAD() };
   private reached: number;
   private respawnIn = 0;
@@ -156,7 +159,11 @@ export class RoadStage implements Stage {
     this.boars = config.beasts.map(([x, kind]) => new Boar(x, this.terrain, kind));
     this.stops = (config.stops ?? []).map((s) => ({ x: s.x, health: BARRICADE.health, broken: false }));
     this.props = (config.props ?? []).map(([x, kind]) => ({ x, kind, broken: false }));
-    for (const s of config.stops ?? []) for (const [x, kind] of s.fighters) this.boars.push(new Boar(x, this.terrain, kind));
+    for (const s of config.stops ?? []) {
+      const guards = s.fighters.map(([x, kind]) => new Boar(x, this.terrain, kind));
+      this.guards.set(s.x, guards);
+      this.boars.push(...guards);
+    }
     this.reached = config.checkpoints[0];
     this.camera.snap(6, this.terrain.height(6), this.terrain.height(6));
   }
@@ -330,6 +337,14 @@ export class RoadStage implements Stage {
     const foot = this.crew.mode === "foot";
     if (foot && !this.wasFoot) {
       const stop = this.stopAhead(this.crew.explorer.body.x, STOP_ZONE);
+      // The stage's first barricade is fought in the 3D arena, where the device can run it.
+      if (stop && stop === this.stops[0] && !this.arenaOffered && this.context.arena) {
+        this.arenaOffered = true;
+        if (this.context.arena.request((won) => won && this.clearStop(stop))) {
+          this.wasFoot = foot;
+          return;
+        }
+      }
       const lines = this.config.stops?.find((s) => s.x === stop?.x)?.dialogue;
       if (lines) this.scene = { lines, t: 0, next: 0 };
     }
@@ -401,6 +416,18 @@ export class RoadStage implements Stage {
     this.context.fx.punch(prop.kind === "stall" ? 0.07 : 0.04);
     this.context.combo.add(1);
     this.context.score.add(spec.points * this.context.combo.multiplier, prop.kind === "stall" ? "Stall smashed" : "Smashed", prop.x, ground + spec.height + 0.5);
+  }
+
+  /* A barricade won in the 3D arena: its guards are gone and the wall comes down. */
+  private clearStop(stop: { x: number; health: number; broken: boolean }): void {
+    stop.broken = true;
+    stop.health = 0;
+    for (const g of this.guards.get(stop.x) ?? []) g.state = "gone";
+    const ground = this.terrain.height(stop.x);
+    this.speak(CLEARED);
+    this.debris.burst(stop.x, ground + 1.5, 5, 3, 26, 5, ["#5a4232", "#6b4f3a", "#7a5c43", "#b5452a"], 0.5);
+    this.context.particles.dust(stop.x, ground + 1, 4, 60, 2.2);
+    this.context.score.add(POINTS.stageClear, "Yard cleared", stop.x, ground + 3);
   }
 
   /*

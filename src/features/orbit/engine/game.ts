@@ -123,6 +123,12 @@ export class Game {
 
   /** Called after every drawn frame (the GPU glow pass hooks in here). */
   onFrame: (() => void) | null = null;
+  /**
+   * Hosts the 3D arena (the page sets it): called with how to finish; returns false to decline,
+   * in which case the fight stays in 2D. While it's open the game is paused.
+   */
+  onArena: ((finish: (won: boolean) => void) => boolean) | null = null;
+  private arenaOpen = false;
   /** Phones and tablets: prompts name the on-screen pads instead of keys. */
   private readonly touch = matchMedia("(pointer: coarse)").matches;
   private tapped = false;
@@ -220,10 +226,25 @@ export class Game {
     if (document.visibilityState === "hidden") {
       this.pause();
       if (this.phase === "play") this.setPhase("paused");
-    } else {
+    } else if (!this.arenaOpen) {
       this.resume();
     }
   };
+
+  /* A stage hands a fight to the 3D arena: the game holds still until the arena reports back. */
+  private requestArena(done: (won: boolean) => void): boolean {
+    if (!this.onArena || this.arenaOpen) return false;
+    const accepted = this.onArena((won) => {
+      this.arenaOpen = false;
+      this.resume();
+      done(won);
+    });
+    if (accepted) {
+      this.arenaOpen = true;
+      this.pause();
+    }
+    return accepted;
+  }
 
   private resume(): void {
     if (this.running) return;
@@ -283,7 +304,7 @@ export class Game {
     // The stage being replaced lets go of anything outside the canvas (the 3D stage's WebGL context).
     (this.stage as Stage | undefined)?.dispose?.();
     this.combo.break();
-    const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo, fx: this.fx };
+    const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo, fx: this.fx, arena: { request: (done) => this.requestArena(done) } };
     const route = id === "village" ? VILLAGE_RUN : id === "city" ? CITY_RUN : FOREST_RUN;
     const stage = new RoadStage(context, this.look, route);
     stage.resize(this.width, this.height);

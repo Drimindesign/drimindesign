@@ -34,16 +34,28 @@ export interface ArenaMeta {
   fight: { centre: [number, number, number]; along: [number, number, number]; half: number; ground: [number, number][] };
   exposure: number;
   lights: ArenaLight[];
+  /** The bonfire's base (drawn live), if the set has one. */
+  fire?: [number, number, number] | null;
 }
 
-export interface ArenaFiles {
+/** One camera position's set: its description and its slices (render, wind mask, depth). */
+export interface ArenaShot {
   meta: ArenaMeta;
   colour: Blob[];
   sway: Blob[];
   depth: Uint16Array[];
+}
+
+/** The camera positions the set was shot from: the wide from the deck, and the low angle on the lawn. */
+export const SHOTS = [{ folder: "", slices: 3 }, { folder: "low/", slices: 2 }] as const;
+
+export interface ArenaFiles {
+  meta: ArenaMeta;
+  shots: ArenaShot[];
   probe: ArrayBuffer;
   hero: ArrayBuffer;
   knight: ArrayBuffer;
+  brute: ArrayBuffer;
 }
 
 export interface ArenaData {
@@ -51,12 +63,16 @@ export interface ArenaData {
 }
 
 /** Every file with its rough size (bytes), for the download screen before anything is fetched. */
-export function arenaManifest(slices = 3): { url: string; bytes: number }[] {
-  const files = [{ url: `${ARENA_BASE}arena.json`, bytes: 5_000 }, { url: `${ARENA_BASE}probe.hdr`, bytes: 420_000 }];
-  for (let i = 0; i < slices; i++) {
-    files.push({ url: `${ARENA_BASE}tile${i}.webp`, bytes: 560_000 }, { url: `${ARENA_BASE}tile${i}.sway.png`, bytes: 40_000 }, { url: `${ARENA_BASE}tile${i}.depth.bin`, bytes: 61_000 });
+export function arenaManifest(): { url: string; bytes: number }[] {
+  const files = [{ url: `${ARENA_BASE}probe.hdr`, bytes: 420_000 }];
+  for (const shot of SHOTS) {
+    const base = `${ARENA_BASE}${shot.folder}`;
+    files.push({ url: `${base}arena.json`, bytes: 5_000 });
+    for (let i = 0; i < shot.slices; i++) {
+      files.push({ url: `${base}tile${i}.webp`, bytes: 560_000 }, { url: `${base}tile${i}.sway.png`, bytes: 40_000 }, { url: `${base}tile${i}.depth.bin`, bytes: 61_000 });
+    }
   }
-  files.push({ url: `${FIGHTERS_BASE}hero.glb`, bytes: 450_000 }, { url: `${FIGHTERS_BASE}knight.glb`, bytes: 370_000 });
+  files.push({ url: `${FIGHTERS_BASE}hero.glb`, bytes: 450_000 }, { url: `${FIGHTERS_BASE}knight.glb`, bytes: 370_000 }, { url: `${FIGHTERS_BASE}brute.glb`, bytes: 340_000 });
   return files;
 }
 
@@ -93,18 +109,26 @@ export async function downloadArena(progress: (share: number) => void): Promise<
     progress(Math.min(0.99, received / expected));
   };
   const get = (url: string): Promise<ArrayBuffer> => fetchWithProgress(url, tick);
-  const meta = JSON.parse(new TextDecoder().decode(await get(`${ARENA_BASE}arena.json`))) as ArenaMeta;
-  const slices = meta.slices.map((_, i) => i);
-  const [colour, sway, depth, probe, hero, knight] = await Promise.all([
-    Promise.all(slices.map(async (i) => new Blob([await get(`${ARENA_BASE}tile${i}.webp`)], { type: "image/webp" }))),
-    Promise.all(slices.map(async (i) => new Blob([await get(`${ARENA_BASE}tile${i}.sway.png`)], { type: "image/png" }))),
-    Promise.all(slices.map(async (i) => new Uint16Array(await get(`${ARENA_BASE}tile${i}.depth.bin`)))),
+  const shot = async (folder: string): Promise<ArenaShot> => {
+    const base = `${ARENA_BASE}${folder}`;
+    const meta = JSON.parse(new TextDecoder().decode(await get(`${base}arena.json`))) as ArenaMeta;
+    const slices = meta.slices.map((_, i) => i);
+    const [colour, sway, depth] = await Promise.all([
+      Promise.all(slices.map(async (i) => new Blob([await get(`${base}tile${i}.webp`)], { type: "image/webp" }))),
+      Promise.all(slices.map(async (i) => new Blob([await get(`${base}tile${i}.sway.png`)], { type: "image/png" }))),
+      Promise.all(slices.map(async (i) => new Uint16Array(await get(`${base}tile${i}.depth.bin`)))),
+    ]);
+    return { meta, colour, sway, depth };
+  };
+  const [shots, probe, hero, knight, brute] = await Promise.all([
+    Promise.all(SHOTS.map((s) => shot(s.folder))),
     get(`${ARENA_BASE}probe.hdr`),
     get(`${FIGHTERS_BASE}hero.glb`),
     get(`${FIGHTERS_BASE}knight.glb`),
+    get(`${FIGHTERS_BASE}brute.glb`),
   ]);
   progress(1);
-  return { meta, colour, sway, depth, probe, hero, knight };
+  return { meta: shots[0].meta, shots, probe, hero, knight, brute };
 }
 
 /** The ground height (m) at a distance along the fight line, from the exported profile. */

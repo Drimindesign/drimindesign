@@ -6,7 +6,7 @@
   .arena {
     position: absolute;
     inset: 0;
-    z-index: 5;
+    z-index: 50;
     background: #050508;
     color: #f3ead8;
   }
@@ -21,7 +21,21 @@
     cursor: grab;
   }
 
-  .arena:not([data-phase="ready"]) .canvas {
+  /* The opening fades up from black, like the first shot of a film. */
+  .arena[data-phase="ready"] .grade::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #000;
+    animation: open 2.2s ease-out forwards;
+  }
+
+  @keyframes open {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  .arena:is([data-phase="offer"], [data-phase="loading"], [data-phase="failed"], [data-phase="unsupported"]) .canvas {
     visibility: hidden;
   }
 
@@ -130,5 +144,136 @@
   .back {
     color: #b9b0a2;
     font-size: 0.9rem;
+  }
+
+  /* HUD: your health top-left, the enemy's top-right, the Master Stroke meter under yours. */
+  .hud {
+    position: absolute;
+    inset: max(0.9rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) auto max(1rem, env(safe-area-inset-left));
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem 2rem;
+    pointer-events: none;
+  }
+
+  .health,
+  .foe,
+  .meter {
+    height: 0.55rem;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.5);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+    overflow: hidden;
+  }
+
+  .health span,
+  .foe span,
+  .meter span {
+    display: block;
+    height: 100%;
+    transform-origin: left;
+    transition: transform 0.18s ease-out;
+  }
+
+  .health span {
+    background: linear-gradient(90deg, #d8462b, #f2a24a);
+  }
+
+  .foe {
+    grid-column: 2;
+    grid-row: 1;
+    transition: opacity 0.3s;
+  }
+
+  .foe[data-on="off"] {
+    opacity: 0;
+  }
+
+  .foe span {
+    transform-origin: right;
+    background: linear-gradient(90deg, #8a8f99, #d6d9df);
+  }
+
+  .meter {
+    grid-column: 1;
+    height: 0.35rem;
+    width: 70%;
+  }
+
+  .meter span {
+    background: #b48eec;
+  }
+
+  .meter[data-full="on"] {
+    box-shadow: 0 0 0.8rem #c9a6ff, inset 0 0 0 1px #e8d9ff;
+  }
+
+  .banner {
+    position: absolute;
+    left: 50%;
+    top: 22%;
+    margin: 0;
+    translate: -50% 0;
+    font-size: clamp(1.4rem, 4vw, 2.6rem);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 0.2rem 1rem rgb(0 0 0 / 0.8);
+    opacity: 0;
+    transition: opacity 0.35s;
+    pointer-events: none;
+  }
+
+  .banner[data-on="on"] {
+    opacity: 1;
+  }
+
+  .keys {
+    font-size: 0.8rem;
+    color: #a99f90;
+  }
+
+  /* Touch pads: phones and tablets only. */
+  .pads {
+    position: absolute;
+    inset: auto max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    display: none;
+    justify-content: space-between;
+    align-items: end;
+    pointer-events: none;
+  }
+
+  @media (pointer: coarse) {
+    .pads {
+      display: flex;
+    }
+  }
+
+  .padGroup {
+    display: flex;
+    gap: 0.6rem;
+    pointer-events: auto;
+  }
+
+  .pad {
+    width: 3.6rem;
+    height: 3.6rem;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    border-radius: 999px;
+    background: rgb(10 8 14 / 0.45);
+    color: #f3ead8;
+    font-size: 1.4rem;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .pad:active {
+    background: rgb(180 142 236 / 0.45);
+  }
+
+  .pad[data-action="attack"] {
+    width: 4.4rem;
+    height: 4.4rem;
   }
 }

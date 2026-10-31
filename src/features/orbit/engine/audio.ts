@@ -262,6 +262,13 @@ export class GameAudio {
     this.thump(220, 120, 0.14, 0.08);
   }
 
+  /** A bonfire's crackle: one dry pop of sap in the wood, with a breath of hiss. `level` 0 … 1. */
+  crackle(level = 0.5): void {
+    const pitch = 1800 + Math.random() * 2600;
+    this.whoosh({ duration: 0.012 + Math.random() * 0.02, from: pitch, to: pitch * 0.7, q: 4, gain: 0.05 * level, attack: 0.001, wet: 0.15 });
+    if (Math.random() < 0.25) this.whoosh({ duration: 0.2, from: 3000, to: 1800, q: 0.5, gain: 0.012 * level, attack: 0.03, wet: 0.1 });
+  }
+
   /** Steel on steel (a blade on a shield or a guard): a bright inharmonic ring and a scrape. `force` 0 … 1. */
   clang(force = 1): void {
     const pitch = 1700 + Math.random() * 500;

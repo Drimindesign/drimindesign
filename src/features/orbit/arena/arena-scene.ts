@@ -1,15 +1,19 @@
 import type * as Three from "three";
 import { groundAt, type ArenaFiles } from "./arena-data";
-import { makeFighter, type ArenaFighter } from "./arena-fighters";
+import { clipLibrary, makeFighter, type ArenaFighter } from "./arena-fighters";
 import { buildAtmosphere, type Atmosphere } from "./atmosphere";
 import { makeCameraRig, type CameraRig } from "./camera-rig";
+import type { CombatInput } from "./combat";
+import { FightDirector, type FightHud, type FightSound, type Shot } from "./fight-director";
+import { buildFire, type Fire } from "./fire";
 import { buildPlate, type Plate } from "./plate";
 
 /*
  * The 3D arena: the photoreal set (plate), the fighters lit to match it, their shadows on the
- * lawn, the night air, and the camera. Lighting is the realism: the set's own light probe gives
- * the fighters the yard's ambient colour, the deck lamp is their warm key light (and casts their
- * shadows), the moon a cool rim from behind; AgX tone mapping matches the render's grade.
+ * lawn, the bonfire, the night air, the camera, and the fight. Lighting is the realism: the set's
+ * own light probe gives the fighters the yard's ambient colour, the bonfire behind them is a hot
+ * flickering rim, the deck lamp a soft warm front fill (and casts their shadows), the moon a cool
+ * edge; AgX tone mapping matches the render's grade.
  */
 
 /** Light levels, tuned by eye against the render: deck lamp (cd), moon (lux), probe ambient, exposure. */
@@ -18,17 +22,33 @@ export const LIGHT = { lamp: 70, lampFalloff: 1.6, moon: 0.9, ambient: 0.75, exp
 const GRASS = 0.03;
 /** Sharpness budget: device-pixel cap, and the deck lamp's shadow map. */
 const QUALITY = { dpr: 1.75, shadowMap: 1024, floor: 1, slowFrame: 22, judgeEvery: 2 } as const;
-/** The look test's stand-off: where on the line (m from the centre) each fighter stands. */
-const STANCE = { hero: -1.15, knight: 1.15 } as const;
+/**
+ * The playable stretch of the fight line: shifted clear of the old tree's trunk (which stands just
+ * in front of the line's left end) so the fight stays on open lawn; the trunk still frames it.
+ */
+const LANE = { shift: 1.1, trim: 1.1 } as const;
+/** Framing for each camera position: the wide from the deck, the low angle on the lawn. */
+const FRAMING: readonly Shot[] = [
+  { near: 26, far: 40, step: 0.35 },
+  { near: 30, far: 42, step: 0.12 },
+];
+/** Every clip the fight plays. */
+const CLIPS = {
+  hero: ["hero_idle", "hero_walk", "hero_run", "hero_jump", "hero_slash1", "hero_slash2", "hero_kick", "hero_spin", "hero_master", "hero_power", "hero_block", "hero_hit1", "hero_hit2", "hero_death", "getup"],
+  foe: ["foe_idle", "foe_walk", "foe_run", "foe_slash1", "foe_slash2", "foe_heavy", "foe_kick", "foe_block", "foe_blockhit", "foe_hit1", "foe_hit2", "foe_death", "getup"],
+} as const;
 
 export class ArenaScene {
   private readonly renderer: Three.WebGLRenderer;
   private readonly scene: Three.Scene;
   private readonly rig: CameraRig;
-  private readonly plate: Plate;
+  private readonly plates: Plate[];
   private readonly atmosphere: Atmosphere;
   private readonly fighters: ArenaFighter[];
-  private readonly heads: Three.Vector3[] = [];
+  private readonly fire: Fire | null;
+  private readonly director: FightDirector;
+  /** The player's controls, written by the page (keys, touch pads), read every frame. */
+  readonly input: CombatInput = { move: 0, jump: false, attack: false, block: false, master: false };
   private readonly disposables: { dispose(): void }[] = [];
   private raf = 0;
   private last = 0;
@@ -42,17 +62,18 @@ export class ArenaScene {
   /** Frames per second over the last second (for the look test's readout). */
   fps = 0;
 
-  private constructor(private readonly THREE: typeof Three, parts: { scene: Three.Scene; rig: CameraRig; plate: Plate; atmosphere: Atmosphere; fighters: ArenaFighter[]; renderer: Three.WebGLRenderer }) {
+  private constructor(private readonly THREE: typeof Three, parts: { scene: Three.Scene; rig: CameraRig; plates: Plate[]; atmosphere: Atmosphere; fighters: ArenaFighter[]; renderer: Three.WebGLRenderer; fire: Fire | null; director: FightDirector }) {
     this.renderer = parts.renderer;
     this.scene = parts.scene;
     this.rig = parts.rig;
-    this.plate = parts.plate;
+    this.plates = parts.plates;
     this.atmosphere = parts.atmosphere;
     this.fighters = parts.fighters;
-    for (let i = 0; i < this.fighters.length; i++) this.heads.push(new THREE.Vector3());
+    this.fire = parts.fire;
+    this.director = parts.director;
   }
 
-  static async create(canvas: HTMLCanvasElement, files: ArenaFiles): Promise<ArenaScene> {
+  static async create(canvas: HTMLCanvasElement, files: ArenaFiles, hud: FightHud, sound: FightSound): Promise<ArenaScene> {
     const [THREE, { GLTFLoader }, { MeshoptDecoder }, { HDRLoader }] = await Promise.all([
       import("three"),
       import("three/addons/loaders/GLTFLoader.js"),
@@ -76,9 +97,15 @@ export class ArenaScene {
       texture.flipY = false;
       return texture;
     };
-    const images = await Promise.all(meta.slices.map(async (_, i) => ({ colour: await decode(files.colour[i]), sway: await decode(files.sway[i]), depth: files.depth[i] })));
-    const plate = buildPlate(THREE, { meta }, images);
-    scene.add(plate.group);
+    const plates = await Promise.all(
+      files.shots.map(async (shot, n) => {
+        const images = await Promise.all(shot.meta.slices.map(async (_, i) => ({ colour: await decode(shot.colour[i]), sway: await decode(shot.sway[i]), depth: shot.depth[i] })));
+        const plate = buildPlate(THREE, { meta: shot.meta }, images);
+        plate.group.visible = n === 0;
+        scene.add(plate.group);
+        return plate;
+      }),
+    );
 
     // Ambient light from the yard itself (the probe rendered at the fight spot).
     const hdr = new HDRLoader().parse(files.probe);
@@ -138,21 +165,21 @@ export class ArenaScene {
     catcher.receiveShadow = true;
     scene.add(catcher);
 
-    // The fighters, facing each other.
+    // The fighters: the hero, two knights, the brute (all loaded now; the waves bring them on).
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
-    const [hero, knight] = await Promise.all([
-      makeFighter(THREE, loader, "hero", files.hero, ["hero_idle"]),
-      makeFighter(THREE, loader, "knight", files.knight, ["foe_idle"]),
+    const clips = clipLibrary(loader);
+    const bodies = await Promise.all([
+      makeFighter(THREE, loader, clips, "hero", files.hero, CLIPS.hero),
+      makeFighter(THREE, loader, clips, "knight", files.knight, CLIPS.foe),
+      makeFighter(THREE, loader, clips, "knight", files.knight, CLIPS.foe),
+      makeFighter(THREE, loader, clips, "brute", files.brute, CLIPS.foe),
     ]);
     const face = Math.atan2(along.x, along.z);
-    hero.root.position.copy(at(STANCE.hero));
-    hero.root.rotation.y = face;
-    knight.root.position.copy(at(STANCE.knight));
-    knight.root.rotation.y = face + Math.PI;
-    hero.play("hero_idle", 0);
-    knight.play("foe_idle", 0);
-    scene.add(hero.root, knight.root);
+    for (const b of bodies) {
+      b.play(b.kind === "hero" ? "hero_idle" : "foe_idle", { fade: 0 });
+      scene.add(b.root);
+    }
     // Contact shadows: where a body meets the grass the light can't reach, whatever the lamp does.
     const contact = new THREE.ShaderMaterial({
       vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
@@ -165,7 +192,7 @@ export class ArenaScene {
     });
     const blob = new THREE.PlaneGeometry(1.1, 0.75);
     blob.rotateX(-Math.PI / 2);
-    for (const f of [hero, knight]) {
+    for (const f of bodies) {
       const pad = new THREE.Mesh(blob, contact);
       pad.position.y = GRASS - 0.01;
       pad.renderOrder = 1;
@@ -175,9 +202,22 @@ export class ArenaScene {
     const atmosphere = buildAtmosphere(THREE, at(0), along, lamp, canvas.height * 0.9);
     scene.add(atmosphere.group);
 
+    // The bonfire behind the fight, with the moon's shafts through the canopy.
+    const fire = meta.fire ? buildFire(THREE, new THREE.Vector3().fromArray(meta.fire), moon ? new THREE.Vector3().fromArray(moon.direction) : null, canvas.height * 0.9) : null;
+    if (fire) scene.add(fire.group);
+
     const target = at(0).setY(groundAt(meta, 0) + 1.15);
     const rig = makeCameraRig(THREE, new THREE.Vector3().fromArray(meta.eye), target);
-    const arena = new ArenaScene(THREE, { scene, rig, plate, atmosphere, fighters: [hero, knight], renderer });
+    const lane = (s: number): Three.Vector3 => at(s + LANE.shift);
+    // A cut swaps the set to the one shot from the new eye point, and moves the camera there.
+    const cutTo = (index: number): void => {
+      plates.forEach((p, n) => (p.group.visible = n === index));
+      rig.cut(new THREE.Vector3().fromArray(files.shots[index].meta.eye), FRAMING[index].far, FRAMING[index].step);
+    };
+    const firePoint = meta.fire ? new THREE.Vector3().fromArray(meta.fire) : null;
+    const director = new FightDirector(THREE, lane, face, meta.fight.half - LANE.trim, bodies, rig, hud, sound, FRAMING.slice(0, files.shots.length), cutTo, firePoint);
+    scene.add(director.sparks);
+    const arena = new ArenaScene(THREE, { scene, rig, plates, atmosphere, fighters: bodies, renderer, fire, director });
     arena.disposables.push(environment, strip, catcher.material as Three.Material, contact, blob);
     // Upload everything now (shaders, textures, meshes) so the first frames don't hitch.
     await renderer.compileAsync(scene, rig.camera);
@@ -220,13 +260,13 @@ export class ArenaScene {
 
   private step(dt: number): void {
     this.time += dt;
-    // Each fighter's eyes on the other's face.
-    this.fighters.forEach((_, i) => {
-      const other = this.fighters[1 - i];
-      this.heads[i].copy(other.root.position).setY(other.root.position.y + 1.6);
-    });
-    this.fighters.forEach((f, i) => f.update(dt, this.heads[i]));
-    this.plate.update(this.time);
+    this.director.update(dt, this.input);
+    // One-shot presses are consumed each frame; held ones (move, block) stay until released.
+    this.input.attack = false;
+    this.input.jump = false;
+    this.input.master = false;
+    this.fire?.update(this.time);
+    for (const p of this.plates) if (p.group.visible) p.update(this.time);
     this.rig.update(dt, this.time);
     this.atmosphere.update(this.time, this.rig.camera);
     this.renderer.render(this.scene, this.rig.camera);
@@ -257,8 +297,10 @@ export class ArenaScene {
 
   dispose(): void {
     this.stop();
-    this.plate.dispose();
+    for (const p of this.plates) p.dispose();
     this.atmosphere.dispose();
+    this.fire?.dispose();
+    this.director.dispose();
     for (const f of this.fighters) f.dispose();
     for (const d of this.disposables) d.dispose();
     this.renderer.dispose();

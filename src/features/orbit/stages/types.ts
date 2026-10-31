@@ -26,6 +26,11 @@ export interface StageContext {
   combo: Combo;
   /** Camera and time effects for big moments. */
   fx: StageFx;
+  /**
+   * The 3D arena: asks to fight a barricade's guards there instead. Returns false when it can't
+   * (no capable device, or no page to host it); otherwise the game pauses until `done(won)`.
+   */
+  arena?: { request(done: (won: boolean) => void): boolean };
 }
 
 export interface StageFx {

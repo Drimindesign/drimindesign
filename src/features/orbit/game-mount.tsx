@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { retryImport } from "@/lib/utils/retry-import";
+import { canRunArena } from "./arena/capability";
 import type { Command, Game } from "./engine/game";
 import type { Action } from "./engine/input";
 import styles from "./orbit.module.css";
@@ -64,6 +65,8 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
   const [shared, setShared] = useState(false);
   // The arena look test replaces the game on this page (read on the client only).
   const arena = useSyncExternalStore(noSubscription, arenaRequested, () => false);
+  // A barricade fight handed to the 3D arena: how to report back to the game when it's over.
+  const [arenaFight, setArenaFight] = useState<{ finish: (won: boolean) => void } | null>(null);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -80,6 +83,11 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         if (cancelled) return;
         const game = new Game(canvas, { root, fields: (name) => root.querySelectorAll<HTMLElement>(`[data-hud="${name}"]`) });
         gameRef.current = game;
+        game.onArena = (finish) => {
+          if (!canRunArena()) return false;
+          setArenaFight({ finish });
+          return true;
+        };
         // QA: /play?debug exposes the running game in the console.
         if (new URLSearchParams(window.location.search).has("debug")) (window as unknown as { orbit?: Game }).orbit = game;
         // /play?gpu: the same game with a WebGL2 glow and grade over the 2D frame.
@@ -155,6 +163,14 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         <canvas ref={canvasRef} className={styles.canvas} aria-hidden="true" />
       </div>
       {arena ? <ArenaMount /> : null}
+      {arenaFight ? (
+        <ArenaMount
+          onExit={(result) => {
+            setArenaFight(null);
+            arenaFight.finish(result === "win");
+          }}
+        />
+      ) : null}
 
       {/* ---- HUD during play ---- */}
       <div className={styles.top}>

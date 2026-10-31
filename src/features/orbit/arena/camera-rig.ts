@@ -8,7 +8,7 @@ import type * as Three from "three";
  */
 
 /** Framing: field of view (degrees), how far the operator may step from the eye point (m), handheld sway (degrees). */
-export const RIG = { fov: 34, closest: 16, widest: 52, step: 0.35, handheld: 0.18, look: [26, 9], settle: 5 } as const;
+export const RIG = { fov: 34, closest: 14, widest: 62, step: 0.35, handheld: 0.18, look: [26, 9], settle: 5 } as const;
 
 export interface CameraRig {
   camera: Three.PerspectiveCamera;
@@ -19,13 +19,17 @@ export interface CameraRig {
   zoom(fov: number): void;
   /** A sudden push-in (a big hit): extra zoom (degrees) that springs back. */
   punch(degrees: number): void;
+  /** A film cut: the operator is instantly at another eye point, framing the same target. */
+  cut(eye: Three.Vector3, fov: number, step: number): void;
   resize(width: number, height: number): void;
   update(dt: number, time: number): void;
 }
 
 export function makeCameraRig(THREE: typeof Three, eye: Three.Vector3, target: Three.Vector3): CameraRig {
   const camera = new THREE.PerspectiveCamera(RIG.fov, 16 / 9, 0.1, 1200);
+  eye = eye.clone();
   camera.position.copy(eye);
+  let step: number = RIG.step;
   let yaw = 0;
   let pitch = 0;
   let fov: number = RIG.fov;
@@ -56,6 +60,14 @@ export function makeCameraRig(THREE: typeof Three, eye: Three.Vector3, target: T
     punch(degrees) {
       kickVelocity -= degrees * 9;
     },
+    cut(next, f, s) {
+      eye.copy(next);
+      step = s;
+      fov = fovNow = THREE.MathUtils.clamp(f, RIG.closest, RIG.widest);
+      fovVelocity = 0;
+      yaw = pitch = 0;
+      aim.copy(target);
+    },
     resize(width, height) {
       camera.aspect = width / Math.max(1, height);
       camera.updateProjectionMatrix();
@@ -67,7 +79,7 @@ export function makeCameraRig(THREE: typeof Three, eye: Three.Vector3, target: T
       camera.fov = fovNow + kick;
       camera.updateProjectionMatrix();
       // The operator shifts their weight: a slow step side to side and a little forward and back.
-      offset.set(Math.sin(time * 0.071) * RIG.step, Math.sin(time * 0.11) * 0.05, Math.sin(time * 0.053 + 1) * RIG.step * 0.5);
+      offset.set(Math.sin(time * 0.071) * step, Math.sin(time * 0.11) * 0.05, Math.sin(time * 0.053 + 1) * step * 0.5);
       camera.position.copy(eye).add(offset);
       camera.lookAt(aim);
       // Handheld: small, slow, layered rotations (never a jitter).

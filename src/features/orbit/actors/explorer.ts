@@ -317,7 +317,7 @@ export class Explorer {
       this.combo = this.sinceSwing < COMBO_WINDOW ? (this.combo + 1) % BLOWS.length : 0;
       this.cooldown = SWORD.cooldown;
       this.struck.clear();
-      this.audio.swing();
+      this.audio.swing(this.combo === BLOWS.length - 1);
     }
     if (this.hitStop > 0) {
       this.hitStop = Math.max(0, this.hitStop - dt);

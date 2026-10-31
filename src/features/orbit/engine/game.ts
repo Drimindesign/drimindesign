@@ -105,7 +105,7 @@ export class Game {
     },
     buzz: (ms) => {
       // Phones only: the browser refuses vibration from keyboard play, and a mouse has nothing to shake.
-      if (!this.still && this.touch) navigator.vibrate?.(ms);
+      if (!this.still && this.touch && navigator.userActivation?.hasBeenActive) navigator.vibrate?.(ms);
     },
     focus: (zoom) => {
       if (!this.still) this.focusZoom = Math.max(this.focusZoom, zoom);
@@ -267,7 +267,7 @@ export class Game {
     if (this.frame % 3 === 0 || this.phase !== "play") this.writeHud();
     const hud = this.stage.hud();
     const playing = this.phase === "play";
-    this.audio.update({ driving: playing && hud.speed !== null, speed: (hud.speed ?? 0) / 3.6, throttle: input.move, thrust: input.jumpHeld && hud.speed !== null && playing ? 1 : 0 });
+    this.audio.update({ driving: playing && hud.speed !== null, speed: (hud.speed ?? 0) / 3.6, throttle: input.move, thrust: input.jumpHeld && hud.speed !== null && playing ? 1 : 0, combat: playing && hud.combat === true });
     this.raf = requestAnimationFrame(this.tick);
   };
 
@@ -424,6 +424,10 @@ export class Game {
     const hud = this.stage.hud();
     const root = this.hud.root;
     this.text("prompt", this.phase === "play" ? (this.touch ? touchPrompt(hud.prompt) : hud.prompt) : "");
+    // The subtitle: the speaker's name and their line, while it's being said.
+    this.set("line", hud.line ? "on" : "off");
+    this.text("line-who", hud.line?.who ?? "");
+    this.text("line-text", hud.line?.text ?? "");
     this.text("time", formatTime(this.runTime));
     this.text("score", this.score.total.toLocaleString("en"));
     this.set("vehicle", hud.speed === null ? "none" : hud.altitude !== null ? "flight" : "car");

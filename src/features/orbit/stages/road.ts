@@ -46,7 +46,7 @@ export interface RoadConfig {
   /** Things to smash on the road: crate stacks, market stalls, fences (x m, kind). */
   props?: readonly (readonly [number, PropKind])[];
   /** Barricades across the road (m): get out, fight the raiders guarding it, and cut it down. */
-  stops?: readonly { x: number; fighters: readonly (readonly [number, BeastKind])[] }[];
+  stops?: readonly { x: number; fighters: readonly (readonly [number, BeastKind])[]; dialogue?: readonly Line[] }[];
   traffic: readonly TrafficSpec[];
   /** Beasts along the road: where each waits (m) and what it is. */
   beasts: readonly (readonly [number, BeastKind])[];
@@ -61,6 +61,17 @@ const RING_HIT = 1.4;
 const HEIGHT = { car: 1.45, truck: 3.1, rickshaw: 1.75 } as const;
 const LENGTH = { car: 4.4, truck: 7, rickshaw: 2.8 } as const;
 export type PropKind = "crates" | "stall" | "fence";
+
+/** A spoken line: who says it, the recording's name (under /audio/voice/), the words, and when (s after stepping out). */
+export interface Line {
+  who: string;
+  clip: string;
+  text: string;
+  at: number;
+}
+/** How long a line stays on screen (s), and the hero's line once a road is cleared. */
+const LINE_TIME = 2.6;
+const CLEARED: Line = { who: "Kachujin", clip: "hero_clear", text: "Road's clear. Let's move.", at: 0 };
 
 /**
  * Breakables: mass (kg, for the momentum the car loses), the speed (m/s) below which the car just
@@ -109,6 +120,10 @@ export class RoadStage implements Stage {
   private readonly fighters = new Fighters3D();
   private readonly debris = new Debris();
   private readonly props: { x: number; kind: PropKind; broken: boolean }[];
+  /** The scene being spoken: its lines, how long since it began (s), and how many have played. */
+  private scene: { lines: readonly Line[]; t: number; next: number } | null = null;
+  private line: { who: string; text: string; left: number } | null = null;
+  private wasFoot = false;
   private readonly sprites = { cell: CELL(), pad: LAUNCH_PAD() };
   private reached: number;
   private respawnIn = 0;
@@ -196,6 +211,7 @@ export class RoadStage implements Stage {
     this.context.combo.update(dt, v.grounded);
     this.stepStops();
     this.stepProps();
+    this.stepDialogue(dt);
     this.debris.update(dt, this.terrain, this.gravity);
     if (this.crew.mode === "car") this.debris.shove(v.x, v.y, v.vx);
     scoreCarEvents(car.drainEvents(), car, this.context);
@@ -307,6 +323,37 @@ export class RoadStage implements Stage {
   }
 
   /*
+   * Dialogue: stepping out at a barricade starts its scene (a taunt, the hero's answer), each line
+   * played and subtitled in turn; cutting the barricade down gets the hero's closing line.
+   */
+  private stepDialogue(dt: number): void {
+    const foot = this.crew.mode === "foot";
+    if (foot && !this.wasFoot) {
+      const stop = this.stopAhead(this.crew.explorer.body.x, STOP_ZONE);
+      const lines = this.config.stops?.find((s) => s.x === stop?.x)?.dialogue;
+      if (lines) this.scene = { lines, t: 0, next: 0 };
+    }
+    this.wasFoot = foot;
+    if (this.line) {
+      this.line.left -= dt;
+      if (this.line.left <= 0) this.line = null;
+    }
+    if (!this.scene) return;
+    this.scene.t += dt;
+    const next = this.scene.lines[this.scene.next];
+    if (next && this.scene.t >= next.at) {
+      this.speak(next);
+      this.scene.next++;
+    }
+    if (this.scene.next >= this.scene.lines.length) this.scene = null;
+  }
+
+  private speak(line: Line): void {
+    this.context.audio.say(line.clip);
+    this.line = { who: line.who, text: line.text, left: LINE_TIME };
+  }
+
+  /*
    * Breakables. The car hitting one faster than it can take shatters it into pieces thrown with
    * the car's speed, and loses momentum by the mass it hit (an inelastic collision: v' = v·M/(M+m));
    * slower than that, a heavy one just stops the car. Flying over clears it. On foot, the sword
@@ -350,7 +397,7 @@ export class RoadStage implements Stage {
     prop.broken = true;
     this.debris.burst(prop.x, ground + spec.height / 3, vx, vy, Math.round(10 + spec.mass / 12), 2.5 + Math.abs(vx) * 0.25, spec.colors, prop.kind === "stall" ? 0.5 : 0.35);
     this.context.particles.dust(prop.x, ground, vx * 0.5, 16, 1.2);
-    this.context.audio.thwack();
+    this.context.audio.crack();
     this.context.fx.punch(prop.kind === "stall" ? 0.07 : 0.04);
     this.context.combo.add(1);
     this.context.score.add(spec.points * this.context.combo.multiplier, prop.kind === "stall" ? "Stall smashed" : "Smashed", prop.x, ground + spec.height + 0.5);
@@ -384,11 +431,12 @@ export class RoadStage implements Stage {
         e.struck.add(stop);
         e.recoil();
         stop.health--;
-        this.context.audio.thwack();
+        this.context.audio.crack();
         this.context.particles.dust(front, ground + 1.2, -3, 18, 1.4);
         this.context.fx.punch(0.05);
         if (stop.health <= 0) {
           stop.broken = true;
+          this.speak(CLEARED);
           this.debris.burst(stop.x, ground + 1.5, e.body.facing * 5, 3, 26, 5, ["#5a4232", "#6b4f3a", "#7a5c43", "#b5452a"], 0.5);
           this.context.audio.land(1);
           this.context.particles.dust(stop.x, ground + 1, 4, 60, 2.2);
@@ -639,6 +687,9 @@ export class RoadStage implements Stage {
       fuel: car.fuelSeconds,
       landIn: this.liftoff >= 0 || foot ? null : car.landIn,
       actions: foot || stop !== undefined,
+      line: this.line,
+      // A fight is on while anything hostile is up and close, to the hero on foot or the truck.
+      combat: this.boars.some((b) => b.active && (b.fighter || b.kind === "wolf" || b.kind === "bull") && Math.abs(b.x - (foot ? this.crew.explorer.body.x : v.x)) < 14),
       damage: car.damage,
       boosters: { have: v.boosters, max: CAR.boosters },
     };

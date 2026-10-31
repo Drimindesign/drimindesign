@@ -106,6 +106,8 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
         }
         e.recoil();
         audio.thwack();
+        // Steel on armour as well as the body under it (the knights wear plate).
+        if (beast.kind === "raider") audio.clang(0.3);
         context.fx.buzz(blow.heavy ? 45 : 20);
         const off = beast.hit(b.facing, blow.power, blow.joint, blow.heavy);
         score.add(off ? POINTS.swordHit * 2 : POINTS.swordHit, off ? "Driven off" : "Slash", beast.x, beast.y + 1.6);

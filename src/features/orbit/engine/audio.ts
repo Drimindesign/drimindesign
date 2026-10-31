@@ -18,6 +18,8 @@ export interface AudioState {
   throttle: number;
   /** Thruster output (0 … 1). */
   thrust: number;
+  /** A fight is on (the combat music takes over). */
+  combat: boolean;
 }
 
 const MASTER = 0.65;
@@ -25,6 +27,18 @@ const MASTER = 0.65;
 const MUSIC = 0.13;
 /** "Skylines" by Alex-Productions (chosic.com), re-encoded at 96 kb/s; streamed, not decoded whole. */
 const MUSIC_URL = "/audio/skylines.mp3";
+/** The combat track (Pixabay licence), and how loud it plays over a fight. */
+const FIGHT_URL = "/audio/fight.mp3";
+const FIGHT = 0.16;
+/** After the last blow the fight music holds this long (s) before the driving music returns. */
+const FIGHT_HOLD = 4;
+/** Recorded sounds (Pixabay licence), decoded once: the sword's slice. */
+const SLICE_URL = "/audio/sword-slice.mp3";
+/**
+ * The electric motor, matched to a recording of the truck accelerating: two soft tones, the low
+ * one from ~450 Hz and its octave, both rising gently with speed, heard only under acceleration.
+ */
+const MOTOR = { base: 450, perMetrePerSecond: 7, level: 0.02 } as const;
 /** A major pentatonic on C (Hz): pickups, chimes and the finish all draw from it. */
 const SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51] as const;
 
@@ -43,6 +57,12 @@ export class GameAudio {
   private thrust: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private muted = false;
   private music: { element: HTMLAudioElement; gain: GainNode } | null = null;
+  private fight: { element: HTMLAudioElement; gain: GainNode } | null = null;
+  private fightLeft = 0;
+  private slice: AudioBuffer | null = null;
+  private motor: { low: OscillatorNode; high: OscillatorNode; gain: GainNode } | null = null;
+  /** Spoken lines, decoded on first use. */
+  private readonly voices = new Map<string, Promise<AudioBuffer | null>>();
   private lastPickup = 0;
   private pickupStep = 0;
 
@@ -105,11 +125,60 @@ export class GameAudio {
 
     this.buildThrust(ctx);
     this.buildMusic(ctx);
+    this.buildMotor(ctx);
+    void this.decode(SLICE_URL).then((buffer) => {
+      this.slice = buffer;
+    });
   }
+
+  /** Fetches and decodes a short recorded sound (null if it fails). */
+  private async decode(url: string): Promise<AudioBuffer | null> {
+    if (!this.ctx) return null;
+    try {
+      const response = await fetch(url);
+      return await this.ctx.decodeAudioData(await response.arrayBuffer());
+    } catch {
+      return null;
+    }
+  }
+
+  /** Plays a decoded buffer through the mix, at a rate and level. */
+  private sample(buffer: AudioBuffer, rate: number, level: number, wet = 0.2): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    const gain = ctx.createGain();
+    gain.gain.value = level;
+    source.connect(gain);
+    this.send(gain, wet);
+    source.start();
+  }
+
+  /** A spoken line (a small recorded file under /audio/voice/), with the music dipped under it. */
+  say(line: string): void {
+    if (!this.ctx) return;
+    let buffer = this.voices.get(line);
+    if (!buffer) {
+      buffer = this.decode(`/audio/voice/${line}.mp3`);
+      this.voices.set(line, buffer);
+    }
+    void buffer.then((b) => {
+      if (!b || !this.ctx) return;
+      this.sample(b, 1, 0.9, 0.12);
+      const now = this.ctx.currentTime;
+      for (const m of [this.music, this.fight]) m?.gain.gain.setTargetAtTime(0.03, now, 0.08);
+      this.duckUntil = now + b.duration;
+    });
+  }
+
+  private duckUntil = 0;
 
   /** The tab is hidden or the game stopped: silence everything, music included. */
   suspend(): void {
     this.music?.element.pause();
+    this.fight?.element.pause();
     void this.ctx?.suspend();
   }
 
@@ -117,6 +186,7 @@ export class GameAudio {
     if (!this.ctx) return;
     void this.ctx.resume();
     void this.music?.element.play().catch(() => undefined);
+    if (this.fightLeft > 0) void this.fight?.element.play().catch(() => undefined);
   }
 
   setMuted(muted: boolean): void {
@@ -132,7 +202,22 @@ export class GameAudio {
     // Thrusters: a soft breath of air that swells in and fades out slowly.
     this.thrust.gain.gain.setTargetAtTime(state.thrust * 0.11, now, state.thrust > 0 ? 0.12 : 0.25);
     this.thrust.filter.frequency.setTargetAtTime(700 + state.thrust * 500, now, 0.15);
-    this.music?.gain.gain.setTargetAtTime(MUSIC * (1 - state.thrust * 0.35), now, 0.4);
+    // The motor whine: only while accelerating, rising with speed (matched to the real truck).
+    if (this.motor) {
+      const pitch = MOTOR.base + Math.abs(state.speed) * MOTOR.perMetrePerSecond;
+      this.motor.low.frequency.setTargetAtTime(pitch, now, 0.2);
+      this.motor.high.frequency.setTargetAtTime(pitch * 2.03, now, 0.2);
+      const pulling = state.driving && state.throttle > 0 ? state.throttle * (0.4 + Math.min(1, Math.abs(state.speed) / 25) * 0.6) : 0;
+      this.motor.gain.gain.setTargetAtTime(pulling * MOTOR.level, now, pulling > 0 ? 0.3 : 0.5);
+    }
+    // Music: the fight track takes over while blows are flying, then hands back; voices dip both.
+    if (state.combat) this.fightLeft = FIGHT_HOLD;
+    else this.fightLeft = Math.max(0, this.fightLeft - 1 / 60);
+    if (this.fightLeft > 0 && !this.fight) this.buildFight(ctx);
+    if (now < this.duckUntil) return;
+    const fighting = this.fightLeft > 0;
+    this.music?.gain.gain.setTargetAtTime(fighting ? 0 : MUSIC * (1 - state.thrust * 0.35), now, fighting ? 0.5 : 1.2);
+    this.fight?.gain.gain.setTargetAtTime(fighting ? FIGHT : 0, now, fighting ? 0.5 : 1.5);
   }
 
   footstep(): void {
@@ -159,15 +244,22 @@ export class GameAudio {
     this.whoosh({ duration: 0.5, from: 600, to: 1300, q: 0.5, gain: 0.07, attack: 0.06, wet: 0.5 });
   }
 
-  /** The staff cutting the air: a quick rising whoosh. */
-  swing(): void {
-    this.whoosh({ duration: 0.18, from: 500, to: 2000, q: 1, gain: 0.08 });
+  /** The blade cutting the air: the recorded slice, pitched a little each time; heavier blows lower and louder. */
+  swing(heavy = false): void {
+    if (this.slice) this.sample(this.slice, (heavy ? 0.85 : 1) * (0.94 + Math.random() * 0.14), heavy ? 0.55 : 0.38);
+    else this.whoosh({ duration: 0.18, from: 500, to: 2000, q: 1, gain: 0.08 });
   }
 
-  /** The staff landing on something solid: a dull knock. */
+  /** A blow landing on a body: a dull, heavy thud with a slap of cloth. */
   thwack(): void {
-    this.thump(160, 90, 0.2, 0.12);
-    this.whoosh({ duration: 0.08, from: 800, to: 500, q: 1.2, gain: 0.08, attack: 0.004 });
+    this.thump(150, 70, 0.26, 0.16);
+    this.whoosh({ duration: 0.09, from: 900, to: 400, q: 1.1, gain: 0.09, attack: 0.003 });
+  }
+
+  /** A blade biting into wood (crates, barricades): a dry crack and splinters. */
+  crack(): void {
+    this.whoosh({ duration: 0.06, from: 2600, to: 1400, q: 3, gain: 0.12, attack: 0.001 });
+    this.thump(220, 120, 0.14, 0.08);
   }
 
   /** Steel on steel (a blade on a shield or a guard): a bright inharmonic ring and a scrape. `force` 0 … 1. */
@@ -318,6 +410,41 @@ export class GameAudio {
     this.send(gain, 0.3);
     source.start();
     this.thrust = { gain, filter };
+  }
+
+  /* The fight track, started the first time a fight breaks out (streamed, looping, silent until faded in). */
+  private buildFight(ctx: AudioContext): void {
+    if (!this.master) return;
+    const element = new Audio(FIGHT_URL);
+    element.loop = true;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    ctx.createMediaElementSource(element).connect(gain).connect(this.master);
+    void element.play().catch(() => undefined);
+    this.fight = { element, gain };
+  }
+
+  /* The motor: two soft sine tones an octave apart through a gentle band, silent until the truck pulls. */
+  private buildMotor(ctx: AudioContext): void {
+    const low = ctx.createOscillator();
+    const high = ctx.createOscillator();
+    low.frequency.value = MOTOR.base;
+    high.frequency.value = MOTOR.base * 2.03;
+    const band = ctx.createBiquadFilter();
+    band.type = "bandpass";
+    band.frequency.value = 900;
+    band.Q.value = 0.5;
+    const highLevel = ctx.createGain();
+    highLevel.gain.value = 0.6;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    low.connect(band);
+    high.connect(highLevel).connect(band);
+    band.connect(gain);
+    this.send(gain, 0.1);
+    low.start();
+    high.start();
+    this.motor = { low, high, gain };
   }
 
   /*

@@ -45,7 +45,16 @@ export const CITY_RUN: RoadConfig = {
     { x: 800, speed: 10, until: 922, kind: "truck", color: "#5a4a8f" },
     { x: 955, speed: 12, until: 982, kind: "car", color: "#2b2d33" },
   ],
-  stops: [{ x: 612, fighters: [[596, "raider"], [603, "brute"]] }],
+  stops: [
+    {
+      x: 612,
+      fighters: [[596, "raider"], [603, "brute"]],
+      dialogue: [
+        { who: "Raider", clip: "raider_gate", text: "Nobody gets past the gate tonight.", at: 0.3 },
+        { who: "Kachujin", clip: "hero_watch", text: "Watch me.", at: 2.6 },
+      ],
+    },
+  ],
   props: [[80, "stall"], [200, "crates"], [300, "stall"], [390, "crates"], [520, "stall"], [670, "crates"], [830, "stall"], [905, "crates"]],
   beasts: [],
 };
@@ -81,8 +90,22 @@ export const FOREST_RUN: RoadConfig = {
   traffic: [],
   // Packs: boars charge in a line, wolves spring at the car; ram them fast, jump them or blast them.
   stops: [
-    { x: 362, fighters: [[348, "raider"], [354, "raider"]] },
-    { x: 880, fighters: [[862, "brute"], [868, "raider"], [873, "raider"]] },
+    {
+      x: 362,
+      fighters: [[348, "raider"], [354, "raider"]],
+      dialogue: [
+        { who: "Raider", clip: "raider_lost", text: "You're a long way from the city, girl.", at: 0.3 },
+        { who: "Kachujin", clip: "hero_far", text: "And you're a long way from walking away.", at: 2.8 },
+      ],
+    },
+    {
+      x: 880,
+      fighters: [[862, "brute"], [868, "raider"], [873, "raider"]],
+      dialogue: [
+        { who: "Brute", clip: "brute_snap", text: "I'll snap you like a twig.", at: 0.3 },
+        { who: "Kachujin", clip: "hero_big", text: "Big talk. Let's see it.", at: 2.6 },
+      ],
+    },
   ],
   props: [[100, "fence"], [175, "crates"], [290, "fence"], [505, "crates"], [570, "fence"], [700, "crates"], [850, "fence"]],
   beasts: [
@@ -141,7 +164,16 @@ export const VILLAGE_RUN: RoadConfig = {
     { x: 815, speed: 9, until: 872, kind: "rickshaw", color: "#24302a" },
     { x: 1000, speed: 7, until: 1052, kind: "truck", color: "#b5452a" },
   ],
-  stops: [{ x: 472, fighters: [[456, "raider"], [463, "raider"]] }],
+  stops: [
+    {
+      x: 472,
+      fighters: [[456, "raider"], [463, "raider"]],
+      dialogue: [
+        { who: "Raider", clip: "raider_road", text: "Turn back. This road belongs to us.", at: 0.3 },
+        { who: "Kachujin", clip: "hero_take", text: "Then I'll take it from you.", at: 2.8 },
+      ],
+    },
+  ],
   props: [[45, "crates"], [190, "fence"], [255, "stall"], [300, "crates"], [560, "stall"], [680, "crates"], [750, "fence"], [820, "stall"], [960, "crates"], [1040, "fence"]],
   beasts: [
     [395, "dog"], [399, "dog"], [655, "bull"],

@@ -54,6 +54,10 @@ export interface View {
 
 export interface StageHud {
   prompt: string;
+  /** A spoken line on screen: who's talking and what they say (a GTA-style subtitle). */
+  line?: { who: string; text: string } | null;
+  /** A fight is on: the combat music plays. */
+  combat?: boolean;
   /** km/h, or null when not driving. */
   speed: number | null;
   /** Thruster tank 0 … 1, or null when not in a vehicle. */

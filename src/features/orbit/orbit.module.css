@@ -173,6 +173,32 @@
     pointer-events: none;
   }
 
+  /* Dialogue: a GTA-style subtitle, the speaker in the brand violet, centred low over the scene. */
+  .subtitle {
+    position: absolute;
+    left: 50%;
+    bottom: clamp(7.5rem, 30svh, 11rem);
+    display: none;
+    max-width: min(36rem, 90%);
+    translate: -50% 0;
+    text-align: center;
+    font-size: var(--text-body);
+    font-weight: 600;
+    line-height: 1.35;
+    text-shadow: 0 2px 0 rgb(10 8 14 / 0.95), 0 0 8px rgb(10 8 14 / 0.8);
+    pointer-events: none;
+  }
+
+  .root[data-line="on"] .subtitle {
+    display: block;
+  }
+
+  .speaker {
+    color: #b48eec;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
   /* Speed with the thruster tank (car), or speed with altitude (launch). */
   .gauges {
     position: absolute;

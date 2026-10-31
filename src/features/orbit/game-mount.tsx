@@ -177,6 +177,9 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       </div>
 
       <p data-hud="prompt" className={styles.prompt} aria-live="polite" />
+      <p className={styles.subtitle} aria-live="polite">
+        <span data-hud="line-who" className={styles.speaker} /> <span data-hud="line-text" />
+      </p>
 
       <div className={styles.gauges} aria-hidden="true">
         <span>

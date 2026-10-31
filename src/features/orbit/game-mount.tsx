@@ -1,8 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { retryImport } from "@/lib/utils/retry-import";
 import type { Command, Game } from "./engine/game";
 import type { Action } from "./engine/input";
@@ -25,6 +26,11 @@ const PADS: readonly { action: Action; label: string; glyph: string }[] = [
   { action: "interact", label: "Get in or out, plant the flag", glyph: "E" },
   { action: "jump", label: "Thrusters: tap to hop, tap again in the air to boost, hold to hover", glyph: "▲" },
 ];
+
+/* The 3D arena (/play?arena): its own chunk, loaded only when asked for. */
+const ArenaMount = dynamic(() => import("./arena/arena-mount").then((m) => m.ArenaMount), { ssr: false });
+const noSubscription = (): (() => void) => () => undefined;
+const arenaRequested = (): boolean => new URLSearchParams(window.location.search).has("arena");
 
 /* Phones: full screen and locked to landscape where the browser allows it. */
 async function playFullscreen(): Promise<void> {
@@ -56,12 +62,15 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
   const [muted, setMuted] = useState(false);
   const [failed, setFailed] = useState(false);
   const [shared, setShared] = useState(false);
+  // The arena look test replaces the game on this page (read on the client only).
+  const arena = useSyncExternalStore(noSubscription, arenaRequested, () => false);
 
   useEffect(() => {
     const root = rootRef.current;
     const stage = stageRef.current;
     const canvas = canvasRef.current;
     if (!root || !stage || !canvas) return;
+    if (arenaRequested()) return;
     let cancelled = false;
     let observer: ResizeObserver | null = null;
     let glow: { render(): void; dispose(): void } | null = null;
@@ -145,6 +154,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       <div ref={stageRef} className={styles.stage}>
         <canvas ref={canvasRef} className={styles.canvas} aria-hidden="true" />
       </div>
+      {arena ? <ArenaMount /> : null}
 
       {/* ---- HUD during play ---- */}
       <div className={styles.top}>

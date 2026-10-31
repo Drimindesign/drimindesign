@@ -493,11 +493,43 @@ export class Fighters3D {
         return actor;
       };
       const hero = make("hero");
+      // Warm-up: one of every figure built now, its shaders compiled in the background (solid and
+      // fading) and its textures uploaded, so the first knight, brute or animal to come on screen
+      // doesn't freeze a frame. They wait hidden and are handed out first.
+      const spare = new Map<string, Actor[]>();
+      const warm: [string, Actor][] = [...(["raider", "brute"] as const).map((k): [string, Actor] => [k, make(k)]), ...animalKinds.map((k): [string, Actor] => [k, makeAnimal(k)])];
+      const fading = (on: boolean): void => {
+        for (const [, actor] of [["hero", hero] as const, ...warm]) for (const m of actor.materials) m.transparent = on;
+      };
+      await renderer.compileAsync(scene, camera);
+      fading(true);
+      await renderer.compileAsync(scene, camera);
+      fading(false);
+      scene.traverse((node) => {
+        const map = ((node as Three.Mesh).material as Three.MeshToonMaterial | undefined)?.map;
+        if (map) renderer.initTexture(map);
+      });
+      // One hidden render uploads every mesh and skeleton to the GPU now rather than mid-fight.
+      renderer.render(scene, camera);
+      for (const [key, actor] of warm) {
+        actor.root.visible = false;
+        spare.set(key, [...(spare.get(key) ?? []), actor]);
+      }
       if (this.disposed) {
         renderer.dispose();
         return;
       }
-      this.three = { THREE, renderer, scene, camera, make, makeAnimal, headlight, hero, enemies: new Map() };
+      this.three = {
+        THREE,
+        renderer,
+        scene,
+        camera,
+        make: (kind) => spare.get(kind)?.pop() ?? make(kind),
+        makeAnimal: (kind) => spare.get(kind)?.pop() ?? makeAnimal(kind),
+        headlight,
+        hero,
+        enemies: new Map(),
+      };
     } catch {
       // No WebGL or the models didn't load: the 2D explorer stays.
     }

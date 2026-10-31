@@ -205,8 +205,8 @@ export class RoadStage implements Stage {
       this.stepLiftoff(dt, input);
       return;
     }
-    // At a barricade the car can be left; on foot you can always climb back in at the door.
-    this.crew.step(dt, this.gravity, input, { board: true, alight: this.stopAhead(v.x, STOP_ZONE) !== undefined });
+    // Stopped anywhere, the truck can be left (to fight, or to walk); on foot you climb back in at the door.
+    this.crew.step(dt, this.gravity, input, { board: true, alight: true });
     this.context.particles.update(dt, this.terrain, this.gravity);
     this.context.combo.update(dt, v.grounded);
     this.stepStops();
@@ -696,7 +696,8 @@ export class RoadStage implements Stage {
     const stop = this.stopAhead(foot ? this.crew.explorer.body.x : v.x, STOP_ZONE);
     if (this.liftoff >= 0) prompt = "Lift-off";
     else if (foot && this.crew.nearDoor && !stop) prompt = "E · Back in the truck";
-    else if (foot) prompt = "F · Sword: cut down the barricade and its guards    Space · Jump";
+    else if (foot && stop) prompt = "F · Sword: cut down the barricade and its guards    Space · Jump";
+    else if (foot) prompt = "F · Sword    Space · Jump    E at the door · Back in the truck";
     else if (stop && this.crew.canAlight) prompt = "Barricade! E · Get out and break it";
     else if (stop) prompt = "Barricade ahead: stop the truck";
     else if (v.x < 22) prompt = "→ Drive    Space · Hop    Space in air · Booster ◆    Hold · Hover    Tap ← → in air · Flip";
@@ -704,6 +705,7 @@ export class RoadStage implements Stage {
     else if (gap) prompt = "Gap ahead: hit the ramp fast and hop · short? Booster ◆";
     else if (this.boars.some((b) => b.active && b.x - v.x > 0 && b.x - v.x < 30)) prompt = "Beasts: hit them fast, fly over, or blast them with the thrusters";
     else if (car.airborne && car.flipsInAir > 0) prompt = `${car.flipsInAir} flip${car.flipsInAir > 1 ? "s" : ""}: land it level`;
+    else if (this.crew.canAlight) prompt = "Stopped: E · Get out on foot";
     return {
       prompt,
       speed: v.speed * 3.6,
@@ -712,7 +714,7 @@ export class RoadStage implements Stage {
       hearts: null,
       fuel: car.fuelSeconds,
       landIn: this.liftoff >= 0 || foot ? null : car.landIn,
-      actions: foot || stop !== undefined,
+      actions: foot || stop !== undefined || this.crew.canAlight,
       line: this.line,
       // A fight is on while anything hostile is up and close, to the hero on foot or the truck.
       combat: this.boars.some((b) => b.active && (b.fighter || b.kind === "wolf" || b.kind === "bull") && Math.abs(b.x - (foot ? this.crew.explorer.body.x : v.x)) < 14),

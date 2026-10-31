@@ -1,0 +1,134 @@
+/*
+ * The 3D arena: the canvas fills the screen; a film grade (vignette and grain) sits over it on the
+ * compositor; the download card and the frame-rate readout sit over that.
+ */
+@layer components {
+  .arena {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: #050508;
+    color: #f3ead8;
+  }
+
+  .canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    cursor: grab;
+  }
+
+  .arena:not([data-phase="ready"]) .canvas {
+    visibility: hidden;
+  }
+
+  /* Film grade: a soft vignette and moving grain, the way a night shot looks on a real camera. */
+  .grade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse 75% 70% at 50% 48%, transparent 55%, rgb(0 0 0 / 0.55) 100%);
+  }
+
+  .grade::after {
+    content: "";
+    position: absolute;
+    inset: -50%;
+    opacity: 0.07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain 0.6s steps(4) infinite;
+  }
+
+  @keyframes grain {
+    0% { transform: translate(0, 0); }
+    25% { transform: translate(-3%, 2%); }
+    50% { transform: translate(2%, -3%); }
+    75% { transform: translate(-2%, -1%); }
+    100% { transform: translate(1%, 3%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .grade::after {
+      animation: none;
+    }
+  }
+
+  .readout {
+    position: absolute;
+    top: max(0.75rem, env(safe-area-inset-top));
+    right: max(0.75rem, env(safe-area-inset-right));
+    margin: 0;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.45);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+
+  .card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(26rem, calc(100% - 2rem));
+    translate: -50% -50%;
+    display: grid;
+    gap: 0.9rem;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    background: rgb(14 12 20 / 0.92);
+    box-shadow: 0 1.5rem 3rem rgb(0 0 0 / 0.5);
+    text-align: center;
+  }
+
+  .card p {
+    margin: 0;
+    line-height: 1.45;
+    color: #d9cfbd;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 1.4rem;
+    letter-spacing: 0.02em;
+  }
+
+  .button {
+    min-height: 2.75rem;
+    border: 0;
+    border-radius: 999px;
+    background: #b48eec;
+    color: #120c1c;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .button:focus-visible,
+  .back:focus-visible {
+    outline: 2px solid #fff6dc;
+    outline-offset: 3px;
+  }
+
+  .bar {
+    height: 0.4rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.12);
+    overflow: hidden;
+  }
+
+  .bar span {
+    display: block;
+    height: 100%;
+    background: #b48eec;
+    transform-origin: left;
+    transition: transform 0.2s linear;
+  }
+
+  .back {
+    color: #b9b0a2;
+    font-size: 0.9rem;
+  }
+}

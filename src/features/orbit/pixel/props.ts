@@ -69,6 +69,31 @@ export const BOAR = (frame: 0 | 1): Sprite =>
     p.line(27, 8, 29, 6, "#2a1c15");
   });
 
+/** A village cow (a humped zebu, cream with a darker neck), facing left, two walking frames. */
+export const COW = (frame: 0 | 1): Sprite =>
+  bake(38, 26, 19, 24, (p) => {
+    // Body, hump and dewlap.
+    p.poly([[9, 9], [14, 6], [30, 6], [35, 9], [35, 17], [30, 19], [12, 19], [8, 16]], "#e8e0cf");
+    p.poly([[12, 6], [17, 2], [21, 3], [20, 7]], "#d9cfba");
+    p.poly([[8, 11], [11, 18], [14, 18], [12, 11]], "#cfc4ad");
+    p.poly([[14, 7], [30, 7], [30, 9], [14, 9]], "#f4eee0");
+    // Head with horns, a darker face.
+    p.poly([[1, 10], [5, 6], [10, 7], [10, 13], [4, 15], [1, 14]], "#c8bca4");
+    p.rect(0, 12, 2, 2, "#8a7d68");
+    p.px(5, 9, "#1a1410");
+    p.line(5, 6, 3, 2, "#e6dcc6");
+    p.line(8, 6, 9, 2, "#e6dcc6");
+    p.line(6, 7, 4, 5, "#6b5f50");
+    // Tail and legs.
+    p.line(35, 9, 37, 16, "#bfb39b");
+    p.px(37, 17, "#3a2e24");
+    const legs = frame === 0 ? [[11, 0], [15, 2], [27, 0], [31, 2]] : [[12, 2], [15, 0], [28, 2], [31, 0]];
+    for (const [x, lift] of legs) {
+      p.rect(x, 18, 2, 6 - lift, "#d6ccb6");
+      p.rect(x, 24 - lift, 2, 1, "#3a2e24");
+    }
+  });
+
 /** The launch pad at the end of the city, with its gantry. */
 export const LAUNCH_PAD = (): Sprite => {
   const w = Math.round(7 * PPM);
@@ -163,8 +188,9 @@ export function drawFlag(p: Painter, x: number, y: number, unfurl: number, time:
   if (w > 6) p.rect(x + 4, y + 4 + Math.round(Math.sin(time * 5 - 3 * 0.6) * 0.6), 3, 2, "#fff6dc");
 }
 
-/** Traffic: a sedan (4.4 m) or a box truck (7 m), facing right, anchored at the rear wheel line centre. */
-export const TRAFFIC = (kind: "car" | "truck", body: string): Sprite => {
+/** Traffic: a sedan (4.4 m), a box truck (7 m) or an auto-rickshaw (2.8 m), facing right, anchored at the wheel line centre. */
+export const TRAFFIC = (kind: "car" | "truck" | "rickshaw", body: string): Sprite => {
+  if (kind === "rickshaw") return RICKSHAW(body);
   const long = kind === "truck";
   const w = Math.round((long ? 7 : 4.4) * PPM);
   const h = Math.round((long ? 3.1 : 1.45) * PPM);
@@ -194,3 +220,22 @@ export const TRAFFIC = (kind: "car" | "truck", body: string): Sprite => {
     }
   });
 };
+
+/* An auto-rickshaw: green body, a yellow canvas roof, the driver up front, three wheels (two seen). */
+function RICKSHAW(body: string): Sprite {
+  const w = Math.round(2.8 * PPM);
+  const h = Math.round(1.75 * PPM);
+  return bake(w + 2, h + 2, Math.round(w / 2) + 1, h + 1, (p) => {
+    p.poly([[2, h - 4], [3, h - 13], [w - 12, h - 13], [w - 2, h - 9], [w - 1, h - 4]], body);
+    p.poly([[3, 3], [w - 10, 2], [w - 5, h - 13], [3, h - 13]], "#f2c230");
+    p.rect(3, 3, w - 13, 2, "#d9a91c");
+    p.poly([[w - 10, 5], [w - 6, h - 13], [w - 12, h - 13], [w - 13, 6]], "#16222c");
+    p.disc(w - 12, h - 15, 1.6, "#1a1410");
+    p.rect(w - 3, h - 9, 2, 2, "#ffe7b3");
+    p.rect(2, h - 11, 2, 2, "#ff3b3b");
+    p.disc(7, h - 3, 2.8, "#0b0c0f");
+    p.disc(7, h - 3, 1.1, "#5b6068");
+    p.disc(w - 7, h - 3, 2.8, "#0b0c0f");
+    p.disc(w - 7, h - 3, 1.1, "#5b6068");
+  });
+}

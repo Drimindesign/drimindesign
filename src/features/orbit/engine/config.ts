@@ -74,29 +74,31 @@ export const CAR = {
   damper: 6200,
   /** Tyre–dirt friction coefficient. */
   grip: 0.95,
-  /** Peak drive force (N): ~7 m/s² off the line, fading toward top speed. */
-  drive: 8800,
-  topSpeed: 40,
+  /** Peak drive force (N): ~6 m/s² off the line, fading toward top speed (~120 km/h). */
+  drive: 7800,
+  topSpeed: 33,
   reverseSpeed: 8,
   brake: 14000,
   rolling: 35,
   /** Pitch torque in the air from spinning the wheels up or down (N·m). */
   airTorque: 2600,
   /** Thrusters under the floor: acceleration while firing (m/s²), independent of the planet. */
-  thrust: 15,
+  thrust: 13,
   /**
    * A tap on the ground: a short burn whose push swells and fades (a sine over liftTime) rather
    * than an instant kick, so the car lifts off smoothly. liftKick is the speed it adds (m/s).
    */
   liftTime: 0.22,
-  liftKick: 7,
+  liftKick: 6,
+  /** Fuel a lift-off costs (s of tank). */
+  liftCost: 0.35,
   /** Holding: the thrusters back off above this climb rate (m/s), so a hold is a hover, not a rocket. */
-  maxClimb: 5,
+  maxClimb: 3.5,
   /** Second press in the air: a burst along the nose (m/s) and a little lift, swelling over boostTime (s); its fuel cost (s). */
-  boost: 8.5,
-  boostLift: 2.2,
+  boost: 6.5,
+  boostLift: 1.6,
   boostTime: 0.28,
-  boostCost: 0.45,
+  boostCost: 0.6,
   /** Flips: spin rate of a queued flip (rad/s, a full turn in ~0.7 s) and how fast it's reached (rad/s²). */
   flipRate: 9,
   flipAccel: 45,
@@ -107,8 +109,8 @@ export const CAR = {
   settleSpring: 48,
   settleDamp: 9,
   /** Seconds of thrust in a full tank; refills on the ground. */
-  thrustTank: 13,
-  thrustRefill: 2.75,
+  thrustTank: 3.5,
+  thrustRefill: 0.5,
   /**
    * Landing flare: falling within `height` (m) of the road, the thrusters hold the sink rate
    * to `floor` m/s plus `perMetre` m/s for every metre still to go, so touchdowns come in soft.

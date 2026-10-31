@@ -13,6 +13,12 @@ export abstract class Terrain {
     return (this.height(x + 0.02) - this.height(x - 0.02)) / 0.04;
   }
 
+  /** Tyre grip at x, as a share of dry road (mud and ice are below 1). Dry everywhere unless a terrain says otherwise. */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  grip(_x: number): number {
+    return 1;
+  }
+
   /** Unit surface normal at x. */
   normal(x: number): { x: number; y: number } {
     const s = this.slope(x);
@@ -40,10 +46,13 @@ function gap(x: number, from: number, to: number, depth: number): number {
   return -depth * smoothstep(from - 0.4, from + 0.4, x) * (1 - smoothstep(to - 0.4, to + 0.4, x));
 }
 
+/** Tyre grip in mud, as a share of dry road. */
+const MUD_GRIP = 0.45;
+
 export interface RoadFeature {
-  kind: "log" | "barrier" | "ramp" | "ravine";
+  kind: "log" | "barrier" | "ramp" | "ravine" | "mud";
   x: number;
-  /** Ramp length or ravine width (m). */
+  /** Ramp length, ravine width or mud stretch (m). */
   size: number;
 }
 
@@ -70,46 +79,16 @@ export class RoadTerrain extends Terrain {
       if (f.kind === "log") h += bump(x, f.x, 0.45, 0.42);
       else if (f.kind === "barrier") h += bump(x, f.x, 0.35, 0.7);
       else if (f.kind === "ramp") h += ramp(x, f.x, f.size, f.size * 0.22);
-      else h += gap(x, f.x, f.x + f.size, 40);
+      else if (f.kind === "ravine") h += gap(x, f.x, f.x + f.size, 40);
+      // Mud sits a hand's depth below the road, with soft edges.
+      else h -= 0.08 * smoothstep(f.x - 1, f.x + 1, x) * (1 - smoothstep(f.x + f.size - 1, f.x + f.size + 1, x));
     }
     return h;
   }
-}
 
-/*
- * Stage 4: the Moon. Low rolling ground pocked with craters: a raised rim and a bowl,
- * deterministic from the seed so the run is the same every time.
- */
-export class MoonTerrain extends Terrain {
-  private readonly craters: { x: number; radius: number; depth: number }[] = [];
-
-  constructor(private readonly seed: number, length: number) {
-    super();
-    let x = 30;
-    let i = 0;
-    while (x < length - 30) {
-      const radius = 2.5 + noise1(i * 1.7, seed) * 6;
-      this.craters.push({ x, radius, depth: radius * (0.18 + noise1(i * 2.3, seed + 3) * 0.14) });
-      x += radius * 2 + 10 + noise1(i * 3.1, seed + 5) * 26;
-      i++;
-    }
-  }
-
-  height(x: number): number {
-    let h = (fbm1(x / 60, this.seed, 3) - 0.5) * 5 + (noise1(x / 7, this.seed + 9) - 0.5) * 0.5;
-    for (const c of this.craters) {
-      const t = Math.abs(x - c.x) / c.radius;
-      if (t > 1.5) continue;
-      // Bowl inside the rim, a raised lip just outside it.
-      h += t < 1 ? -c.depth * (1 - t * t) + c.depth * 0.25 : c.depth * 0.25 * (1 - smoothstep(1, 1.5, t));
-    }
-    return h;
-  }
-}
-
-/** Level ground at height 0: the launch pad and the street under it. */
-export class FlatTerrain extends Terrain {
-  height(): number {
-    return 0;
+  /** Monsoon mud: the tyres get under half their grip. */
+  grip(x: number): number {
+    for (const f of this.features) if (f.kind === "mud" && x > f.x && x < f.x + f.size) return MUD_GRIP;
+    return 1;
   }
 }

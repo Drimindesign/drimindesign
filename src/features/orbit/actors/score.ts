@@ -33,8 +33,10 @@ export class Score {
   private readonly popups: Popup[] = [];
 
   add(points: number, label: string, x: number, y: number): void {
-    this.total += points;
-    this.popups.push({ text: `+${points} ${label}`, x, y, age: 0 });
+    // Penalties take points away, never below zero; a zero just shows the label.
+    this.total = Math.max(0, this.total + points);
+    const amount = points > 0 ? `+${points} ` : points < 0 ? `${points} ` : "";
+    this.popups.push({ text: `${amount}${label}`, x, y, age: 0 });
     if (this.popups.length > 12) this.popups.shift();
   }
 

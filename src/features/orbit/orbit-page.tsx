@@ -5,11 +5,9 @@ import type { StageId } from "./stages/types";
 
 /* The project each stage unlocks: discovering an identity, building a place, launching an app, growing a learner. */
 const STAGE_REWARDS: Partial<Record<StageId, string>> = {
-  discover: "breeze-and-mist",
-  build: "breeze-and-grains",
-  launch: "shreeram-milks",
-  grow: "speakora-onboarding",
-  jupiter: "house-of-diams",
+  village: "breeze-and-mist",
+  city: "breeze-and-grains",
+  forest: "shreeram-milks",
 };
 
 /*

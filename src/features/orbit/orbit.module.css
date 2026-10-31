@@ -365,11 +365,9 @@
     text-decoration: none;
   }
 
-  .root[data-reward="discover"] .reward[data-for="discover"],
-  .root[data-reward="build"] .reward[data-for="build"],
-  .root[data-reward="launch"] .reward[data-for="launch"],
-  .root[data-reward="grow"] .reward[data-for="grow"],
-  .root[data-reward="jupiter"] .reward[data-for="jupiter"] {
+  .root[data-reward="village"] .reward[data-for="village"],
+  .root[data-reward="city"] .reward[data-for="city"],
+  .root[data-reward="forest"] .reward[data-for="forest"] {
     display: grid;
   }
 

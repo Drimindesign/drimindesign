@@ -2,13 +2,13 @@ import type { RoadConfig } from "./road";
 
 /*
  * The two road runs. Gaps are sized to the tank: a hop alone clears the short ones at speed;
- * the long ones need a ramp, a boost or some hover; the tank (13 s) refills on the road,
+ * the long ones need a ramp, a boost or some hover; the tank (3.5 s) refills slowly on the road,
  * so fuel is a choice. Traffic stops before ramps, so there's always something to jump.
  */
 
 /** Stage 1: out of the city at night. Flat streets, traffic, broken bridges. */
 export const CITY_RUN: RoadConfig = {
-  id: "discover",
+  id: "city",
   scene: "city",
   seed: 31,
   hills: 0,
@@ -47,7 +47,7 @@ export const CITY_RUN: RoadConfig = {
 
 /** Stage 2: the forest road at night to the launch pad. Logs, ravines, and packs of boars and wolves. */
 export const FOREST_RUN: RoadConfig = {
-  id: "build",
+  id: "forest",
   scene: "forest",
   seed: 11,
   hills: 1,
@@ -90,42 +90,50 @@ export const FOREST_RUN: RoadConfig = {
 };
 
 /**
- * Stage 5: inside Jupiter's clouds, on a shelf of ammonia ice. Heavier gravity than Earth (so
- * every jump is short and the tank works harder), broken shelf with drops into the cloud sea,
- * and storm creatures that pounce from further out than anything before.
+ * Stage 1: out of a village in the monsoon, at night. Mud stretches that steal two-thirds of the
+ * grip (brake early, don't spin the wheels), broken bridges over flooded ravines, auto-rickshaws
+ * and painted lorries, cows standing in the road (hit one and the car is wrecked; fly over for
+ * points) and village dogs that chase the car.
  */
-export const JUPITER_RUN: RoadConfig = {
-  id: "jupiter",
-  scene: "jupiter",
-  seed: 47,
-  hills: 1,
-  gravity: 14,
-  finish: 960,
+export const VILLAGE_RUN: RoadConfig = {
+  id: "village",
+  scene: "village",
+  seed: 23,
+  hills: 0.45,
+  finish: 1150,
   features: [
-    { kind: "ramp", x: 110, size: 12 },
-    { kind: "ravine", x: 124, size: 14 },
-    { kind: "ramp", x: 230, size: 14 },
-    { kind: "ravine", x: 246, size: 18 },
-    { kind: "ramp", x: 380, size: 12 },
-    { kind: "ravine", x: 394, size: 16 },
-    { kind: "ramp", x: 520, size: 16 },
-    { kind: "ravine", x: 538, size: 22 },
-    { kind: "ramp", x: 680, size: 12 },
-    { kind: "ravine", x: 694, size: 18 },
-    { kind: "ramp", x: 820, size: 16 },
-    { kind: "ravine", x: 838, size: 24 },
+    { kind: "mud", x: 60, size: 25 },
+    { kind: "ramp", x: 140, size: 12 },
+    { kind: "ravine", x: 154, size: 13 },
+    { kind: "mud", x: 225, size: 30 },
+    { kind: "ramp", x: 320, size: 14 },
+    { kind: "ravine", x: 336, size: 17 },
+    { kind: "mud", x: 415, size: 22 },
+    { kind: "ramp", x: 500, size: 12 },
+    { kind: "ravine", x: 514, size: 16 },
+    { kind: "mud", x: 590, size: 45 },
+    { kind: "ramp", x: 700, size: 16 },
+    { kind: "ravine", x: 718, size: 21 },
+    { kind: "mud", x: 795, size: 28 },
+    { kind: "ramp", x: 880, size: 14 },
+    { kind: "ravine", x: 896, size: 18 },
+    { kind: "mud", x: 975, size: 38 },
+    { kind: "ramp", x: 1060, size: 16 },
+    { kind: "ravine", x: 1078, size: 23 },
   ],
-  checkpoints: [6, 180, 320, 460, 610, 760, 900],
-  cells: [[60, 1.2], [131, 4], [200, 1.2], [255, 5], [330, 1.2], [402, 4.5], [470, 1.2], [549, 5.5], [640, 1.2], [703, 5], [780, 1.2], [850, 6]],
-  rings: [[132, 5], [256, 6], [404, 5.5], [550, 6.5], [704, 6], [851, 7]],
-  traffic: [],
+  checkpoints: [6, 200, 380, 560, 760, 940, 1110],
+  cells: [[40, 1.2], [161, 4], [290, 1.2], [345, 4.5], [460, 1.2], [522, 4.2], [660, 1.2], [728, 5], [850, 1.2], [905, 5], [1030, 1.2], [1089, 5.5]],
+  rings: [[160, 4.6], [344, 5.4], [521, 5], [727, 6], [904, 5.6], [1088, 6.4]],
+  traffic: [
+    { x: 30, speed: 7, until: 132, kind: "rickshaw", color: "#2e7d4f" },
+    { x: 250, speed: 8, until: 312, kind: "rickshaw", color: "#24302a" },
+    { x: 430, speed: 6, until: 492, kind: "truck", color: "#c9a23a" },
+    { x: 620, speed: 8, until: 692, kind: "rickshaw", color: "#2e7d4f" },
+    { x: 815, speed: 9, until: 872, kind: "rickshaw", color: "#24302a" },
+    { x: 1000, speed: 7, until: 1052, kind: "truck", color: "#b5452a" },
+  ],
   beasts: [
-    [70, "storm"], [76, "storm"],
-    [170, "storm"], [176, "storm"], [182, "storm"],
-    [300, "storm"], [306, "storm"],
-    [440, "storm"], [446, "storm"], [452, "storm"],
-    [600, "storm"], [606, "storm"],
-    [740, "storm"], [746, "storm"], [752, "storm"],
-    [880, "storm"], [886, "storm"], [892, "storm"], [898, "storm"],
+    [95, "cow"], [270, "cow"], [395, "dog"], [399, "dog"], [455, "cow"], [645, "cow"], [770, "cow"],
+    [840, "dog"], [844, "dog"], [848, "dog"], [935, "cow"], [1020, "cow"], [1125, "cow"],
   ],
 };

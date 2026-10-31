@@ -3,10 +3,8 @@ import { Combo, POINTS, Score } from "../actors/score";
 import { Painter } from "../pixel/painter";
 import { Particles } from "../pixel/particles";
 import type { ExplorerId } from "../pixel/explorer-sprite";
-import { Grow } from "../stages/grow";
-import { Launch } from "../stages/launch";
 import { RoadStage } from "../stages/road";
-import { CITY_RUN, FOREST_RUN, JUPITER_RUN } from "../stages/routes";
+import { CITY_RUN, FOREST_RUN, VILLAGE_RUN } from "../stages/routes";
 import { STAGE_ORDER, STAGE_TITLES, type Stage, type StageContext, type StageId } from "../stages/types";
 import { GameAudio } from "./audio";
 import { ART, MAX_STEPS, SIM_HZ, VIEW_MIN } from "./config";
@@ -106,7 +104,7 @@ export class Game {
     if (!ctx) throw new Error("Canvas 2D is not available");
     this.ctx = ctx;
     this.painter = new Painter(ctx);
-    this.stage = this.makeStage("discover");
+    this.stage = this.makeStage("village");
     this.writeBest();
   }
 
@@ -176,7 +174,7 @@ export class Game {
         this.runTime = 0;
         this.score.total = 0;
         this.totals = { collected: 0, available: 0, landings: 0 };
-        this.stage = this.makeStage("discover");
+        this.stage = this.makeStage("village");
         this.setPhase("title");
         break;
     }
@@ -243,16 +241,8 @@ export class Game {
     (this.stage as Stage | undefined)?.dispose?.();
     this.combo.break();
     const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo };
-    const stage =
-      id === "discover"
-        ? new RoadStage(context, this.look, CITY_RUN)
-        : id === "build"
-          ? new RoadStage(context, this.look, FOREST_RUN)
-          : id === "launch"
-            ? new Launch(context)
-            : id === "grow"
-              ? new Grow(context, this.look)
-              : new RoadStage(context, this.look, JUPITER_RUN);
+    const route = id === "village" ? VILLAGE_RUN : id === "city" ? CITY_RUN : FOREST_RUN;
+    const stage = new RoadStage(context, this.look, route);
     stage.resize(this.width, this.height);
     return stage;
   }
@@ -298,7 +288,7 @@ export class Game {
     this.totals = { collected: 0, available: 0, landings: 0 };
     this.runTime = 0;
     this.score.total = 0;
-    this.stage = this.makeStage("discover");
+    this.stage = this.makeStage("village");
     this.beginStage(0);
   }
 

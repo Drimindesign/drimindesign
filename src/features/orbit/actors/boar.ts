@@ -1,12 +1,12 @@
 import { ART } from "../engine/config";
 import type { ToScreen } from "../engine/camera";
 import type { Terrain } from "../engine/terrain";
-import { BOAR, type Sprite } from "../pixel/props";
+import { BOAR, COW, type Sprite } from "../pixel/props";
 
 export type BoarState = "wait" | "charge" | "stagger" | "flee" | "blasted" | "gone";
 
 /** The beasts on the roads and the Moon. */
-export type BeastKind = "boar" | "wolf" | "alien" | "storm";
+export type BeastKind = "boar" | "wolf" | "alien" | "storm" | "cow" | "dog";
 
 interface BeastSpec {
   /** Top charging speed (m/s) and how hard it accelerates into it (m/s²). */
@@ -34,7 +34,13 @@ const SPECS: Record<BeastKind, BeastSpec> = {
   alien: { speed: 5, accel: 8, notice: 24, leapRange: 7, leap: 5, health: 2, mass: 60, scale: 0.95, filter: "hue-rotate(95deg) saturate(2.2) brightness(1.15)" },
   // Jupiter's storm creatures: drawn in 3D by the scene; quick, and they pounce from further out.
   storm: { speed: 7.5, accel: 13, notice: 26, leapRange: 8, leap: 7.5, health: 2, mass: 70, scale: 1, filter: "none" },
+  // Village cows: never hostile, they graze and wander; heavy enough to wreck a car that hits one.
+  // Village dogs: chase the car barking, too light to hurt it; a fright sends them running.
+  dog: { speed: 8.5, accel: 14, notice: 22, leapRange: 0, leap: 0, health: 1, mass: 25, scale: 0.62, filter: "sepia(1) saturate(1.4) brightness(0.8)" },
+  cow: { speed: 1.1, accel: 2.5, notice: 0, leapRange: 0, leap: 0, health: 99, mass: 420, scale: 1, filter: "none" },
 };
+/** A cow wanders within this distance of where it grazes (m). */
+const GRAZE = 4;
 
 /** A blow leaves it dazed this long (s); a stomp longer. */
 const STAGGER = 0.7;
@@ -46,7 +52,7 @@ const BLAST_TIME = 0.8;
 /** Its back: the height a jump must clear, and where a stomp lands (m above the ground). */
 export const BOAR_BACK = 0.7;
 
-let sprites: [Sprite, Sprite] | null = null;
+const sprites: Partial<Record<"boar" | "cow", [Sprite, Sprite]>> = {};
 
 /*
  * A beast, as a body: it waits, notices you, and charges, accelerating to a run; wolves and
@@ -64,6 +70,8 @@ export class Boar {
   private readonly spec: BeastSpec;
   private timer = 0;
   private leapIn = 0;
+  /** Where a cow is ambling to (m). */
+  private wander = 0;
   /** White flash after a hit (s). */
   private flash = 0;
   /** Tumbling after a car hit or a blast: angle (rad) and spin (rad/s). */
@@ -80,8 +88,7 @@ export class Boar {
     this.health = this.spec.health;
     this.x = home;
     this.y = terrain.height(home);
-    sprites ??= [BOAR(0), BOAR(1)];
-    this.sprite = sprites;
+    this.sprite = kind === "cow" ? (sprites.cow ??= [COW(0), COW(1)]) : (sprites.boar ??= [BOAR(0), BOAR(1)]);
   }
 
   get active(): boolean {
@@ -117,7 +124,9 @@ export class Boar {
     this.timer = Math.max(0, this.timer - dt);
     this.leapIn = Math.max(0, this.leapIn - dt);
     this.flash = Math.max(0, this.flash - dt);
-    switch (this.state) {
+    if (this.kind === "cow") {
+      this.graze(dt);
+    } else switch (this.state) {
       case "wait":
         if (Math.abs(this.x - targetX) < spec.notice) {
           this.state = "charge";
@@ -176,6 +185,39 @@ export class Boar {
     return started;
   }
 
+  /*
+   * A cow: picks a new spot near where it grazes every few seconds and ambles there; after a
+   * knock (stagger) it gets back up and carries on. It's never "gone".
+   */
+  private graze(dt: number): void {
+    if (this.state === "stagger") {
+      if (this.grounded) this.vx = approach(this.vx, 0, 6 * dt);
+      if (this.timer === 0) this.state = "wait";
+      return;
+    }
+    if (this.leapIn === 0) {
+      this.leapIn = 2 + Math.random() * 3;
+      this.wander = this.home + (Math.random() * 2 - 1) * GRAZE;
+    }
+    const to = this.wander - this.x;
+    const target = Math.abs(to) < 0.3 ? 0 : Math.sign(to) * this.spec.speed;
+    if (this.grounded) this.vx = approach(this.vx, target, this.spec.accel * dt);
+  }
+
+  /** Frightened off (a dog by the thrusters or the car): it runs away and doesn't come back. */
+  scare(dir: number): void {
+    this.vx = dir * this.spec.speed * 1.3;
+    this.vy = 1.5;
+    this.state = "flee";
+  }
+
+  /** Startled by the thrusters: it trots off, away from the noise. */
+  startle(dir: number): void {
+    this.wander = this.x + dir * GRAZE * 1.5;
+    this.leapIn = 3;
+    this.vx = dir * 3;
+  }
+
   get grounded(): boolean {
     return this.y <= this.terrain.height(this.x) + 0.02;
   }
@@ -220,8 +262,14 @@ export class Boar {
     const total = carMass + this.spec.mass;
     this.vx = ((2 * carMass) / total) * carVx * 0.7;
     this.vy = 3.5 + Math.abs(carVx) * 0.15;
-    this.spin = -Math.sign(carVx) * 9;
+    this.spin = -Math.sign(carVx) * 9 * (90 / this.spec.mass);
     this.flash = 0.15;
+    if (this.kind === "cow") {
+      // Knocked over, not killed: it gets back up.
+      this.timer = 2.5;
+      this.state = "stagger";
+      return -((2 * this.spec.mass) / total) * carVx * 0.7;
+    }
     this.health = 0;
     this.state = "flee";
     return -((2 * this.spec.mass) / total) * carVx * 0.7;

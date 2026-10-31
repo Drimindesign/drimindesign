@@ -141,7 +141,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
   };
 
   return (
-    <div ref={rootRef} className={styles.root} data-phase="title" data-stage="discover" data-vehicle="none">
+    <div ref={rootRef} className={styles.root} data-phase="title" data-stage="village" data-vehicle="none">
       <div ref={stageRef} className={styles.stage}>
         <canvas ref={canvasRef} className={styles.canvas} aria-hidden="true" />
       </div>
@@ -202,7 +202,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       <section className={`${styles.card} ${styles.titleCard}`} aria-label="Idea to Orbit">
         <p className={styles.kicker}>A Drimindesign game</p>
         <p className={styles.logo}>Idea to Orbit</p>
-        <p className={styles.lede}>Out of the city, through the forest, into orbit, onto the Moon. Flip it, land it, beat your best.</p>
+        <p className={styles.lede}>From a monsoon village, through the city at night, to the launch pad. Flip it, land it, beat your best.</p>
         <div className={styles.actions}>
           <button type="button" data-command="start" className={styles.primary} onClick={command}>
             Press Space to start

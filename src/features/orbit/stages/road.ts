@@ -8,7 +8,7 @@ import { CAR, PLANETS, PPM } from "../engine/config";
 import type { InputSnapshot } from "../engine/input";
 import { RoadTerrain, type RoadFeature } from "../engine/terrain";
 import { City } from "../pixel/city";
-import { JupiterScene } from "../pixel/jupiter-scene";
+import { Village } from "../pixel/village";
 import type { ExplorerId } from "../pixel/explorer-sprite";
 import type { Painter } from "../pixel/painter";
 import { NIGHT } from "../pixel/palette";
@@ -22,13 +22,13 @@ interface TrafficSpec {
   /** Cruising speed (m/s); it stops for good at `until` (before a ramp or a gap). */
   speed: number;
   until: number;
-  kind: "car" | "truck";
+  kind: "car" | "truck" | "rickshaw";
   color: string;
 }
 
 export interface RoadConfig {
-  id: "discover" | "build" | "jupiter";
-  scene: "city" | "forest" | "jupiter";
+  id: "village" | "city" | "forest";
+  scene: "village" | "city" | "forest";
   /** Surface gravity (m/s²); Earth's when omitted. */
   gravity?: number;
   seed: number;
@@ -52,8 +52,10 @@ const FALL_LIMIT = -14;
 const RING_RADIUS = 1.7;
 const RING_HIT = 1.4;
 /** Traffic is this tall (m) for collisions and near misses. */
-const HEIGHT = { car: 1.45, truck: 3.1 } as const;
-const LENGTH = { car: 4.4, truck: 7 } as const;
+const HEIGHT = { car: 1.45, truck: 3.1, rickshaw: 1.75 } as const;
+const LENGTH = { car: 4.4, truck: 7, rickshaw: 2.8 } as const;
+/** The finale: the launch rig lifts the car off the pad for this long (s) before the stage ends. */
+const LIFTOFF_TIME = 3.2;
 
 interface Traffic extends TrafficSpec {
   at: number;
@@ -69,11 +71,11 @@ interface Traffic extends TrafficSpec {
  * rings that boost and refuel, and gaps sized so the tank makes you choose. Wrecks and falls go back to the last checkpoint.
  */
 export class RoadStage implements Stage {
-  readonly id: "discover" | "build" | "jupiter";
+  readonly id: "village" | "city" | "forest";
   private readonly terrain: RoadTerrain;
   private readonly world: World | null;
   private readonly city: City | null;
-  private readonly jupiter: JupiterScene | null;
+  private readonly village: Village | null;
   private readonly camera = new FollowCamera(480, 270);
   private readonly crew: Crew;
   private readonly cells: Pickups;
@@ -86,6 +88,8 @@ export class RoadStage implements Stage {
   private width = 480;
   private height = 270;
   private done = false;
+  /** Seconds into the lift-off from the pad, or -1. */
+  private liftoff = -1;
   fade = 0;
   private readonly gravity: number;
 
@@ -98,7 +102,7 @@ export class RoadStage implements Stage {
     this.terrain = new RoadTerrain(config.seed, config.features, config.hills);
     this.world = config.scene === "forest" ? new World(this.terrain, NIGHT) : null;
     this.city = config.scene === "city" ? new City(this.terrain) : null;
-    this.jupiter = config.scene === "jupiter" ? new JupiterScene(this.terrain, config.finish + 60) : null;
+    this.village = config.scene === "village" ? new Village(this.terrain, config.features) : null;
     this.gravity = config.gravity ?? PLANETS.earth.gravity;
     const explorer = new Explorer(4, this.terrain, look, context.audio, context.particles);
     const car = new Car(6, this.terrain, context.audio, context.particles);
@@ -134,11 +138,7 @@ export class RoadStage implements Stage {
     this.camera.setView(width, height);
     this.world?.resize(width, height, this.camera.y);
     this.city?.resize(width, height);
-    this.jupiter?.resize(width, height);
-  }
-
-  dispose(): void {
-    this.jupiter?.dispose();
+    this.village?.resize(width, height);
   }
 
   step(dt: number, input: InputSnapshot): void {
@@ -146,6 +146,10 @@ export class RoadStage implements Stage {
     if (this.done) return;
     const car = this.crew.car;
     const v = car.vehicle;
+    if (this.liftoff >= 0) {
+      this.stepLiftoff(dt, input);
+      return;
+    }
     this.crew.step(dt, this.gravity, input, { board: false, alight: false });
     this.context.particles.update(dt, this.terrain, this.gravity);
     this.context.combo.update(dt, v.grounded);
@@ -170,8 +174,14 @@ export class RoadStage implements Stage {
     this.stepBoars(dt);
     if (v.y < FALL_LIMIT) this.respawn();
     if (v.x >= this.config.finish && v.grounded) {
-      this.done = true;
       this.context.audio.complete();
+      // The forest road ends on the launch pad: the car lifts off. Elsewhere the stage just ends.
+      if (this.config.scene === "forest") {
+        this.liftoff = 0;
+        this.context.audio.ignition();
+      } else {
+        this.done = true;
+      }
     }
   }
 
@@ -228,6 +238,20 @@ export class RoadStage implements Stage {
   }
 
 
+  /* The finale: thrusters full, the car rises off the pad into the night, then the stage ends. */
+  private stepLiftoff(dt: number, input: InputSnapshot): void {
+    const v = this.crew.car.vehicle;
+    this.liftoff += dt;
+    v.tank = CAR.thrustTank;
+    this.crew.step(dt, this.gravity, { ...input, move: 0, flipPressed: 0, jumpHeld: true, jumpPressed: false }, { board: false, alight: false });
+    this.context.particles.update(dt, this.terrain, this.gravity);
+    // The pad's launch rig takes over from the driver: a steady, level climb.
+    v.vy = Math.min(24, Math.max(v.vy, 0) + 15 * dt);
+    v.vx *= Math.exp(-2 * dt);
+    v.spinRate += (-v.angle * 20 - v.spinRate * 6) * dt;
+    if (this.liftoff > LIFTOFF_TIME) this.done = true;
+  }
+
   /** Back on the road at the last checkpoint. */
   respawn(): void {
     this.context.audio.respawn();
@@ -261,8 +285,11 @@ export class RoadStage implements Stage {
       this.city.drawGround(ctx, camera);
       this.city.drawLamps(ctx, toScreen, camera, 0);
     }
-    // Jupiter: the 3D world and its creatures, under the 2D car.
-    this.jupiter?.draw(ctx, camera, time, dt, this.boars);
+    if (this.village) {
+      this.village.drawBack(ctx, camera);
+      this.village.drawGround(ctx, camera);
+      this.village.drawLanterns(ctx, toScreen, camera, time);
+    }
     this.drawObstacles(painter, toScreen);
     this.drawFinish(ctx, painter, toScreen, time);
     for (const c of this.config.checkpoints.slice(1)) {
@@ -282,11 +309,12 @@ export class RoadStage implements Stage {
       blit(ctx, t.sprite, x, y + 1);
       glow(ctx, x - LENGTH[t.kind] * 8, y - (t.kind === "truck" ? 9 : 10), t.moving ? 6 : 9, "255, 60, 60", t.moving ? 0.5 : 0.85);
     }
-    if (!this.jupiter) for (const boar of this.boars) boar.draw(ctx, toScreen, time);
+    for (const boar of this.boars) boar.draw(ctx, toScreen, time);
     this.context.particles.draw(painter, toScreen, view.frame);
     car.draw(ctx, painter, toScreen, alpha, true);
     this.drawRings(ctx, toScreen, time, true);
     if (this.world) this.world.drawFront(ctx, camera, time, this.context.still);
+    this.village?.drawRain(ctx, time, this.context.still);
     this.context.score.draw(ctx, toScreen);
   }
 
@@ -324,7 +352,7 @@ export class RoadStage implements Stage {
     ctx.font = "700 6px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillStyle = Math.sin(time * 6) > -0.8 ? "#ff5b28" : "#7a2a14";
-    ctx.fillText(this.config.scene === "jupiter" ? "ORBIT GATE" : "CITY LIMITS", x, y - 44);
+    ctx.fillText(this.config.scene === "village" ? "HIGHWAY" : "CITY LIMITS", x, y - 44);
     ctx.restore();
     glow(ctx, x, y - 46, 40, "250, 46, 0", 0.35);
   }
@@ -348,8 +376,7 @@ export class RoadStage implements Stage {
         for (let i = 0; i < 4; i++) painter.rect(x - 1, y + i * 4, 1, 2, "#ffd27a");
       } else {
         // The ravine is a dark chasm from its lips down: without this the sky glow behind the scene shows through the pit.
-        // (On Jupiter the 3D shelf has real gaps, with cloud below.)
-        if (!this.jupiter) {
+        {
           const [x0, y0] = toScreen(f.x, Math.min(this.terrain.height(f.x - 0.05), this.terrain.height(f.x + f.size + 0.05)));
           const [x1] = toScreen(f.x + f.size, 0);
           painter.rect(x0, y0 + 2, x1 - x0, Math.max(0, this.height - y0), "#05060a");
@@ -370,7 +397,8 @@ export class RoadStage implements Stage {
     const v = car.vehicle;
     const gap = this.config.features.find((f) => f.kind === "ravine" && f.x - v.x > 0 && f.x - v.x < 35);
     let prompt = "";
-    if (v.x < 22) prompt = "→ Drive    Space · Hop    Space in air · Boost    Hold · Hover    Tap ← → in air · Flip";
+    if (this.liftoff >= 0) prompt = "Lift-off";
+    else if (v.x < 22) prompt = "→ Drive    Space · Hop    Space in air · Boost    Hold · Hover    Tap ← → in air · Flip";
     else if (car.wrecked > 0) prompt = "Wrecked: land on your wheels";
     else if (gap) prompt = "Gap ahead: hop, boost, hover";
     else if (this.boars.some((b) => b.active && b.x - v.x > 0 && b.x - v.x < 30)) prompt = "Beasts: hit them fast, fly over, or blast them with the thrusters";
@@ -382,7 +410,7 @@ export class RoadStage implements Stage {
       altitude: null,
       hearts: null,
       fuel: car.fuelSeconds,
-      landIn: car.landIn,
+      landIn: this.liftoff >= 0 ? null : car.landIn,
     };
   }
 }

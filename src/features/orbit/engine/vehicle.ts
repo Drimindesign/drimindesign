@@ -21,13 +21,17 @@ interface Wheel {
   ay: number;
   compression: number;
   grounded: boolean;
-  /** World position of the wheel centre, for drawing. */
+  /** World position of the wheel centre, for drawing, and its drawn suspension length (m). */
   cx: number;
   cy: number;
+  extension: number;
   /** Rolling angle (rad) and rate (rad/s). */
   spin: number;
   spinRate: number;
 }
+
+/** In the air the drawn wheels hang this much short of full extension (m): tucked in the arches. */
+const AIR_TUCK = 0.1;
 
 /* Body outline points that can touch the ground: nose, tail, underside and roof. */
 const HULL: readonly [number, number][] = [
@@ -89,6 +93,7 @@ export class Vehicle {
       grounded: false,
       cx: x + w.x,
       cy: this.y + w.y - CAR.restLength,
+      extension: CAR.restLength - AIR_TUCK,
       spin: 0,
       spinRate: 0,
     }));
@@ -188,7 +193,11 @@ export class Vehicle {
             ? -Math.sign(along) * CAR.brake * -input.throttle * 0.5
             : input.throttle * CAR.drive * 0.35 * Math.max(0, 1 + forward / CAR.reverseSpeed);
         }
-        const limit = CAR.grip * load;
+        // Mud: the tyres slip and the wheels sink and drag.
+        const grip = this.terrain.grip(hitX);
+        // Sinking drag grows with speed: ~2.5 m/s² at 60 km/h in deep mud, like a real car.
+        if (grip < 1) force -= along * mass * 0.12 * (1 - grip);
+        const limit = CAR.grip * grip * load;
         force = Math.max(-limit, Math.min(limit, force));
         apply(hitX, hitY, tx * force, ty * force);
         wheel.spinRate = along / CAR.wheelRadius;
@@ -198,9 +207,12 @@ export class Vehicle {
         wheel.spinRate += (input.throttle * 60 - wheel.spinRate * 0.8) * dt;
       }
       wheel.spin -= wheel.spinRate * dt;
-      const length = CAR.restLength - wheel.compression;
-      wheel.cx = anchor.x - upX * length;
-      wheel.cy = anchor.y - upY * length;
+      // Where the wheel is drawn: on the ground, where the spring puts it; in the air it droops
+      // only a little past ride height and eases there, so the tyres stay tucked in the arches.
+      const target = wheel.grounded ? CAR.restLength - wheel.compression : CAR.restLength - AIR_TUCK;
+      wheel.extension += (target - wheel.extension) * Math.min(1, (wheel.grounded ? 40 : 10) * dt);
+      wheel.cx = anchor.x - upX * wheel.extension;
+      wheel.cy = anchor.y - upY * wheel.extension;
     }
 
     // The body itself against the ground.
@@ -231,7 +243,7 @@ export class Vehicle {
     this.thrust = input.parked || this.tank <= 0 ? 0 : Math.max(hold, flare);
     if (input.thrustPressed && this.grounded && this.tank > 0.3 && !input.parked) {
       this.lift = 0;
-      this.tank -= 0.2;
+      this.tank -= CAR.liftCost;
     }
     // The lift-off and boost burns: a push that swells and fades (sine), integrating to its kick.
     if (this.lift >= 0) {

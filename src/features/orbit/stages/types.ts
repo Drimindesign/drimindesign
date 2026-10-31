@@ -4,16 +4,14 @@ import type { InputSnapshot } from "../engine/input";
 import type { Painter } from "../pixel/painter";
 import type { Particles } from "../pixel/particles";
 
-export type StageId = "discover" | "build" | "launch" | "grow" | "jupiter";
+export type StageId = "village" | "city" | "forest";
 
-export const STAGE_ORDER: readonly StageId[] = ["discover", "build", "launch", "grow", "jupiter"];
+export const STAGE_ORDER: readonly StageId[] = ["village", "city", "forest"];
 
 export const STAGE_TITLES: Record<StageId, { number: string; title: string; goal: string }> = {
-  discover: { number: "01", title: "Discover", goal: "Out of the city by night. Jump the traffic, fly the broken bridges, land the flips." },
-  build: { number: "02", title: "Build", goal: "The forest road to the launch pad. Logs, boars, ravines: flip it, land it, keep the combo." },
-  launch: { number: "03", title: "Launch", goal: "Hold the thrusters and climb out of the sky." },
-  grow: { number: "04", title: "Grow", goal: "Cross the Moon, then get out and plant the flag." },
-  jupiter: { number: "05", title: "Scale", goal: "Inside Jupiter's clouds. Heavy gravity, broken ice, storm creatures: reach the orbit gate." },
+  village: { number: "01", title: "Discover", goal: "Out of the village in the monsoon. Mud steals your grip, cows own the road, the bridges are broken." },
+  city: { number: "02", title: "Build", goal: "Through the city by night. Jump the traffic, fly the broken flyovers, land the flips." },
+  forest: { number: "03", title: "Launch", goal: "The forest road to the launch pad. Boars and wolves, ravines: reach the pad and lift off." },
 };
 
 /** Shared by every stage for its whole life. */

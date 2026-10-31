@@ -27,10 +27,24 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
   let down = false;
   for (const beast of beasts) {
     if (beast.update(dt, gravity, driving ? v.x : e.body.x)) audio.grunt();
+    if (beast.kind === "cow") {
+      if (driving) cowMeetsCar(beast, crew, context);
+      continue;
+    }
     if (!beast.active) continue;
     if (driving) {
       const side = Math.sign(beast.x - v.x) || 1;
       const below = v.y - beast.y;
+      if (beast.kind === "dog") {
+        // Dogs are frightened off, never hurt: the jet scares them, the car bumps them away.
+        const near = Math.abs(beast.x - v.x);
+        if (v.thrust > 0.25 && near < JET_HALF_WIDTH * 1.5 && below < JET_REACH) beast.scare(side);
+        else if (car.wrecked === 0 && beast.state !== "flee" && near < 2.3 && beast.y < v.y + 0.4 && beast.y > v.y - 1.6) {
+          beast.scare(side);
+          score.add(-50, "Watch the dogs", beast.x, beast.y + 1.5);
+        }
+        continue;
+      }
       if (v.thrust > 0.25 && Math.abs(beast.x - v.x) < JET_HALF_WIDTH && below > 0.2 && below < JET_REACH) {
         beast.blast(side);
         audio.thwack();
@@ -79,4 +93,35 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
     }
   }
   return down;
+}
+
+/** Above this speed (m/s) hitting a cow wrecks the car. */
+const COW_WRECK = 5;
+/** Cows already cleared in the air this run, so each pays once. */
+const cleared = new WeakSet<Boar>();
+
+/*
+ * A cow and the car. The thrusters startle it into trotting off. Flying over one pays. Driving
+ * into one is a 420 kg collision: the car loses a third of its speed or more, and above walking
+ * pace it's wrecked; the cow is knocked down and gets back up.
+ */
+function cowMeetsCar(cow: Boar, crew: Crew, context: StageContext): void {
+  const car = crew.car;
+  const v = car.vehicle;
+  const dx = cow.x - v.x;
+  if (v.thrust > 0.25 && Math.abs(dx) < JET_HALF_WIDTH * 1.6 && v.y - cow.y < JET_REACH) cow.startle(Math.sign(dx) || 1);
+  if (!v.grounded && Math.abs(dx) < 1 && v.y - cow.y > 1.6 && !cleared.has(cow)) {
+    cleared.add(cow);
+    context.combo.add(1);
+    context.score.add(STUNTS.nearMiss * context.combo.multiplier, "Over the cow", cow.x, cow.y + 2.5);
+  }
+  if (car.wrecked > 0 || cow.state === "stagger") return;
+  if (Math.abs(dx) < 2.4 && v.y - cow.y < 1.9 && v.y > cow.y - 0.5) {
+    const closing = Math.abs(v.vx - cow.vx);
+    v.vx += cow.hitByCar(v.vx - cow.vx, CAR.mass);
+    context.audio.thwack();
+    context.combo.break();
+    if (closing > COW_WRECK) car.crash();
+    context.score.add(-150, "Hit a cow", cow.x, cow.y + 2.2);
+  }
 }

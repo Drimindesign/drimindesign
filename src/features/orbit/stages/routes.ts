@@ -43,6 +43,7 @@ export const CITY_RUN: RoadConfig = {
     { x: 955, speed: 12, until: 982, kind: "car", color: "#2b2d33" },
   ],
   stops: [{ x: 612, fighters: [[596, "raider"], [603, "brute"]] }],
+  props: [[80, "stall"], [200, "crates"], [300, "stall"], [390, "crates"], [520, "stall"], [670, "crates"], [830, "stall"], [905, "crates"]],
   beasts: [],
 };
 
@@ -80,6 +81,7 @@ export const FOREST_RUN: RoadConfig = {
     { x: 362, fighters: [[348, "raider"], [354, "raider"]] },
     { x: 880, fighters: [[862, "brute"], [868, "raider"], [873, "raider"]] },
   ],
+  props: [[100, "fence"], [175, "crates"], [290, "fence"], [505, "crates"], [570, "fence"], [700, "crates"], [850, "fence"]],
   beasts: [
     [92, "boar"], [96, "boar"],
     [186, "wolf"], [190, "wolf"], [194, "boar"],
@@ -138,6 +140,7 @@ export const VILLAGE_RUN: RoadConfig = {
     { x: 1000, speed: 7, until: 1052, kind: "truck", color: "#b5452a" },
   ],
   stops: [{ x: 472, fighters: [[456, "raider"], [463, "raider"]] }],
+  props: [[45, "crates"], [190, "fence"], [255, "stall"], [300, "crates"], [560, "stall"], [680, "crates"], [750, "fence"], [820, "stall"], [960, "crates"], [1040, "fence"]],
   beasts: [
     [95, "cow"], [270, "cow"], [395, "dog"], [399, "dog"], [455, "cow"], [645, "cow"], [770, "cow"],
     [840, "dog"], [844, "dog"], [848, "dog"], [935, "cow"], [1020, "cow"], [1125, "cow"],

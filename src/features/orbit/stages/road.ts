@@ -8,6 +8,7 @@ import { CAR, PLANETS, PPM } from "../engine/config";
 import type { InputSnapshot } from "../engine/input";
 import { RoadTerrain, type RoadFeature } from "../engine/terrain";
 import { City } from "../pixel/city";
+import { Debris } from "../pixel/debris";
 import { Fighters3D } from "../pixel/fighters-3d";
 import { Village } from "../pixel/village";
 import type { ExplorerId } from "../pixel/explorer-sprite";
@@ -42,6 +43,8 @@ export interface RoadConfig {
   /** Energy cells and stunt rings: x, height above the ground (m). */
   cells: readonly (readonly [number, number])[];
   rings: readonly (readonly [number, number])[];
+  /** Things to smash on the road: crate stacks, market stalls, fences (x m, kind). */
+  props?: readonly (readonly [number, PropKind])[];
   /** Barricades across the road (m): get out, fight the raiders guarding it, and cut it down. */
   stops?: readonly { x: number; fighters: readonly (readonly [number, BeastKind])[] }[];
   traffic: readonly TrafficSpec[];
@@ -57,6 +60,19 @@ const RING_HIT = 1.4;
 /** Traffic is this tall (m) for collisions and near misses. */
 const HEIGHT = { car: 1.45, truck: 3.1, rickshaw: 1.75 } as const;
 const LENGTH = { car: 4.4, truck: 7, rickshaw: 2.8 } as const;
+export type PropKind = "crates" | "stall" | "fence";
+
+/**
+ * Breakables: mass (kg, for the momentum the car loses), the speed (m/s) below which the car just
+ * stops against it, size (m), damage to the truck, points, and the colours its pieces fly in.
+ */
+const PROPS: Record<PropKind, { mass: number; breakAt: number; width: number; height: number; damage: number; points: number; colors: readonly string[] }> = {
+  crates: { mass: 70, breakAt: 1.5, width: 1.7, height: 1.7, damage: 0.03, points: 40, colors: ["#8a6440", "#6b4b2e", "#a47a4e"] },
+  stall: { mass: 240, breakAt: 6, width: 3, height: 2.4, damage: 0.08, points: 80, colors: ["#6b4b2e", "#e0481c", "#f1e6d2", "#3f7a5a", "#d9a91c"] },
+  fence: { mass: 45, breakAt: 1.5, width: 3, height: 1.1, damage: 0.02, points: 25, colors: ["#7a5c43", "#5a4232"] },
+};
+/** How much damage reaching a new checkpoint repairs. */
+const REPAIR = 0.5;
 /** Sword blows a barricade takes, its height (m), and the speed (m/s) above which hitting it wrecks the car. */
 const BARRICADE = { health: 4, height: 6, wreck: 7 } as const;
 /** Within this distance before a barricade (m), the car can be left. */
@@ -91,6 +107,8 @@ export class RoadStage implements Stage {
   private readonly boars: Boar[];
   private readonly stops: { x: number; health: number; broken: boolean }[];
   private readonly fighters = new Fighters3D();
+  private readonly debris = new Debris();
+  private readonly props: { x: number; kind: PropKind; broken: boolean }[];
   private readonly sprites = { cell: CELL(), pad: LAUNCH_PAD() };
   private reached: number;
   private respawnIn = 0;
@@ -122,6 +140,7 @@ export class RoadStage implements Stage {
     this.traffic = config.traffic.map((t) => ({ ...t, at: t.x, moving: true, passed: false, sprite: TRAFFIC(t.kind, t.color) }));
     this.boars = config.beasts.map(([x, kind]) => new Boar(x, this.terrain, kind));
     this.stops = (config.stops ?? []).map((s) => ({ x: s.x, health: BARRICADE.health, broken: false }));
+    this.props = (config.props ?? []).map(([x, kind]) => ({ x, kind, broken: false }));
     for (const s of config.stops ?? []) for (const [x, kind] of s.fighters) this.boars.push(new Boar(x, this.terrain, kind));
     this.reached = config.checkpoints[0];
     this.camera.snap(6, this.terrain.height(6), this.terrain.height(6));
@@ -176,6 +195,9 @@ export class RoadStage implements Stage {
     this.context.particles.update(dt, this.terrain, this.gravity);
     this.context.combo.update(dt, v.grounded);
     this.stepStops();
+    this.stepProps();
+    this.debris.update(dt, this.terrain, this.gravity);
+    if (this.crew.mode === "car") this.debris.shove(v.x, v.y, v.vx);
     scoreCarEvents(car.drainEvents(), car, this.context);
 
     if (car.wrecked > 0 && this.respawnIn === 0) this.respawnIn = car.wrecked;
@@ -185,7 +207,16 @@ export class RoadStage implements Stage {
       return;
     }
 
-    for (const c of this.config.checkpoints) if (v.x >= c && v.grounded && v.upright) this.reached = Math.max(this.reached, c);
+    for (const c of this.config.checkpoints) {
+      if (v.x >= c && v.grounded && v.upright && c > this.reached) {
+        this.reached = c;
+        // Each new checkpoint patches the truck up.
+        if (car.damage > 0.05) {
+          car.repair(REPAIR);
+          this.context.score.add(0, "Repaired", v.x, v.y + 2.5);
+        }
+      }
+    }
     const got = this.cells.collect(v.x, v.y, 1.6);
     if (got > 0) {
       this.context.audio.pickup();
@@ -272,6 +303,56 @@ export class RoadStage implements Stage {
   }
 
   /*
+   * Breakables. The car hitting one faster than it can take shatters it into pieces thrown with
+   * the car's speed, and loses momentum by the mass it hit (an inelastic collision: v' = v·M/(M+m));
+   * slower than that, a heavy one just stops the car. Flying over clears it. On foot, the sword
+   * breaks them too.
+   */
+  private stepProps(): void {
+    const car = this.crew.car;
+    const v = car.vehicle;
+    const e = this.crew.explorer;
+    for (const prop of this.props) {
+      if (prop.broken) continue;
+      const spec = PROPS[prop.kind];
+      const ground = this.terrain.height(prop.x);
+      const near = prop.x - spec.width / 2;
+      const far = prop.x + spec.width / 2;
+      if (this.crew.mode === "car" && car.wrecked === 0 && v.x + 2.3 > near && v.x - 2.3 < far && v.y - 0.5 < ground + spec.height) {
+        if (Math.abs(v.vx) >= spec.breakAt) {
+          this.smash(prop, v.vx, v.vy);
+          v.vx *= CAR.mass / (CAR.mass + spec.mass);
+          car.hurt(spec.damage);
+        } else if (v.vx > 0) {
+          v.x = near - 2.3;
+          v.vx = 0;
+        }
+        continue;
+      }
+      if (this.crew.mode === "foot" && e.striking && !e.struck.has(prop)) {
+        const box = e.hitbox;
+        if (box.x1 > near && box.x0 < far && box.y0 < ground + spec.height) {
+          e.struck.add(prop);
+          e.recoil();
+          this.smash(prop, e.body.facing * 4, 2);
+        }
+      }
+    }
+  }
+
+  private smash(prop: { x: number; kind: PropKind; broken: boolean }, vx: number, vy: number): void {
+    const spec = PROPS[prop.kind];
+    const ground = this.terrain.height(prop.x);
+    prop.broken = true;
+    this.debris.burst(prop.x, ground + spec.height / 3, vx, vy, Math.round(10 + spec.mass / 12), 2.5 + Math.abs(vx) * 0.25, spec.colors, prop.kind === "stall" ? 0.5 : 0.35);
+    this.context.particles.dust(prop.x, ground, vx * 0.5, 16, 1.2);
+    this.context.audio.thwack();
+    this.context.fx.punch(prop.kind === "stall" ? 0.07 : 0.04);
+    this.context.combo.add(1);
+    this.context.score.add(spec.points * this.context.combo.multiplier, prop.kind === "stall" ? "Stall smashed" : "Smashed", prop.x, ground + spec.height + 0.5);
+  }
+
+  /*
    * Barricades: a wall of logs and spikes. The car stops against it, or is wrecked if it comes
    * in fast; flying over is too high. On foot it's cut down with the sword, blow by blow.
    */
@@ -304,6 +385,7 @@ export class RoadStage implements Stage {
         this.context.fx.punch(0.05);
         if (stop.health <= 0) {
           stop.broken = true;
+          this.debris.burst(stop.x, ground + 1.5, e.body.facing * 5, 3, 26, 5, ["#5a4232", "#6b4f3a", "#7a5c43", "#b5452a"], 0.5);
           this.context.audio.land(1);
           this.context.particles.dust(stop.x, ground + 1, 4, 60, 2.2);
           this.context.fx.punch(0.1);
@@ -391,6 +473,8 @@ export class RoadStage implements Stage {
       glow(ctx, x - LENGTH[t.kind] * 8, y - (t.kind === "truck" ? 9 : 10), t.moving ? 6 : 9, "255, 60, 60", t.moving ? 0.5 : 0.85);
     }
     this.drawBarricades(painter, toScreen);
+    this.drawProps(painter, toScreen, time);
+    this.debris.draw(ctx, toScreen, this.width);
     for (const boar of this.boars) if (!boar.fighter || !this.fighters.ready) boar.draw(ctx, toScreen, time);
     this.context.particles.draw(painter, toScreen, view.frame);
     car.draw(ctx, painter, toScreen, alpha, true);
@@ -441,6 +525,35 @@ export class RoadStage implements Stage {
     ctx.fillText(this.config.scene === "village" ? "HIGHWAY" : "CITY LIMITS", x, y - 44);
     ctx.restore();
     glow(ctx, x, y - 46, 40, "250, 46, 0", 0.35);
+  }
+
+  /* Crate stacks, market stalls with striped awnings, fences: drawn until they're smashed. */
+  private drawProps(painter: Painter, toScreen: ToScreen, time: number): void {
+    for (const prop of this.props) {
+      if (prop.broken) continue;
+      const [x, y] = toScreen(prop.x, this.terrain.height(prop.x));
+      if (x < -60 || x > this.width + 60) continue;
+      if (prop.kind === "crates") {
+        for (const [cx, cy] of [[-13, 0], [0, 0], [-6, -13]] as const) {
+          painter.rect(x + cx, y + cy - 13, 13, 13, "#8a6440");
+          painter.rect(x + cx, y + cy - 13, 13, 1, "#a47a4e");
+          painter.line(x + cx + 1, y + cy - 12, x + cx + 12, y + cy - 1, "#5a3f26");
+          painter.line(x + cx + 12, y + cy - 12, x + cx + 1, y + cy - 1, "#5a3f26");
+        }
+      } else if (prop.kind === "stall") {
+        const awning = this.config.scene === "village" ? ["#e0481c", "#f1e6d2"] : ["#2f6db0", "#f1e6d2"];
+        painter.rect(x - 24, y - 38, 2, 38, "#4a3424");
+        painter.rect(x + 22, y - 38, 2, 38, "#4a3424");
+        painter.rect(x - 24, y - 16, 48, 4, "#6b4b2e");
+        painter.rect(x - 24, y - 12, 48, 12, "#5a3f26");
+        for (let i = 0; i < 8; i++) painter.rect(x - 26 + i * 6.5, y - 42 + Math.sin(time * 2 + i) * 0.5, 6.5, 6, awning[i % 2]);
+        for (let i = 0; i < 7; i++) painter.disc(x - 18 + i * 6, y - 18, 2, i % 3 === 0 ? "#d9a91c" : i % 3 === 1 ? "#3f7a5a" : "#e0481c");
+      } else {
+        for (let i = 0; i < 4; i++) painter.rect(x - 24 + i * 16, y - 18, 2, 18, "#5a4232");
+        painter.rect(x - 24, y - 15, 50, 2, "#7a5c43");
+        painter.rect(x - 24, y - 8, 50, 2, "#7a5c43");
+      }
+    }
   }
 
   /* A barricade: logs lashed upright, sharpened stakes, a red rag; it sheds logs as it's cut. */
@@ -522,6 +635,7 @@ export class RoadStage implements Stage {
       fuel: car.fuelSeconds,
       landIn: this.liftoff >= 0 || foot ? null : car.landIn,
       actions: foot || stop !== undefined,
+      damage: car.damage,
     };
   }
 }

@@ -21,6 +21,11 @@ const BODY_POINTS: readonly [number, number][] = [[0.15, 0.6], [2.3, -0.3], [-2.
 const JET = 1.1;
 /** The forward boost's flash out of the tail (s). */
 const BOOST_FLASH = 0.28;
+/**
+ * Damage (0 … 1): what a crash and a hard landing cost, where the hood starts steaming, where the
+ * thrusters start to sputter, and how much engine power is lost at full damage.
+ */
+const DAMAGE = { crash: 0.25, hardLanding: 0.05, steam: 0.35, sputter: 0.6, powerLoss: 0.4 } as const;
 /** Braking this hard (m/s, forward speed) scuffs dust off the tyres. */
 const SKID_SPEED = 9;
 
@@ -78,6 +83,8 @@ export class Car {
   private braking = false;
   private reversing = false;
   private boostFlash = 0;
+  /** Accumulated damage, 0 (new) … 1 (finished). */
+  damage = 0;
 
   constructor(
     x: number,
@@ -133,9 +140,12 @@ export class Car {
     const grounded = car.grounded;
     const hop = !parked && input.thrustPressed && grounded;
     const boost = !parked && input.thrustPressed && !grounded;
+    // A damaged truck: less power, and past a point the thrusters cut in and out.
+    const power = 1 - DAMAGE.powerLoss * this.damage;
+    const sputter = this.damage > DAMAGE.sputter && Math.random() < (this.damage - DAMAGE.sputter) * 1.6;
     car.step(dt, gravity, {
-      throttle: parked ? 0 : input.move,
-      thrust: !parked && input.thrustHeld && !hop,
+      throttle: parked ? 0 : input.move * power,
+      thrust: !parked && input.thrustHeld && !hop && !sputter,
       thrustPressed: hop,
       parked,
       flip: parked ? 0 : input.flipPressed,
@@ -155,6 +165,11 @@ export class Car {
           this.particles.gas(at.x, ground + 0.08, Math.random() < 0.5 ? 1 : -1, 0.12, car.vx, 0, spread);
         }
       }
+    }
+    // Damage shows: steam from under the hood, thicker the worse it gets.
+    if (this.damage > DAMAGE.steam && Math.random() < (this.damage - DAMAGE.steam) * 0.5) {
+      const hood = car.toWorld(1.5, 0.15);
+      this.particles.gas(hood.x, hood.y, -0.3, 1, car.vx, car.vy, 0.25);
     }
     // Hard braking at speed: dust off the tyres.
     if (this.braking && forward > SKID_SPEED && Math.random() < 0.5) {
@@ -217,6 +232,7 @@ export class Car {
       this.crash();
       return;
     }
+    if (this.sink > 9) this.hurt(DAMAGE.hardLanding);
     if (this.sink > 3) {
       const force = Math.min(1, this.sink / 12);
       this.particles.dust(car.x, this.terrain.height(car.x), car.vx, Math.round(10 + force * 30), 0.6 + force);
@@ -240,6 +256,7 @@ export class Car {
   /** A wreck: on a bad landing, or driving into something solid. */
   crash(): void {
     const car = this.vehicle;
+    this.damage = Math.min(1, this.damage + DAMAGE.crash);
     this.wrecked = WRECK_TIME;
     this.air = 0;
     this.rotation = 0;
@@ -251,8 +268,20 @@ export class Car {
     this.events.push({ kind: "crash" });
   }
 
-  /** Back on its wheels at x (a checkpoint after a fall or a wreck). */
+  /** Takes damage from a hit (0 … 1); at full damage the truck is finished and wrecks. */
+  hurt(amount: number): void {
+    this.damage = Math.min(1, this.damage + amount);
+    if (this.damage >= 1 && this.wrecked === 0) this.crash();
+  }
+
+  /** Patched up (at a checkpoint): takes `amount` of the damage away. */
+  repair(amount: number): void {
+    this.damage = Math.max(0, this.damage - amount);
+  }
+
+  /** Back on its wheels at x (a checkpoint after a fall or a wreck), repaired if it was finished. */
   reset(x: number): void {
+    if (this.damage >= 1) this.damage = 0.3;
     this.vehicle.reset(x);
     this.sink = 0;
     this.air = 0;

@@ -222,6 +222,34 @@
     box-shadow: 0 0 0 1px rgb(255 246 220 / 0.4);
   }
 
+  /* The truck's condition: green to red as it takes damage. */
+  .hull {
+    position: relative;
+    display: block;
+    width: 3.5rem;
+    height: 0.5rem;
+    background: rgb(20 15 20 / 0.5);
+    box-shadow: 0 0 0 1px rgb(255 246 220 / 0.4);
+  }
+
+  .hullFill {
+    position: absolute;
+    inset: 0;
+    background: #7fd06a;
+    transform-origin: left;
+    transform: scaleX(var(--hull, 1));
+    transition: transform 120ms linear;
+  }
+
+  .root[data-hull="low"] .hullFill {
+    background: #ff5b3a;
+  }
+
+  .root[data-vehicle="flight"] .hull,
+  .root[data-actions="true"] .hull {
+    display: none;
+  }
+
   .tankFill {
     position: absolute;
     inset: 0;

@@ -68,6 +68,8 @@ export interface StageHud {
   landIn: number | null;
   /** On foot or about to be: the get-out and sword pads show. */
   actions?: boolean;
+  /** The truck's damage, 0 … 1 (road stages). */
+  damage?: number;
 }
 
 export interface Stage {

@@ -138,6 +138,7 @@ function cowMeetsCar(cow: Boar, crew: Crew, context: StageContext): void {
     context.audio.thwack();
     context.combo.break();
     context.fx.punch(0.08);
+    car.hurt(0.15);
     if (closing > COW_WRECK) car.crash();
     context.score.add(-150, "Hit a cow", cow.x, cow.y + 2.2);
   }

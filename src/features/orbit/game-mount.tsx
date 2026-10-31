@@ -185,6 +185,9 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         <span className={styles.altitude}>
           <span data-hud="alt-label">ALT</span> <span data-hud="altitude">0</span> m
         </span>
+        <span className={styles.hull} title="Truck condition">
+          <span className={styles.hullFill} />
+        </span>
         <span className={styles.tank}>
           <span className={styles.tankFill} />
         </span>

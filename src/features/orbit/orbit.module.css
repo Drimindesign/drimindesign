@@ -590,67 +590,112 @@
       visibility: hidden;
     }
 
+    /*
+     * The controller: frosted glass buttons that sink when pressed, a thin light edge on top
+     * like a real pad's bevel, the brand violet on the thrusters.
+     */
     .pad {
       position: absolute;
       display: grid;
       place-items: center;
-      width: 4.75rem;
-      height: 4.75rem;
-      border: 1px solid rgb(255 246 220 / 0.4);
+      align-content: center;
+      gap: 0.1rem;
+      width: 4.4rem;
+      height: 4.4rem;
+      border: 1px solid rgb(255 255 255 / 0.16);
       border-radius: 50%;
-      background: rgb(20 15 20 / 0.35);
-      color: inherit;
-      font-size: 1.5rem;
+      background: radial-gradient(circle at 50% 30%, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.04) 60%), rgb(14 12 22 / 0.42);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -2px 6px rgb(0 0 0 / 0.35), 0 6px 18px rgb(0 0 0 / 0.35);
+      backdrop-filter: blur(10px) saturate(140%);
+      -webkit-backdrop-filter: blur(10px) saturate(140%);
+      color: #fff6dc;
       font-weight: 700;
       touch-action: none;
       pointer-events: auto;
       -webkit-tap-highlight-color: transparent;
+      transition: transform 0.08s ease-out, background-color 0.12s, box-shadow 0.12s;
+    }
+
+    .glyph {
+      font-size: 1.45rem;
+      line-height: 1;
+    }
+
+    .caption {
+      font-size: 0.55rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.75;
     }
 
     .pad:active,
     .pad[data-held="true"] {
-      background: rgb(255 246 220 / 0.25);
+      transform: scale(0.92);
+      background: radial-gradient(circle at 50% 35%, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0.08) 65%), rgb(40 30 60 / 0.55);
+      box-shadow: inset 0 2px 8px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.3);
+    }
+
+    /* Left thumb: brake and gas joined in one glass pill. */
+    .pad[data-action="left"],
+    .pad[data-action="right"] {
+      bottom: max(var(--gutter), env(safe-area-inset-bottom));
+      width: 4.9rem;
+      height: 4.4rem;
     }
 
     .pad[data-action="left"] {
       left: max(var(--gutter), env(safe-area-inset-left));
-      bottom: max(var(--gutter), env(safe-area-inset-bottom));
+      border-radius: 2.2rem 0.7rem 0.7rem 2.2rem;
     }
 
     .pad[data-action="right"] {
-      left: calc(max(var(--gutter), env(safe-area-inset-left)) + 5.75rem);
-      bottom: max(var(--gutter), env(safe-area-inset-bottom));
+      left: calc(max(var(--gutter), env(safe-area-inset-left)) + 5.15rem);
+      border-radius: 0.7rem 2.2rem 2.2rem 0.7rem;
     }
 
+    /* Right thumb: the big thruster button, ringed in violet. */
     .pad[data-action="jump"] {
       right: max(var(--gutter), env(safe-area-inset-right));
       bottom: max(var(--gutter), env(safe-area-inset-bottom));
-      width: 6rem;
-      height: 6rem;
-      border-color: rgb(103 211 255 / 0.6);
-      font-size: 1.9rem;
+      width: 5.9rem;
+      height: 5.9rem;
+      border: 2px solid rgb(180 142 236 / 0.75);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 0 22px rgb(180 142 236 / 0.35), 0 6px 18px rgb(0 0 0 / 0.35);
     }
 
+    .pad[data-action="jump"] .glyph {
+      font-size: 2rem;
+    }
+
+    /* The arc above it: sword, in/out, call the truck. */
+    .pad[data-action="attack"],
     .pad[data-action="interact"],
+    .pad[data-action="switch"] {
+      width: 3.6rem;
+      height: 3.6rem;
+    }
+
     .pad[data-action="attack"] {
-      width: 3.25rem;
-      height: 3.25rem;
-      font-size: 1.1rem;
+      right: calc(max(var(--gutter), env(safe-area-inset-right)) + 0.4rem);
+      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 6.6rem);
+      border-color: rgb(250 46 0 / 0.55);
     }
 
     .pad[data-action="interact"] {
-      right: calc(max(var(--gutter), env(safe-area-inset-right)) + 6.75rem);
+      right: calc(max(var(--gutter), env(safe-area-inset-right)) + 6.6rem);
       bottom: max(var(--gutter), env(safe-area-inset-bottom));
     }
 
-    .pad[data-action="attack"] {
-      right: calc(max(var(--gutter), env(safe-area-inset-right)) + 1.4rem);
-      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 6.75rem);
+    .pad[data-action="switch"] {
+      right: calc(max(var(--gutter), env(safe-area-inset-right)) + 5.2rem);
+      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 4.8rem);
     }
 
-    /* Get out and the sword only matter at a barricade or on foot. */
+    /* Get out and the sword only matter at a barricade or on foot; calling the truck only on foot. */
     .root:not([data-actions="true"]) .pad[data-action="interact"],
-    .root:not([data-actions="true"]) .pad[data-action="attack"] {
+    .root:not([data-actions="true"]) .pad[data-action="attack"],
+    .root:not([data-foot="true"]) .pad[data-action="switch"] {
       display: none;
     }
   }

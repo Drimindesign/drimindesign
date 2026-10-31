@@ -43,8 +43,10 @@ export const CHARACTER = {
   accelRun: 2.4,
   decel: 11,
   airAccel: 3.2,
-  /** Take-off speed from the legs (m/s): ~1.1 m on Earth, the same push goes much higher on Pluto. */
-  jumpSpeed: 4.65,
+  /** Take-off speed from the legs (m/s): a trained fighter's spring, ~1.6 m on Earth. */
+  jumpSpeed: 5.6,
+  /** A second push in mid-air (kung fu): its speed (m/s), enough to reach a truck's roof. */
+  airJumpSpeed: 6.4,
   /** Gravity multiplier while rising with jump released: short taps give short hops. */
   releaseGravity: 2.4,
   coyoteTime: 0.1,
@@ -83,17 +85,17 @@ export const CAR = {
   /** Pitch torque in the air from spinning the wheels up or down (N·m). */
   airTorque: 2600,
   /** Thrusters under the floor: acceleration while firing (m/s²), independent of the planet. */
-  thrust: 12,
+  thrust: 16,
   /**
    * A tap on the ground: a short burn whose push swells and fades (a sine over liftTime) rather
    * than an instant kick, so the car lifts off smoothly. liftKick is the speed it adds (m/s).
    */
   liftTime: 0.22,
-  liftKick: 6,
+  liftKick: 7.5,
   /** Fuel a lift-off costs (s of tank). */
   liftCost: 0.35,
   /** Holding: the thrusters back off above this climb rate (m/s): a hold steadies and softens, it barely climbs. */
-  maxClimb: 2.5,
+  maxClimb: 3.5,
   /**
    * Second press in the air: a booster burst along the nose (m/s) and a little lift, swelling over
    * boostTime (s). It spends a booster charge, not tank: charges are earned by stunts.

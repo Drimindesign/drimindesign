@@ -88,6 +88,10 @@ const REPAIR = 0.5;
 const BARRICADE = { health: 4, height: 6, wreck: 7 } as const;
 /** Within this distance before a barricade (m), the car can be left. */
 const STOP_ZONE = 16;
+/** How close the camera comes in on her when she's out of the truck (zoom factor). */
+const FOOT_ZOOM = 1.7;
+/** Calling the truck: it comes down this far ahead of her (m), from this high (m), if it's further than this (m). */
+const CALL = { ahead: 4.5, height: 9, farther: 8 } as const;
 /** Brake assist before a barricade: how far out it starts (m), the speed allowed per metre left (1/s), its braking (m/s²), the crawl at the wall (m/s). */
 const STOP_ASSIST = { range: 40, slope: 0.55, brake: 18, crawl: 1.2 } as const;
 /** The finale: the launch rig lifts the car off the pad for this long (s) before the stage ends. */
@@ -154,6 +158,8 @@ export class RoadStage implements Stage {
     const explorer = new Explorer(4, this.terrain, look, context.audio, context.particles);
     const car = new Car(6, this.terrain, context.audio, context.particles);
     this.crew = new Crew(explorer, car, this.terrain, context.audio);
+    explorer.body.platforms = () => this.platforms();
+    this.crew.onCall = () => void this.callCar();
     this.crew.seat();
     this.cells = new Pickups(config.cells.map(([x, h]) => [x, Math.max(0, this.terrain.height(x)) + h] as const));
     this.rings = config.rings.map(([x, h]) => ({ x, y: Math.max(0, this.terrain.height(x)) + h, taken: false }));
@@ -328,7 +334,9 @@ export class RoadStage implements Stage {
     }
     // A fight on foot pulls the camera in.
     const e = this.crew.explorer.body;
-    if (this.crew.mode === "foot" && this.boars.some((b) => b.fighter && b.active && Math.abs(b.x - e.x) < 10)) this.context.fx.focus(1.16);
+    if (this.crew.mode === "foot" && this.boars.some((b) => b.fighter && b.active && Math.abs(b.x - e.x) < 10)) this.context.fx.focus(1.3);
+    // Out of the truck, the camera comes in close on her (and eases back out when she's back in).
+    else if (this.crew.mode !== "car") this.context.fx.focus(FOOT_ZOOM);
   }
 
   /*
@@ -430,6 +438,37 @@ export class RoadStage implements Stage {
     this.debris.burst(stop.x, ground + 1.5, 5, 3, 26, 5, ["#5a4232", "#6b4f3a", "#7a5c43", "#b5452a"], 0.5);
     this.context.particles.dust(stop.x, ground + 1, 4, 60, 2.2);
     this.context.score.add(POINTS.stageClear, "Yard cleared", stop.x, ground + 3);
+  }
+
+  /*
+   * What she can stand on besides the ground (kung fu: up onto anything): truck and rickshaw roofs
+   * (riding them as they roll), crates and stalls still standing, and the Cybertruck itself.
+   */
+  private platforms(): { x0: number; x1: number; top: number; vx: number }[] {
+    const out: { x0: number; x1: number; top: number; vx: number }[] = [];
+    for (const t of this.traffic) {
+      const half = LENGTH[t.kind] / 2 - 0.2;
+      out.push({ x0: t.at - half, x1: t.at + half, top: this.terrain.height(t.at) + HEIGHT[t.kind], vx: t.moving ? t.speed : 0 });
+    }
+    for (const p of this.props) {
+      if (p.broken || p.kind === "fence") continue;
+      const spec = PROPS[p.kind];
+      out.push({ x0: p.x - spec.width / 2, x1: p.x + spec.width / 2, top: this.terrain.height(p.x) + spec.height, vx: 0 });
+    }
+    const v = this.crew.car.vehicle;
+    if (!this.crew.car.occupied && v.grounded && v.upright) out.push({ x0: v.x - 2.1, x1: v.x + 2.1, top: v.y + 0.95, vx: v.vx });
+    return out;
+  }
+
+  /* C: the truck, left somewhere behind, comes down out of the sky beside her. */
+  callCar(): boolean {
+    const e = this.crew.explorer.body;
+    const v = this.crew.car.vehicle;
+    if (this.crew.mode !== "foot" || Math.abs(v.x - e.x) < CALL.farther) return false;
+    v.drop(e.x + e.facing * CALL.ahead, CALL.height);
+    this.context.audio.ignition();
+    this.context.fx.punch(0.04);
+    return true;
   }
 
   /*
@@ -732,7 +771,8 @@ export class RoadStage implements Stage {
     if (this.liftoff >= 0) prompt = "Lift-off";
     else if (foot && this.crew.nearDoor && !stop) prompt = "E · Back in the truck";
     else if (foot && stop) prompt = "F · Sword: cut down the barricade and its guards    Space · Jump";
-    else if (foot) prompt = "F · Sword    Space · Jump    E at the door · Back in the truck";
+    else if (foot && Math.abs(v.x - this.crew.explorer.body.x) > CALL.farther) prompt = "F · Sword    Space · Jump (twice in the air)    C · Call the truck";
+    else if (foot) prompt = "F · Sword    Space · Jump (twice in the air)    E at the door · Back in the truck";
     else if (stop && this.crew.canAlight) prompt = "Barricade! Press E · step out and fight";
     else if (stop) prompt = "Barricade ahead: stop the truck";
     else if (v.x < 22 && this.stops[0] && !this.stops[0].broken) prompt = "→ Drive to the barricade ahead, then press E to step out and fight";
@@ -751,6 +791,7 @@ export class RoadStage implements Stage {
       fuel: car.fuelSeconds,
       landIn: this.liftoff >= 0 || foot ? null : car.landIn,
       actions: foot || stop !== undefined || this.crew.canAlight,
+      foot,
       line: this.line,
       // A fight is on while anything hostile is up and close, to the hero on foot or the truck.
       combat: this.boars.some((b) => b.active && (b.fighter || b.kind === "wolf" || b.kind === "bull") && Math.abs(b.x - (foot ? this.crew.explorer.body.x : v.x)) < 14),

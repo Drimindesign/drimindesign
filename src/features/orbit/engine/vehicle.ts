@@ -322,6 +322,16 @@ export class Vehicle {
     return true;
   }
 
+  /** Called down from the sky: level, at x, this high above the ground, already falling. */
+  drop(x: number, height: number): void {
+    this.reset(x);
+    this.y += height;
+    this.vy = -3;
+    this.angle = 0;
+    this.py = this.y;
+    this.pangle = 0;
+  }
+
   reset(x: number): void {
     this.x = x;
     this.y = this.terrain.height(x) + 0.8;

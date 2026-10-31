@@ -20,13 +20,17 @@ export interface Reward {
   image: string;
 }
 
-/* Touch controls: brake and gas under the left thumb; thrusters (big), get out and sword under the right. */
-const PADS: readonly { action: Action; label: string; glyph: string }[] = [
-  { action: "left", label: "Brake, reverse, or back-flip in the air", glyph: "◀" },
-  { action: "right", label: "Accelerate, or front-flip in the air", glyph: "▶" },
-  { action: "attack", label: "Swing the sword", glyph: "⚔" },
-  { action: "interact", label: "Get in or out, plant the flag", glyph: "E" },
-  { action: "jump", label: "Thrusters: tap to hop, tap again in the air to boost, hold to hover", glyph: "▲" },
+/*
+ * The controller (touch screens): brake and gas in a glass pill under the left thumb; under the
+ * right, the big thruster button with the sword, get in/out and call-the-truck in an arc above it.
+ */
+const PADS: readonly { action: Action; label: string; glyph: string; caption: string }[] = [
+  { action: "left", label: "Brake, reverse, or back-flip in the air", glyph: "◀", caption: "" },
+  { action: "right", label: "Accelerate, or front-flip in the air", glyph: "▶", caption: "" },
+  { action: "attack", label: "Swing the sword", glyph: "⚔", caption: "Sword" },
+  { action: "interact", label: "Get in or out, plant the flag", glyph: "E", caption: "In/Out" },
+  { action: "switch", label: "Call the truck down to you", glyph: "C", caption: "Truck" },
+  { action: "jump", label: "Thrusters: tap to hop, tap again in the air to boost, hold to hover; on foot, jump (twice for a double jump)", glyph: "▲", caption: "" },
 ];
 
 /* The 3D arena (/play?arena): its own chunk, loaded only when asked for. */
@@ -126,6 +130,8 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
 
   const press = (event: React.PointerEvent<HTMLButtonElement>): void => {
     event.currentTarget.dataset.held = "true";
+    // A tick in the hand, like a real controller's button.
+    if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(8);
     gameRef.current?.audio.unlock();
     gameRef.current?.input.press(padAction(event));
     try {
@@ -242,7 +248,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         </span>
       </div>
 
-      <p className={styles.hints}>→ drive · Space hop · Space in air boost · hold hover · tap ← → in air flip · E get out · F sword · R checkpoint · Esc pause</p>
+      <p className={styles.hints}>→ drive · Space hop · Space in air boost · hold hover · tap ← → in air flip · E get out · F sword · on foot: Space twice double-jump, C call the truck · R checkpoint · Esc pause</p>
 
       {/* ---- Cards between stages ---- */}
       <section className={`${styles.card} ${styles.titleCard}`} aria-label="Idea to Orbit">
@@ -384,7 +390,8 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
             onPointerCancel={release}
             onContextMenu={(event) => event.preventDefault()}
           >
-            {pad.glyph}
+            <span className={styles.glyph}>{pad.glyph}</span>
+            {pad.caption ? <span className={styles.caption}>{pad.caption}</span> : null}
           </button>
         ))}
       </div>

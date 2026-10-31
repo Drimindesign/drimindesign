@@ -1,12 +1,14 @@
 "use client";
 
-import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { retryImport } from "@/lib/utils/retry-import";
 import type { GameAudio } from "../engine/audio";
 import { apply, bindKeys, type PadAction } from "./arena-controls";
 import { arenaManifest, levelReady, type ArenaFiles } from "./arena-data";
 import { LEVELS, type LevelId } from "./arena-levels";
+import { teko } from "@/app/fonts/fonts";
+import { ArenaMenu } from "./arena-menu";
 import { ArenaPads } from "./arena-pads";
 import { canRunArena } from "./capability";
 import type { ArenaScene } from "./arena-scene";
@@ -169,7 +171,7 @@ export function ArenaMount({ onExit, level }: { onExit?: (result: "win" | "lose"
   const view = useRef({ yaw: 0, pitch: 0 });
 
   return (
-    <div className={styles.arena} data-phase={phase}>
+    <div className={`${styles.arena} ${teko.variable}`} data-phase={phase}>
       <canvas
         ref={canvasRef}
         className={styles.canvas}
@@ -206,59 +208,21 @@ export function ArenaMount({ onExit, level }: { onExit?: (result: "win" | "lose"
           <ArenaPads onPad={onPad} />
         </>
       ) : null}
+      {phase === "offer" || phase === "loading" || phase === "failed" || phase === "unsupported" ? (
+        <Image className={styles.keyart} src="/game/arena/banner-1920.webp" alt="" fill sizes="100vw" />
+      ) : null}
       {phase !== "ready" ? (
-        <div className={styles.card}>
-          <h2 className={styles.title}>{phase === "win" ? "Cleared" : phase === "lose" ? "You fell" : LEVELS[chosenLevel].title}</h2>
-          {phase === "offer" ? (
-            <>
-              {!level && ready.length > 1 ? (
-                <div className={styles.levels} role="radiogroup" aria-label="Arena">
-                  {ready.map((id) => (
-                    <button key={id} type="button" role="radio" aria-checked={id === chosenLevel} className={styles.level} onClick={() => setPicked(id)}>
-                      {LEVELS[id].title}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              <p>{LEVELS[chosenLevel].blurb} One download, about {megabytes(chosenLevel)} MB, kept on this device.</p>
-              <p className={styles.keys}>← → move (hold to run) · ↑ jump · F swing · Shift block · Q Master Stroke</p>
-              <button type="button" className={styles.button} onClick={() => void enter()}>
-                Download and fight
-              </button>
-            </>
-          ) : null}
-          {phase === "loading" ? (
-            <>
-              <p>Preparing the arena…</p>
-              <div className={styles.bar} role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100}>
-                <span style={{ transform: `scaleX(${progress})` }} />
-              </div>
-            </>
-          ) : null}
-          {phase === "win" || phase === "lose" ? (
-            <button type="button" className={styles.button} onClick={() => (phase === "win" && onExit ? onExit("win") : void again())}>
-              {phase === "win" && onExit ? "Back to the road" : "Fight again"}
-            </button>
-          ) : null}
-          {phase === "unsupported" ? <p>This device can&apos;t run the 3D arena; fights stay in 2D here.</p> : null}
-          {phase === "failed" ? (
-            <>
-              <p>The arena didn&apos;t load. Check the connection and try again.</p>
-              <button type="button" className={styles.button} onClick={() => void enter()}>
-                Try again
-              </button>
-            </>
-          ) : null}
-          {onExit ? (
-            <button type="button" className={styles.back} onClick={() => onExit(phase === "win" ? "win" : "lose")}>
-              Back to the game
-            </button>
-          ) : (
-            <Link className={styles.back} href="/play">
-              Back to the game
-            </Link>
-          )}
-        </div>
+        <ArenaMenu
+          phase={phase}
+          level={chosenLevel}
+          choices={level ? [] : ready}
+          megabytes={megabytes(chosenLevel)}
+          progress={progress}
+          onPick={setPicked}
+          onFight={() => void enter()}
+          onAgain={() => void again()}
+          onExit={onExit}
+        />
       ) : null}
     </div>
   );

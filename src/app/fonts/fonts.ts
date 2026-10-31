@@ -24,3 +24,17 @@ export const manrope = localFont({
   variable: "--font-manrope",
   fallback: ["ui-sans-serif", "system-ui", "Segoe UI", "Roboto", "sans-serif"],
 });
+
+/*
+ * Teko (SIL OFL), a condensed display face for the game's arena screens. Not preloaded: it's
+ * only used once the arena opens.
+ */
+export const teko = localFont({
+  src: "./teko-600.woff2",
+  weight: "600",
+  style: "normal",
+  display: "swap",
+  preload: false,
+  variable: "--font-teko",
+  fallback: ["Impact", "Arial Narrow", "sans-serif"],
+});

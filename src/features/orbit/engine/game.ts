@@ -24,7 +24,7 @@ export interface Hud {
  * Camera zoom: how close it sits when slow, the speed (km/h) where it's fully opened out, the
  * spring (1/s) that carries it, how hard a punch of strength 1 kicks it, and the closest it gets.
  */
-const ZOOM = { close: 1.07, fullSpeed: 110, omega: 9, punch: 9, max: 1.25 } as const;
+const ZOOM = { close: 1.07, fullSpeed: 110, omega: 6, punch: 9, max: 1.85 } as const;
 const STEP = 1 / SIM_HZ;
 /** How long a stage card stays up before play starts on its own (s). */
 const INTRO_TIME = 2.6;
@@ -478,6 +478,7 @@ export class Game {
     if (hud.fuel !== null) this.text("fuel", `${hud.fuel.toFixed(1)}s`);
     this.set("airborne", hud.landIn === null ? "false" : "true");
     this.set("actions", hud.actions ? "true" : "false");
+    this.set("foot", hud.foot ? "true" : "false");
     root.style.setProperty("--hull", (1 - (hud.damage ?? 0)).toFixed(3));
     this.set("hull", (hud.damage ?? 0) > 0.6 ? "low" : "ok");
     // Booster charges as pips: filled for each in hand.

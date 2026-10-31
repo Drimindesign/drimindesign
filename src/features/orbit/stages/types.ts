@@ -59,6 +59,8 @@ export interface View {
 
 export interface StageHud {
   prompt: string;
+  /** She's out of the truck (the controller shows the call-the-truck button). */
+  foot?: boolean;
   /** A spoken line on screen: who's talking and what they say (a GTA-style subtitle). */
   line?: { who: string; text: string } | null;
   /** A fight is on: the combat music plays. */

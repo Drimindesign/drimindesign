@@ -1,5 +1,5 @@
 /*
- * Input abstraction: keyboard and on-screen buttons feed the same actions, and the game reads
+ * Input abstraction: keyboard, gamepads and on-screen buttons feed the same actions, and the game reads
  * a snapshot per frame (held state plus presses since the last read). Nothing else in the game
  * touches the keyboard.
  */
@@ -41,9 +41,29 @@ const KEYS: Record<string, Action> = {
   KeyP: "pause",
 };
 
+/**
+ * A gamepad (standard mapping: Xbox, PlayStation, most Bluetooth controllers): the stick or D-pad
+ * moves; A jumps and fires the thrusters, X swings, B gets in and out, Y calls the truck,
+ * Start pauses, Select goes back to the checkpoint.
+ */
+const PAD_BUTTONS: readonly (readonly [number, Action])[] = [
+  [0, "jump"],
+  [12, "jump"],
+  [2, "attack"],
+  [1, "interact"],
+  [3, "switch"],
+  [9, "pause"],
+  [8, "reset"],
+  [14, "left"],
+  [15, "right"],
+];
+/** How far the stick must lean before it counts (0 … 1). */
+const STICK = 0.4;
+
 export class Input {
   private readonly held = new Set<Action>();
   private readonly pressed = new Set<Action>();
+  private padHeld = new Set<Action>();
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     const action = KEYS[event.code];
@@ -85,7 +105,24 @@ export class Input {
     this.held.delete(action);
   }
 
+  /* Gamepads are polled (the browser sends no events for buttons): edges become presses and releases. */
+  private pollPads(): void {
+    const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
+    const now = new Set<Action>();
+    for (const pad of pads) {
+      if (!pad || !pad.connected) continue;
+      const x = pad.axes[0] ?? 0;
+      if (x < -STICK) now.add("left");
+      if (x > STICK) now.add("right");
+      for (const [button, action] of PAD_BUTTONS) if (pad.buttons[button]?.pressed) now.add(action);
+    }
+    for (const action of now) if (!this.padHeld.has(action)) this.press(action);
+    for (const action of this.padHeld) if (!now.has(action)) this.release(action);
+    this.padHeld = now;
+  }
+
   read(): InputSnapshot {
+    this.pollPads();
     const snapshot: InputSnapshot = {
       move: (this.held.has("right") ? 1 : 0) - (this.held.has("left") ? 1 : 0),
       flipPressed: (this.pressed.has("right") ? 1 : 0) - (this.pressed.has("left") ? 1 : 0),

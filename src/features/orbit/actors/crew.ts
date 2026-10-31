@@ -62,6 +62,9 @@ export class Crew {
     this.set("car");
   }
 
+  /** C on foot: call the truck (the stage brings it down beside her). */
+  onCall: (() => void) | null = null;
+
   step(dt: number, gravity: number, input: InputSnapshot, rules: { board: boolean; alight: boolean }): void {
     this.modeTime += dt;
     const driving = this.mode === "car";
@@ -71,7 +74,7 @@ export class Crew {
     const e = this.explorer;
     switch (this.mode) {
       case "foot":
-        if (input.switchPressed) e.switchLook();
+        if (input.switchPressed) this.onCall?.();
         e.step(dt, gravity, input);
         if (rules.board && input.interactPressed && this.nearDoor && this.car.vehicle.upright) this.set("walkToDoor");
         break;

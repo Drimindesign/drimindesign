@@ -70,6 +70,12 @@
     }
   }
 
+  /* The loading screen's key art: the whole screen, its dark deck along the bottom under the card. */
+  .keyart {
+    object-fit: cover;
+    object-position: 50% 40%;
+  }
+
   .readout {
     position: absolute;
     top: max(0.75rem, env(safe-area-inset-top));
@@ -98,16 +104,248 @@
     text-align: center;
   }
 
+  /*
+   * Over the key art the card becomes a band along the bottom: title and words on the left, the
+   * button on the right, the progress bar across the very bottom, on a dark fade so it reads.
+   */
+  .card[data-banner="on"] {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    translate: none;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.6rem 1.5rem;
+    padding: 4rem max(1.25rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+    border-radius: 0;
+    background: linear-gradient(to top, rgb(5 4 8 / 0.92) 45%, rgb(5 4 8 / 0));
+    box-shadow: none;
+    text-align: left;
+  }
+
+  .card[data-banner="on"] > * {
+    grid-column: 1;
+  }
+
+  .card[data-banner="on"] .title {
+    font-size: clamp(2.4rem, 5vw, 3.8rem);
+    letter-spacing: 0.03em;
+    text-shadow: 0 0.2rem 1rem rgb(0 0 0 / 0.7);
+  }
+
+  .card[data-banner="on"] .actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: end;
+  }
+
+  .card[data-banner="on"] .loading,
+  .card[data-banner="on"] .meta {
+    grid-column: 1 / -1;
+  }
+
+  .bar span {
+    background: linear-gradient(90deg, #fa2e00, #ffb340);
+  }
+
+  /* Phones in landscape: a lower band so the key art shows; no keyboard hint on touch screens. */
+  @media (pointer: coarse) {
+    .keys {
+      display: none;
+    }
+  }
+
+  @media (max-height: 480px) {
+    .card[data-banner="on"] {
+      gap: 0.4rem 1rem;
+      padding-top: 2.5rem;
+    }
+
+    .card[data-banner="on"] .title {
+      font-size: 2rem;
+    }
+
+    .levelCard {
+      width: 6.6rem;
+    }
+
+    .fight {
+      min-width: 8.5rem;
+      font-size: 1.6rem;
+    }
+
+    .card[data-banner="on"] p {
+      font-size: 0.8rem;
+      line-height: 1.35;
+    }
+
+
+  }
+
   .card p {
     margin: 0;
     line-height: 1.45;
     color: #d9cfbd;
   }
 
+  /* The game's display face for titles and big calls to action. */
   .title {
     margin: 0;
-    font-size: 1.4rem;
-    letter-spacing: 0.02em;
+    font-family: var(--font-teko), Impact, sans-serif;
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    font-weight: 600;
+    line-height: 0.95;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .heading {
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  .chapter,
+  .card p.chapter {
+    font-family: var(--font-teko), Impact, sans-serif;
+    font-size: 1.05rem;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: #ff8a3c;
+  }
+
+  .tagline,
+  .card p.tagline {
+    font-size: 0.95rem;
+    color: #e6dccb;
+  }
+
+  .cards {
+    display: flex;
+    gap: 0.6rem;
+  }
+
+  /* A level as a game card: its picture, name, and difficulty stars; the chosen one glows. */
+  .levelCard {
+    position: relative;
+    display: grid;
+    gap: 0.2rem;
+    width: 8.5rem;
+    min-height: 2.75rem;
+    padding: 0.3rem 0.3rem 0.4rem;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    border-radius: 0.6rem;
+    background: rgb(10 8 14 / 0.55);
+    color: #f3ead8;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.15s ease-out, border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .levelCard[aria-checked="true"] {
+    border-color: #ff8a3c;
+    box-shadow: 0 0 0 1px #ff8a3c, 0 0 18px rgb(255 120 40 / 0.45);
+    transform: translateY(-2px);
+  }
+
+  .levelCard:focus-visible {
+    outline: 2px solid #fff6dc;
+    outline-offset: 3px;
+  }
+
+  .thumb {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 0.4rem;
+  }
+
+  .cardName {
+    font-family: var(--font-teko), Impact, sans-serif;
+    font-size: 1.15rem;
+    line-height: 1;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .stars {
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: #ffb340;
+  }
+
+  .starsOff {
+    color: rgb(255 255 255 / 0.22);
+  }
+
+  .actions {
+    display: grid;
+    justify-items: center;
+    gap: 0.35rem;
+  }
+
+  /* FIGHT: the big call to action, hot orange with dark type, breathing a glow. */
+  .fight {
+    min-width: 11rem;
+    min-height: 3.25rem;
+    padding: 0.15rem 2rem 0;
+    border: 0;
+    border-radius: 0.5rem;
+    background: linear-gradient(180deg, #ff9a3c, #fa2e00);
+    color: #160804;
+    font-family: var(--font-teko), Impact, sans-serif;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 0 0 1px rgb(255 190 120 / 0.6), 0 0 24px rgb(250 46 0 / 0.55);
+    animation: breathe 2.4s ease-in-out infinite;
+  }
+
+  .fight:focus-visible {
+    outline: 2px solid #fff6dc;
+    outline-offset: 3px;
+  }
+
+  @keyframes breathe {
+    50% {
+      box-shadow: 0 0 0 1px rgb(255 190 120 / 0.8), 0 0 38px rgb(250 46 0 / 0.75);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fight {
+      animation: none;
+    }
+  }
+
+  .meta,
+  .card p.meta {
+    font-size: 0.75rem;
+    color: #a99f90;
+  }
+
+  .loading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.4rem 0.8rem;
+  }
+
+  .tip,
+  .card p.tip {
+    grid-column: 1 / -1;
+    font-size: 0.85rem;
+    color: #e6dccb;
+  }
+
+  .percent,
+  .card p.percent {
+    font-family: var(--font-teko), Impact, sans-serif;
+    font-size: 1.3rem;
+    color: #ff8a3c;
   }
 
   .button {
@@ -244,33 +482,6 @@
   .lightning {
     background: #cfdcff;
     mix-blend-mode: screen;
-  }
-
-  .levels {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-
-  .level {
-    min-height: 2.75rem;
-    padding-inline: 0.9rem;
-    border: 1px solid rgb(255 255 255 / 0.2);
-    border-radius: 999px;
-    background: transparent;
-    color: #e9e0d0;
-    cursor: pointer;
-  }
-
-  .level[aria-checked="true"] {
-    border-color: #b48eec;
-    background: rgb(180 142 236 / 0.2);
-  }
-
-  .level:focus-visible {
-    outline: 2px solid #fff6dc;
-    outline-offset: 3px;
   }
 
   .keys {

@@ -59,8 +59,9 @@ export function makeSword(THREE: typeof Three, kind: SwordKind): Three.Group {
 /** A heater shield (flat top, curving to a point), its face toward +Z, with an iron rim and boss. */
 export function makeShield(THREE: typeof Three): Three.Group {
   const group = new THREE.Group();
-  const w = 0.3;
-  const h = 0.62;
+  // A real heater shield: about 46 cm across, 56 cm tall.
+  const w = 0.23;
+  const h = 0.52;
   const shape = new THREE.Shape();
   shape.moveTo(-w, h * 0.45);
   shape.lineTo(w, h * 0.45);
@@ -87,6 +88,45 @@ export function makeShield(THREE: typeof Three): Three.Group {
     if (mesh.isMesh) mesh.castShadow = true;
   });
   return group;
+}
+
+/** A leather scabbard with a steel chape, its mouth at the origin, running down -Y. */
+export function makeScabbard(THREE: typeof Three, kind: SwordKind): Three.Group {
+  const s = SWORDS[kind];
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.022, s.blade + 0.04, 10), new THREE.MeshStandardMaterial({ color: 0x2b1810, roughness: 0.7 }));
+  body.scale.z = 0.45;
+  body.position.y = -(s.blade + 0.04) / 2;
+  const chape = new THREE.Mesh(new THREE.ConeGeometry(0.024, 0.07, 10), new THREE.MeshStandardMaterial(IRON));
+  chape.rotation.x = Math.PI;
+  chape.scale.z = 0.45;
+  chape.position.y = -s.blade - 0.06;
+  const throat = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.04, 10), new THREE.MeshStandardMaterial(IRON));
+  throat.scale.z = 0.5;
+  group.add(body, chape, throat);
+  group.traverse((node) => {
+    const mesh = node as Three.Mesh;
+    if (mesh.isMesh) mesh.castShadow = true;
+  });
+  return group;
+}
+
+/**
+ * Where a sheathed sword sits on the left hip (in the hips bone's own frame, worked out with the
+ * body in its bind pose, facing +Z): hilt up and a little forward, blade down and back.
+ */
+export function hipMount(THREE: typeof Three, hips: Three.Object3D): { position: Three.Vector3; quaternion: Three.Quaternion; scale: Three.Vector3 } {
+  hips.updateWorldMatrix(true, false);
+  const hipsWorld = hips.matrixWorld.clone();
+  const at = new THREE.Vector3().setFromMatrixPosition(hipsWorld).add(new THREE.Vector3(0.17, 0.02, 0.07));
+  const blade = new THREE.Vector3(0, -0.92, -0.38).normalize();
+  const desired = new THREE.Matrix4().compose(at, new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), blade), new THREE.Vector3(1, 1, 1));
+  const local = hipsWorld.invert().multiply(desired);
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  local.decompose(position, quaternion, scale);
+  return { position, quaternion, scale };
 }
 
 /**

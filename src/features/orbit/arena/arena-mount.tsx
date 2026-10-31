@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { retryImport } from "@/lib/utils/retry-import";
 import type { GameAudio } from "../engine/audio";
 import { apply, bindKeys, type PadAction } from "./arena-controls";
-import { arenaManifest, type ArenaFiles } from "./arena-data";
+import { arenaManifest, levelReady, type ArenaFiles } from "./arena-data";
+import { LEVELS, type LevelId } from "./arena-levels";
 import { ArenaPads } from "./arena-pads";
 import { canRunArena } from "./capability";
 import type { ArenaScene } from "./arena-scene";
@@ -15,15 +16,15 @@ import type { FightHud, FightSound } from "./fight-director";
 type Phase = "offer" | "loading" | "ready" | "win" | "lose" | "unsupported" | "failed";
 
 const noSubscription = (): (() => void) => () => undefined;
-const MEGABYTES = (arenaManifest().reduce((sum, f) => sum + f.bytes, 0) / 1e6).toFixed(1);
+const megabytes = (level: LevelId): string => (arenaManifest(LEVELS[level]).reduce((sum, f) => sum + f.bytes, 0) / 1e6).toFixed(1);
 
 /*
- * The 3D arena (/play?arena): an offer to download it (size first), a progress bar, then the
- * fight in the backyard. The HUD (health, the Master Stroke meter, banners) is written straight
+ * The 3D arena (/play?arena, the title screen's button, or a barricade in the game): an offer to
+ * download it (size first; from the title screen, a choice of level), a progress bar, then the fight. The HUD (health, the Master Stroke meter, banners) is written straight
  * into the DOM by the fight each frame, never through React state. Keys or touch pads play;
  * dragging the background looks around.
  */
-export function ArenaMount({ onExit }: { onExit?: (result: "win" | "lose") => void }): React.ReactElement {
+export function ArenaMount({ onExit, level }: { onExit?: (result: "win" | "lose") => void; level?: LevelId }): React.ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const arenaRef = useRef<ArenaScene | null>(null);
   const filesRef = useRef<ArenaFiles | null>(null);
@@ -34,11 +35,27 @@ export function ArenaMount({ onExit }: { onExit?: (result: "win" | "lose") => vo
   const meterBar = useRef<HTMLSpanElement>(null);
   const meterBox = useRef<HTMLDivElement>(null);
   const bannerRef = useRef<HTMLParagraphElement>(null);
+  const impactRef = useRef<HTMLDivElement>(null);
+  const lightningRef = useRef<HTMLDivElement>(null);
+  const [picked, setPicked] = useState<LevelId>(level ?? "yard");
+  // Levels whose renders are on the server (new ones go up as they're rendered).
+  const [ready, setReady] = useState<LevelId[]>(["yard"]);
+  const chosenLevel: LevelId = ready.includes(picked) ? picked : "yard";
   const held = useRef(new Set<PadAction>());
   const [chosen, setPhase] = useState<Phase>("offer");
   const supported = useSyncExternalStore(noSubscription, canRunArena, () => true);
   const phase: Phase = supported ? chosen : "unsupported";
   const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let live = true;
+    void Promise.all((Object.keys(LEVELS) as LevelId[]).map(async (id) => ((await levelReady(LEVELS[id])) ? id : null))).then((ids) => {
+      if (live) setReady(ids.filter((id): id is LevelId => id !== null));
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     const unbind = bindKeys(() => arenaRef.current?.input ?? null, held.current);
@@ -74,6 +91,13 @@ export function ArenaMount({ onExit }: { onExit?: (result: "win" | "lose") => vo
       bannerRef.current.textContent = text ?? "";
       bannerRef.current.dataset.on = text ? "on" : "off";
     },
+    flash(kind, strength) {
+      if (kind === "lightning") {
+        if (lightningRef.current) lightningRef.current.style.opacity = String(strength);
+        return;
+      }
+      impactRef.current?.animate([{ opacity: strength }, { opacity: 0 }], { duration: 420, easing: "ease-out" });
+    },
     end(result) {
       setPhase(result);
     },
@@ -86,7 +110,10 @@ export function ArenaMount({ onExit }: { onExit?: (result: "win" | "lose") => vo
     },
     clang: (force) => audioRef.current?.clang(force),
     fall: () => audioRef.current?.land(1),
-    crackle: (level) => audioRef.current?.crackle(level),
+    crackle: (amount) => audioRef.current?.crackle(amount),
+    shield: () => audioRef.current?.shield(),
+    thunder: (strength) => audioRef.current?.thunder(strength),
+    rain: (amount) => audioRef.current?.rain(amount),
   };
 
   const build = async (): Promise<void> => {
@@ -95,7 +122,7 @@ export function ArenaMount({ onExit }: { onExit?: (result: "win" | "lose") => vo
     if (!canvas || !files) return;
     const { ArenaScene } = await retryImport(() => import("./arena-scene"));
     const rect = canvas.getBoundingClientRect();
-    const arena = await ArenaScene.create(canvas, files, hud, sound);
+    const arena = await ArenaScene.create(canvas, files, LEVELS[chosenLevel], hud, sound);
     arena.resize(rect.width, rect.height);
     arenaRef.current = arena;
     // QA: /play?arena&debug exposes the scene in the console.
@@ -114,7 +141,7 @@ export function ArenaMount({ onExit }: { onExit?: (result: "win" | "lose") => vo
         audioRef.current = new Audio();
         audioRef.current.unlock();
       }
-      filesRef.current ??= await downloadArena(setProgress);
+      filesRef.current ??= await downloadArena(LEVELS[chosenLevel], setProgress);
       await build();
     } catch {
       setPhase("failed");
@@ -160,6 +187,8 @@ export function ArenaMount({ onExit }: { onExit?: (result: "win" | "lose") => vo
         onPointerCancel={() => (drag.current = null)}
       />
       <div className={styles.grade} aria-hidden="true" />
+      <div ref={lightningRef} className={styles.lightning} aria-hidden="true" />
+      <div ref={impactRef} className={styles.impact} aria-hidden="true" />
       {phase === "ready" ? (
         <>
           <div className={styles.hud}>
@@ -179,10 +208,19 @@ export function ArenaMount({ onExit }: { onExit?: (result: "win" | "lose") => vo
       ) : null}
       {phase !== "ready" ? (
         <div className={styles.card}>
-          <h2 className={styles.title}>{phase === "win" ? "Yard cleared" : phase === "lose" ? "You fell" : "The Backyard"}</h2>
+          <h2 className={styles.title}>{phase === "win" ? "Cleared" : phase === "lose" ? "You fell" : LEVELS[chosenLevel].title}</h2>
           {phase === "offer" ? (
             <>
-              <p>The 3D arena: a real night set, lit like film. Two knights and a brute stand between you and the road. One download, about {MEGABYTES} MB, kept on this device.</p>
+              {!level && ready.length > 1 ? (
+                <div className={styles.levels} role="radiogroup" aria-label="Arena">
+                  {ready.map((id) => (
+                    <button key={id} type="button" role="radio" aria-checked={id === chosenLevel} className={styles.level} onClick={() => setPicked(id)}>
+                      {LEVELS[id].title}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <p>{LEVELS[chosenLevel].blurb} One download, about {megabytes(chosenLevel)} MB, kept on this device.</p>
               <p className={styles.keys}>← → move (hold to run) · ↑ jump · F swing · Shift block · Q Master Stroke</p>
               <button type="button" className={styles.button} onClick={() => void enter()}>
                 Download and fight

@@ -64,6 +64,7 @@ export class GameAudio {
   /** Spoken lines, decoded on first use. */
   private readonly voices = new Map<string, Promise<AudioBuffer | null>>();
   private lastPickup = 0;
+  private rainLoop: GainNode | null = null;
   private pickupStep = 0;
 
   get isMuted(): boolean {
@@ -260,6 +261,43 @@ export class GameAudio {
   crack(): void {
     this.whoosh({ duration: 0.06, from: 2600, to: 1400, q: 3, gain: 0.12, attack: 0.001 });
     this.thump(220, 120, 0.14, 0.08);
+  }
+
+  /** A blade caught on a shield: a dull wooden knock under a short iron ring. */
+  shield(): void {
+    this.thump(110, 60, 0.3, 0.14);
+    this.bell(680 + Math.random() * 140, 0.045, 0, 0.32);
+    this.whoosh({ duration: 0.07, from: 1800, to: 900, q: 1.5, gain: 0.06, attack: 0.002 });
+  }
+
+  /** Thunder: a long low rumble that rolls in and away. `strength` 0 … 1. */
+  thunder(strength = 0.8): void {
+    this.whoosh({ duration: 3.4, from: 170, to: 55, q: 0.4, gain: 0.24 * strength, attack: 0.3, wet: 0.6 });
+    this.thump(58, 34, 0.32 * strength, 1.8, 0.08);
+  }
+
+  /** Steady rain (filtered noise, looping) at `level` 0 … 1; 0 fades it out. */
+  rain(level: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.noise) return;
+    if (!this.rainLoop) {
+      const source = ctx.createBufferSource();
+      source.buffer = this.noise;
+      source.loop = true;
+      const high = ctx.createBiquadFilter();
+      high.type = "highpass";
+      high.frequency.value = 900;
+      const low = ctx.createBiquadFilter();
+      low.type = "lowpass";
+      low.frequency.value = 6500;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      source.connect(high).connect(low).connect(gain);
+      this.send(gain, 0.2);
+      source.start();
+      this.rainLoop = gain;
+    }
+    this.rainLoop.gain.setTargetAtTime(level * 0.07, ctx.currentTime, 0.6);
   }
 
   /** A bonfire's crackle: one dry pop of sap in the wood, with a breath of hiss. `level` 0 … 1. */

@@ -1,3 +1,5 @@
+import type { ArenaLevel } from "./arena-levels";
+
 /*
  * The arena's files: its description (arena.json, written by the Blender export), the slices'
  * renders, depth grids and wind masks, the light probe, and the fighters. Downloaded once with a
@@ -46,7 +48,7 @@ export interface ArenaShot {
   depth: Uint16Array[];
 }
 
-/** The camera positions the set was shot from: the wide from the deck, and the low angle on the lawn. */
+/** The camera positions each level's set was shot from: the wide, and the low angle (folders under the level's). */
 export const SHOTS = [{ folder: "", slices: 3 }, { folder: "low/", slices: 2 }] as const;
 
 export interface ArenaFiles {
@@ -63,10 +65,10 @@ export interface ArenaData {
 }
 
 /** Every file with its rough size (bytes), for the download screen before anything is fetched. */
-export function arenaManifest(): { url: string; bytes: number }[] {
-  const files = [{ url: `${ARENA_BASE}probe.hdr`, bytes: 420_000 }];
+export function arenaManifest(level: ArenaLevel): { url: string; bytes: number }[] {
+  const files = [{ url: `${ARENA_BASE}${level.folder}probe.hdr`, bytes: 420_000 }];
   for (const shot of SHOTS) {
-    const base = `${ARENA_BASE}${shot.folder}`;
+    const base = `${ARENA_BASE}${level.folder}${shot.folder}`;
     files.push({ url: `${base}arena.json`, bytes: 5_000 });
     for (let i = 0; i < shot.slices; i++) {
       files.push({ url: `${base}tile${i}.webp`, bytes: 560_000 }, { url: `${base}tile${i}.sway.png`, bytes: 40_000 }, { url: `${base}tile${i}.depth.bin`, bytes: 61_000 });
@@ -100,8 +102,8 @@ async function fetchWithProgress(url: string, onBytes: (n: number) => void): Pro
 }
 
 /** Downloads the whole arena; `progress` gets the share done (0 … 1). */
-export async function downloadArena(progress: (share: number) => void): Promise<ArenaFiles> {
-  const manifest = arenaManifest();
+export async function downloadArena(level: ArenaLevel, progress: (share: number) => void): Promise<ArenaFiles> {
+  const manifest = arenaManifest(level);
   const expected = manifest.reduce((sum, f) => sum + f.bytes, 0);
   let received = 0;
   const tick = (n: number): void => {
@@ -110,7 +112,7 @@ export async function downloadArena(progress: (share: number) => void): Promise<
   };
   const get = (url: string): Promise<ArrayBuffer> => fetchWithProgress(url, tick);
   const shot = async (folder: string): Promise<ArenaShot> => {
-    const base = `${ARENA_BASE}${folder}`;
+    const base = `${ARENA_BASE}${level.folder}${folder}`;
     const meta = JSON.parse(new TextDecoder().decode(await get(`${base}arena.json`))) as ArenaMeta;
     const slices = meta.slices.map((_, i) => i);
     const [colour, sway, depth] = await Promise.all([
@@ -122,13 +124,23 @@ export async function downloadArena(progress: (share: number) => void): Promise<
   };
   const [shots, probe, hero, knight, brute] = await Promise.all([
     Promise.all(SHOTS.map((s) => shot(s.folder))),
-    get(`${ARENA_BASE}probe.hdr`),
+    get(`${ARENA_BASE}${level.folder}probe.hdr`),
     get(`${FIGHTERS_BASE}hero.glb`),
     get(`${FIGHTERS_BASE}knight.glb`),
     get(`${FIGHTERS_BASE}brute.glb`),
   ]);
   progress(1);
   return { meta: shots[0].meta, shots, probe, hero, knight, brute };
+}
+
+/** Whether a level's renders are on the server yet (new levels go up as they're rendered). */
+export async function levelReady(level: ArenaLevel): Promise<boolean> {
+  try {
+    const response = await fetch(`${ARENA_BASE}${level.folder}arena.json`, { method: "HEAD" });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 /** The ground height (m) at a distance along the fight line, from the exported profile. */

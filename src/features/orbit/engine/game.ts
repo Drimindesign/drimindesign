@@ -127,7 +127,7 @@ export class Game {
    * Hosts the 3D arena (the page sets it): called with how to finish; returns false to decline,
    * in which case the fight stays in 2D. While it's open the game is paused.
    */
-  onArena: ((finish: (won: boolean) => void) => boolean) | null = null;
+  onArena: ((finish: (won: boolean) => void, stage: StageId) => boolean) | null = null;
   private arenaOpen = false;
   /** Phones and tablets: prompts name the on-screen pads instead of keys. */
   private readonly touch = matchMedia("(pointer: coarse)").matches;
@@ -237,7 +237,7 @@ export class Game {
     const accepted = this.onArena((won) => {
       this.holdForArena(false);
       done(won);
-    });
+    }, STAGE_ORDER[this.stageIndex]);
     if (accepted) this.holdForArena(true);
     return accepted;
   }

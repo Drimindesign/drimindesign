@@ -228,6 +228,51 @@
     opacity: 1;
   }
 
+  /* A white impact flash (the final blow's cut) and the cold flash of lightning. */
+  .impact,
+  .lightning {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .impact {
+    background: #fff;
+  }
+
+  .lightning {
+    background: #cfdcff;
+    mix-blend-mode: screen;
+  }
+
+  .levels {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .level {
+    min-height: 2.75rem;
+    padding-inline: 0.9rem;
+    border: 1px solid rgb(255 255 255 / 0.2);
+    border-radius: 999px;
+    background: transparent;
+    color: #e9e0d0;
+    cursor: pointer;
+  }
+
+  .level[aria-checked="true"] {
+    border-color: #b48eec;
+    background: rgb(180 142 236 / 0.2);
+  }
+
+  .level:focus-visible {
+    outline: 2px solid #fff6dc;
+    outline-offset: 3px;
+  }
+
   .keys {
     font-size: 0.8rem;
     color: #a99f90;

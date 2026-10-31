@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { retryImport } from "@/lib/utils/retry-import";
+import { STAGE_LEVEL, type LevelId } from "./arena/arena-levels";
 import { canRunArena } from "./arena/capability";
 import type { Command, Game } from "./engine/game";
 import type { Action } from "./engine/input";
@@ -66,7 +67,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
   // The arena look test replaces the game on this page (read on the client only).
   const arena = useSyncExternalStore(noSubscription, arenaRequested, () => false);
   // A barricade fight handed to the 3D arena: how to report back to the game when it's over.
-  const [arenaFight, setArenaFight] = useState<{ finish: (won: boolean) => void } | null>(null);
+  const [arenaFight, setArenaFight] = useState<{ finish: (won: boolean) => void; level: LevelId } | null>(null);
   // The title screen's shortcut straight into the 3D arena (devices that can run it).
   const [arenaDirect, setArenaDirect] = useState(false);
   const arenaCapable = useSyncExternalStore(noSubscription, canRunArena, () => false);
@@ -86,9 +87,9 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         if (cancelled) return;
         const game = new Game(canvas, { root, fields: (name) => root.querySelectorAll<HTMLElement>(`[data-hud="${name}"]`) });
         gameRef.current = game;
-        game.onArena = (finish) => {
+        game.onArena = (finish, stage) => {
           if (!canRunArena()) return false;
-          setArenaFight({ finish });
+          setArenaFight({ finish, level: STAGE_LEVEL[stage] ?? "yard" });
           return true;
         };
         // QA: /play?debug exposes the running game in the console.
@@ -176,6 +177,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       ) : null}
       {arenaFight ? (
         <ArenaMount
+          level={arenaFight.level}
           onExit={(result) => {
             setArenaFight(null);
             arenaFight.finish(result === "win");

@@ -1,6 +1,6 @@
 import type * as Three from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
-import { holdWeapon, makeShield, makeSword } from "./weapons";
+import { hipMount, holdWeapon, makeScabbard, makeShield, makeSword } from "./weapons";
 
 /*
  * The fighters in the arena: the full Mixamo characters with their colour and surface-detail
@@ -19,7 +19,7 @@ const HEIGHT = { hero: 1.75, knight: 1.9, brute: 2.35 } as const;
 /** What each one carries. */
 const ARMS = { hero: { sword: "longsword", shield: false }, knight: { sword: "longsword", shield: true }, brute: { sword: "greatsword", shield: false } } as const;
 /** Clips that play once and hold their last frame. */
-const ONCE = /(slash|kick|spin|heavy|master|power|slide|hit|death|getup|block|jump)/;
+const ONCE = /(slash|kick|spin|heavy|master|power|slide|hit|death|getup|block|jump|draw|sheathe)/;
 
 export type FighterKind = keyof typeof HEIGHT;
 
@@ -36,6 +36,10 @@ export interface ArenaFighter {
   /** Where the sword's tip is (world), for sparks and trails. */
   tip(out: Three.Vector3): Three.Vector3;
   setOpacity(alpha: number): void;
+  /** Sword in hand (true) or in its scabbard on the hip (false; the hero only). */
+  arm(armed: boolean): void;
+  /** Shades the body by the light where it stands (a multiplier on its colours). */
+  setShade(k: number): void;
   dispose(): void;
 }
 
@@ -79,6 +83,8 @@ export async function makeFighter(THREE: typeof Three, loader: { parseAsync(data
   // Soles on the ground: the root sits where the feet are.
   scene.position.y = -box.min.y * scale;
   const materials: Three.MeshStandardMaterial[] = [];
+  const bases: Three.Color[] = [];
+  let shade = 1;
   scene.traverse((node) => {
     const mesh = node as Three.Mesh;
     if (!mesh.isMesh) return;
@@ -94,6 +100,7 @@ export async function makeFighter(THREE: typeof Three, loader: { parseAsync(data
       m.alphaTest = 0.5;
     }
     materials.push(m);
+    bases.push(m.color.clone());
   });
   const root = new THREE.Group();
   root.add(scene);
@@ -103,6 +110,18 @@ export async function makeFighter(THREE: typeof Three, loader: { parseAsync(data
   const sword = makeSword(THREE, ARMS[kind].sword);
   const right = scene.getObjectByName(bone("RightHand"));
   if (right) holdWeapon(THREE, right, sword, false);
+  // The hero also wears a scabbard on her left hip; the sword can live there or in her hand.
+  const inHand = { position: sword.position.clone(), quaternion: sword.quaternion.clone(), scale: sword.scale.clone() };
+  const hips = scene.getObjectByName(bone("Hips"));
+  const onHip = kind === "hero" && hips ? hipMount(THREE, hips) : null;
+  if (onHip && hips) {
+    const scabbard = makeScabbard(THREE, ARMS[kind].sword);
+    scabbard.position.copy(onHip.position);
+    scabbard.quaternion.copy(onHip.quaternion);
+    scabbard.scale.copy(onHip.scale);
+    hips.add(scabbard);
+  }
+  let armed = true;
   const left = scene.getObjectByName(bone("LeftHand"));
   if (ARMS[kind].shield && left) holdWeapon(THREE, left, makeShield(THREE), true);
   const tipLocal = new THREE.Vector3(0, kind === "brute" ? 1.4 : 1.1, 0);
@@ -180,6 +199,22 @@ export async function makeFighter(THREE: typeof Three, loader: { parseAsync(data
     },
     tip(out) {
       return sword.localToWorld(out.copy(tipLocal));
+    },
+    arm(next) {
+      if (next === armed || !onHip || !hips || !right) return;
+      armed = next;
+      const mount = armed ? inHand : onHip;
+      (armed ? right : hips).add(sword);
+      sword.position.copy(mount.position);
+      sword.quaternion.copy(mount.quaternion);
+      sword.scale.copy(mount.scale);
+      // In the scabbard only the hilt shows above the throat: the blade sits down inside it.
+      if (!armed) sword.position.add(new THREE.Vector3(0, -0.02, 0).applyQuaternion(mount.quaternion));
+    },
+    setShade(k) {
+      if (Math.abs(k - shade) < 0.01) return;
+      shade = k;
+      materials.forEach((m, i) => m.color.copy(bases[i]).multiplyScalar(k));
     },
     setOpacity(alpha) {
       for (const m of materials) {

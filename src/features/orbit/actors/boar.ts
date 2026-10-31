@@ -4,7 +4,7 @@ import { Ragdoll, type Joint } from "../engine/ragdoll";
 import type { Terrain } from "../engine/terrain";
 import { BOAR, COW, type Sprite } from "../pixel/props";
 
-export type BoarState = "wait" | "charge" | "attack" | "stagger" | "knocked" | "getup" | "flee" | "down" | "blasted" | "gone";
+export type BoarState = "wait" | "charge" | "circle" | "attack" | "block" | "stagger" | "knocked" | "getup" | "flee" | "down" | "blasted" | "gone";
 
 /** The beasts on the roads and the Moon. */
 export type BeastKind = "boar" | "wolf" | "alien" | "storm" | "cow" | "dog" | "raider" | "brute";
@@ -48,6 +48,17 @@ const SPECS: Record<BeastKind, BeastSpec> = {
  * from this close (m) and its blow reaches this far.
  */
 const ATTACK = { windup: 0.42, strike: 0.16, recover: 0.6, range: 1.15, reach: 1.45 } as const;
+/**
+ * Defence. When the hero starts a swing in reach, a fighter facing them may raise its guard (the
+ * knight often, the brute rarely) and hold it this long (s), or a raider may step back out of
+ * reach. A guard broken by a kick leaves it reeling (s).
+ */
+const GUARD: Partial<Record<BeastKind, number>> = { raider: 0.45, brute: 0.12 };
+const DODGE: Partial<Record<BeastKind, number>> = { raider: 0.2 };
+const BLOCK_TIME = 0.9;
+const GUARD_BROKEN = 1.1;
+/** Waiting its turn, a fighter keeps this far from the hero (m), side-stepping to hold it. */
+const HOLD_OFF = 3.4;
 /** A fallen fighter lies this long before fading out (s). */
 const DOWN_TIME = 6;
 /** Knocked down but alive: it lies at least this long (s), at most KNOCK_MAX, then gets up over GETUP_TIME. */
@@ -87,6 +98,8 @@ export class Boar {
   private readonly spec: BeastSpec;
   private timer = 0;
   private leapIn = 0;
+  /** Seconds left of the flinch after a blow on its guard. */
+  private blockFlinch = 0;
   /** The body as a ragdoll while it's limp, and how long it's been down. */
   ragdoll: Ragdoll | null = null;
   private knockedFor = 0;
@@ -159,6 +172,49 @@ export class Boar {
     this.knockedFor = 0;
   }
 
+  /** A blow just landed on its guard (for the block-hit flinch). */
+  get blocked(): boolean {
+    return this.state === "block" && this.blockFlinch > 0;
+  }
+
+  /** The hero starts a swing within reach: it may raise its guard, or step back out of reach. */
+  react(fromX: number): void {
+    if (!this.fighter || (this.state !== "charge" && this.state !== "circle")) return;
+    const toward = Math.sign(fromX - this.x) || 1;
+    if (Math.random() < (GUARD[this.kind] ?? 0)) {
+      this.state = "block";
+      this.facing = toward;
+      this.timer = BLOCK_TIME;
+      this.vx = 0;
+    } else if (Math.random() < (DODGE[this.kind] ?? 0)) {
+      this.vx = -toward * 4.5;
+      this.vy = 1.2;
+      this.state = "circle";
+      this.timer = 0.5;
+    }
+  }
+
+  /** Is it covering a blow coming from `dir` (±1)? Only while guarding and facing it. */
+  covers(dir: number): boolean {
+    return this.state === "block" && this.facing === -dir;
+  }
+
+  /** A blow on the guard: no harm, a jolt back, the flinch. */
+  absorb(dir: number): void {
+    this.vx = dir * 1.5 * (90 / this.spec.mass);
+    this.blockFlinch = 0.35;
+    this.timer = Math.max(this.timer, 0.4);
+  }
+
+  /** A kick into the guard: it's knocked open and reels. */
+  breakGuard(dir: number): void {
+    this.vx = dir * 3.5 * (90 / this.spec.mass);
+    this.vy = 1;
+    this.flash = 0.15;
+    this.timer = GUARD_BROKEN;
+    this.state = "stagger";
+  }
+
   /** Fights on foot with a weapon (drawn in 3D) rather than charging like an animal. */
   get fighter(): boolean {
     return this.kind === "raider" || this.kind === "brute";
@@ -199,10 +255,12 @@ export class Boar {
   }
 
   /** Returns true when it starts a charge this step (for the grunt). */
-  update(dt: number, gravity: number, targetX: number): boolean {
+  /** `engage`: a fighter's turn to close in; otherwise it holds off and circles. */
+  update(dt: number, gravity: number, targetX: number, engage = true): boolean {
     let started = false;
     const spec = this.spec;
     this.timer = Math.max(0, this.timer - dt);
+    this.blockFlinch = Math.max(0, this.blockFlinch - dt);
     this.leapIn = Math.max(0, this.leapIn - dt);
     this.flash = Math.max(0, this.flash - dt);
     if (this.kind === "cow") {
@@ -214,8 +272,24 @@ export class Boar {
           started = true;
         }
         break;
+      case "circle": {
+        // Waiting its turn: hold off at a distance, side-stepping, facing the hero.
+        const side = Math.sign(this.x - targetX) || 1;
+        this.facing = -side;
+        if (this.grounded && this.timer === 0) this.vx = approach(this.vx, (targetX + side * HOLD_OFF - this.x) * 1.5, spec.accel * 0.5 * dt);
+        if (engage && this.timer === 0) this.state = "charge";
+        break;
+      }
+      case "block":
+        if (this.grounded) this.vx = approach(this.vx, 0, 10 * dt);
+        if (this.timer === 0) this.state = "charge";
+        break;
       case "charge": {
         const dir = Math.sign(targetX - this.x) || -1;
+        if (this.fighter && !engage) {
+          this.state = "circle";
+          break;
+        }
         // A fighter closes to sword range, plants its feet and swings.
         if (this.fighter && Math.abs(targetX - this.x) < ATTACK.range && this.grounded) {
           this.state = "attack";

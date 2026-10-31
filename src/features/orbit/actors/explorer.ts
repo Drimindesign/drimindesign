@@ -2,6 +2,7 @@ import { Animator } from "../engine/animator";
 import type { GameAudio } from "../engine/audio";
 import type { ToScreen } from "../engine/camera";
 import { CharacterController, type MoveInput } from "../engine/character-controller";
+import { Ragdoll } from "../engine/ragdoll";
 import type { Terrain } from "../engine/terrain";
 import { EXPLORERS, ExplorerSprite, type ExplorerId } from "../pixel/explorer-sprite";
 import { paste, type Painter } from "../pixel/painter";
@@ -19,26 +20,33 @@ export const MAX_HEARTS = 3;
  */
 const KEYS: readonly (readonly [number, number, number])[] = [
   [0, -1.0, 0],
-  [0.13, 2.4, 0.35],
-  [0.16, 2.45, 0.4],
-  [0.24, 0.05, 0.65],
-  [0.32, -0.05, 0.6],
-  [0.46, 2.0, 0.3],
-  [0.62, -1.0, 0],
+  [0.17, 2.4, 0.35],
+  [0.21, 2.45, 0.4],
+  [0.31, 0.05, 0.65],
+  [0.42, -0.05, 0.6],
+  [0.6, 2.0, 0.3],
+  [0.8, -1.0, 0],
 ];
-const SWING = { strike: 0.16, extended: 0.32, end: 0.62 } as const;
+/** The swing's timing (s), long enough for the motion-captured cuts to read as real weight. */
+const SWING = { strike: 0.21, extended: 0.42, end: 0.8 } as const;
 const SWORD = { guard: -1.0, length: 1.15, cooldown: 0.5 } as const;
 /**
- * The combo: a chop, a slice, then a stab driven through with the whole body. A swing started
- * within COMBO_WINDOW (s) of the last one's end continues it. Each blow's knockback (m/s), where
- * it lands, and whether it knocks the target off its feet.
+ * The combo: two cuts, a kick that breaks a raised guard, then a spinning blow that takes the
+ * target off its feet. A swing started within COMBO_WINDOW (s) of the last one's end continues
+ * it. Each blow's knockback (m/s), where it lands, whether it knocks down, and whether it breaks
+ * a block.
  */
-const COMBO_WINDOW = 0.45;
+const COMBO_WINDOW = 0.5;
 const BLOWS = [
-  { power: 2.4, joint: "head", heavy: false },
-  { power: 3, joint: "chest", heavy: false },
-  { power: 4.5, joint: "chest", heavy: true },
+  { power: 2.4, joint: "head", heavy: false, guardBreak: false },
+  { power: 3, joint: "chest", heavy: false, guardBreak: false },
+  { power: 3.6, joint: "pelvis", heavy: false, guardBreak: true },
+  { power: 5, joint: "chest", heavy: true, guardBreak: false },
 ] as const;
+/** Knocked down: lie at least this long (s), at most KNOCK_MAX, then get up over GETUP (s). */
+const KNOCK = { min: 0.6, max: 2.2, getup: 1.5 } as const;
+/** A blow bounced off a shield: the blade is thrown back and the arms jar this long (s). */
+const PARRIED = 0.45;
 /** Contact freezes the blade this long (s): the hit lands with weight. */
 const HIT_STOP = 0.06;
 /** Hands are never still: the guard breathes and sways (rad), and swings with the walk. */
@@ -62,6 +70,14 @@ export class Explorer {
   alpha = 1;
   crouch = 0;
   hearts = MAX_HEARTS;
+  /** Knocked down: the body as a ragdoll, then getting up (s left), else null / 0. */
+  ragdoll: Ragdoll | null = null;
+  getup = 0;
+  private knockedFor = 0;
+  /** A swing began this step (enemies react to it: block, dodge). */
+  swingStarted = false;
+  /** Thrown back off a shield (s left). */
+  parried = 0;
   /** Getting into or out of the car, and how far along (for the 3D model's sit and stand clips). */
   transition: { kind: "in" | "out"; progress: number } | null = null;
   private mercy = 0;
@@ -162,14 +178,55 @@ export class Explorer {
   }
 
   /** Knocked by something coming from `fromX`. Returns false while still blinking from the last hit. */
-  hurt(fromX: number): boolean {
-    if (this.mercy > 0) return false;
+  hurt(fromX: number, heavy = false): boolean {
+    if (this.mercy > 0 || this.ragdoll) return false;
     this.hearts = Math.max(0, this.hearts - 1);
     this.mercy = MERCY;
     const away = Math.sign(this.body.x - fromX) || -1;
-    this.body.impulse(away * 4.8, 3.8);
     this.audio.land(0.7);
+    if (heavy) {
+      this.knockDown(away);
+      return true;
+    }
+    this.body.impulse(away * 2.2, 1.2);
     return true;
+  }
+
+  /** Limp, knocked down: the body is a ragdoll (driven by the 3D model) until it gets up. */
+  get limp(): boolean {
+    return this.ragdoll !== null && this.getup === 0;
+  }
+
+  /*
+   * A heavy blow takes the hero off their feet: a ragdoll seeded standing, thrown away from the
+   * blow with the feet swept toward it, so the body goes over backwards.
+   */
+  private knockDown(away: number): void {
+    const b = this.body;
+    const f = b.facing;
+    const at = (dx: number, share: number): { x: number; y: number } => ({ x: b.x + dx * f, y: b.y + share * 1.75 });
+    this.ragdoll = new Ragdoll(
+      {
+        head: at(0.02, 0.93), chest: at(0, 0.72), pelvis: at(0, 0.5),
+        elbowL: at(0.06, 0.56), handL: at(0.14, 0.44), elbowR: at(-0.05, 0.56), handR: at(-0.02, 0.42),
+        kneeL: at(0.06, 0.27), footL: at(0.08, 0.03), kneeR: at(-0.03, 0.27), footR: at(-0.07, 0.03),
+      },
+      b.vx,
+      0.5,
+    );
+    this.ragdoll.impulse("chest", away * 6, 1.5);
+    this.ragdoll.impulse("footL", -away * 2, 0);
+    this.ragdoll.impulse("footR", -away * 2, 0);
+    this.knockedFor = 0;
+    this.swing = -1;
+  }
+
+  /** The blade bounced off a shield: thrown back, open for a moment. */
+  parry(): void {
+    this.parried = PARRIED;
+    this.swing = -1;
+    this.hitStop = HIT_STOP * 1.5;
+    this.body.impulse(-this.body.facing * 2.5, 0.6);
   }
 
   heal(): void {
@@ -232,13 +289,31 @@ export class Explorer {
   step(dt: number, gravity: number, input: MoveInput & { attackPressed?: boolean }, effects = true): void {
     this.mercy = Math.max(0, this.mercy - dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
+    this.parried = Math.max(0, this.parried - dt);
     this.clock += dt;
+    this.swingStarted = false;
+    // Knocked down: no control while the ragdoll falls and settles, then the get-up plays.
+    if (this.ragdoll) {
+      if (this.getup > 0) {
+        this.getup = Math.max(0, this.getup - dt);
+        if (this.getup === 0) this.ragdoll = null;
+      } else {
+        this.ragdoll.step(dt, gravity, this.terrain);
+        this.knockedFor += dt;
+        const pelvis = this.ragdoll.points.pelvis;
+        this.body.place(pelvis.x, this.terrain.height(pelvis.x));
+        if ((this.ragdoll.resting && this.knockedFor > KNOCK.min) || this.knockedFor > KNOCK.max) this.getup = KNOCK.getup;
+      }
+      return;
+    }
+    if (this.parried > 0) input = { ...input, attackPressed: false, move: 0 };
     if (this.swing < 0) this.sinceSwing += dt;
     // Pressed during a swing (after its strike): the next blow of the combo follows straight on.
     if (input.attackPressed && this.swing >= SWING.strike) this.queued = true;
     if ((input.attackPressed || this.queued) && this.swing < 0 && (this.cooldown === 0 || this.queued)) {
       this.queued = false;
       this.swing = 0;
+      this.swingStarted = true;
       this.combo = this.sinceSwing < COMBO_WINDOW ? (this.combo + 1) % BLOWS.length : 0;
       this.cooldown = SWORD.cooldown;
       this.struck.clear();

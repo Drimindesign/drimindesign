@@ -103,6 +103,9 @@ export class Game {
     punch: (strength) => {
       if (!this.still) this.zoomVelocity += strength * ZOOM.punch;
     },
+    buzz: (ms) => {
+      if (!this.still) navigator.vibrate?.(ms);
+    },
     focus: (zoom) => {
       if (!this.still) this.focusZoom = Math.max(this.focusZoom, zoom);
     },

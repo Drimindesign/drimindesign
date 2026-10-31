@@ -170,6 +170,14 @@ export class GameAudio {
     this.whoosh({ duration: 0.08, from: 800, to: 500, q: 1.2, gain: 0.08, attack: 0.004 });
   }
 
+  /** Steel on steel (a blade on a shield or a guard): a bright inharmonic ring and a scrape. `force` 0 … 1. */
+  clang(force = 1): void {
+    const pitch = 1700 + Math.random() * 500;
+    this.bell(pitch, 0.07 * force, 0, 0.5);
+    this.bell(pitch * 1.47, 0.035 * force, 0.004, 0.35);
+    this.whoosh({ duration: 0.12, from: 4200, to: 2400, q: 2, gain: 0.07 * force, attack: 0.002 });
+  }
+
   /** Picking something up: a bell note that climbs the scale when pickups come quickly. */
   pickup(): void {
     const ctx = this.ctx;

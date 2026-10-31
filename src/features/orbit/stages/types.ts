@@ -35,6 +35,8 @@ export interface StageFx {
   slowmo(seconds: number, scale?: number): void;
   /** Hold the camera this close (1.1–1.2) for this frame: a fight on foot. */
   focus(zoom: number): void;
+  /** A short phone vibration (ms), for hits felt in the hand. */
+  buzz(ms: number): void;
 }
 
 /** What the stage draws into, per frame. */

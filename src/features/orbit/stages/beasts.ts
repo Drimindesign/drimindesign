@@ -6,6 +6,8 @@ import type { StageContext } from "./types";
 
 /** Below this speed (m/s) a charging beast that rams the car wrecks it; above it, the car ploughs through. */
 const RAM_SPEED = 10;
+/** Fighters that close in at once on a hero on foot. */
+const ENGAGED = 2;
 /** The thruster jet reaches this far below the car (m) and this far either side of it. */
 const JET_REACH = 7;
 const JET_HALF_WIDTH = 2.4;
@@ -23,8 +25,16 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
   const e = crew.explorer;
   const driving = crew.mode === "car";
   let down = false;
+  // On foot, only the two nearest fighters close in at once; the rest hold off and wait their turn.
+  const engaged = new Set(
+    driving
+      ? beasts
+      : beasts.filter((b) => b.fighter && b.active).sort((a, b) => Math.abs(a.x - e.body.x) - Math.abs(b.x - e.body.x)).slice(0, ENGAGED),
+  );
   for (const beast of beasts) {
-    if (beast.update(dt, gravity, driving ? v.x : e.body.x)) audio.grunt();
+    if (beast.update(dt, gravity, driving ? v.x : e.body.x, engaged.has(beast))) audio.grunt();
+    // The hero starts a swing: fighters in reach may raise a guard or step back.
+    if (!driving && e.swingStarted && beast.fighter && Math.abs(beast.x - e.body.x) < 2.8) beast.react(e.body.x);
     if (beast.kind === "cow") {
       if (driving) cowMeetsCar(beast, crew, context);
       continue;
@@ -82,9 +92,25 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
       const box = e.hitbox;
       if (beast.x + 0.6 > box.x0 && beast.x - 0.6 < box.x1 && beast.y + 1 > box.y0 && beast.y < box.y1) {
         e.struck.add(beast);
+        const blow = e.blow;
+        if (beast.covers(b.facing)) {
+          // Steel on the guard: a kick knocks it open, a cut bounces off and throws the blade back.
+          audio.clang(blow.guardBreak ? 0.6 : 1);
+          context.fx.punch(0.05);
+          context.fx.buzz(25);
+          if (blow.guardBreak) {
+            beast.breakGuard(b.facing);
+            score.add(POINTS.swordHit, "Guard broken", beast.x, beast.y + 1.6);
+          } else {
+            beast.absorb(b.facing);
+            e.parry();
+            score.add(0, "Blocked", beast.x, beast.y + 1.9);
+          }
+          continue;
+        }
         e.recoil();
         audio.thwack();
-        const blow = e.blow;
+        context.fx.buzz(blow.heavy ? 45 : 20);
         const off = beast.hit(b.facing, blow.power, blow.joint, blow.heavy);
         score.add(off ? POINTS.swordHit * 2 : POINTS.swordHit, off ? "Driven off" : "Slash", beast.x, beast.y + 1.6);
         context.fx.punch(off ? 0.07 : 0.04);
@@ -101,7 +127,10 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
     // An animal hurts on contact; a raider only in the strike of its swing, within its reach, facing you.
     const reach = beast.fighter ? beast.reach : 0.8;
     const facing = !beast.fighter || Math.sign(b.x - beast.x) === beast.facing;
-    if (beast.dangerous && facing && Math.abs(beast.x - b.x) < reach && b.y < beast.y + 1.4 && b.y > beast.y - 0.5 && e.hurt(beast.x)) {
+    // A brute's blow takes the hero off their feet.
+    if (beast.dangerous && facing && Math.abs(beast.x - b.x) < reach && b.y < beast.y + 1.4 && b.y > beast.y - 0.5 && e.hurt(beast.x, beast.kind === "brute")) {
+      context.fx.buzz(beast.kind === "brute" ? 70 : 35);
+      context.fx.punch(beast.kind === "brute" ? 0.09 : 0.05);
       beast.rebound(Math.sign(beast.x - b.x) || 1);
       combo.break();
       if (e.hearts === 0) down = true;

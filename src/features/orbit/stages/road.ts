@@ -1079,7 +1079,8 @@ export class RoadStage implements Stage {
         mate.alpha = mate.carrier.alpha;
         continue;
       }
-      if (inTruck && mate.state !== "caged") {
+      // Distant soldiers must reach the truck on foot before boarding.
+      if (inTruck && mate.state !== "caged" && (mate.alpha === 0 || Math.abs(mate.x - v.x) < 3)) {
         mate.x = v.x - 1;
         mate.y = this.terrain.height(mate.x);
         mate.alpha = 0;

@@ -1091,9 +1091,8 @@
 }
 
 @layer components {
-  .mission { position: absolute; top: 11.5rem; left: var(--gutter); max-width: min(42rem, 90%); color: #fff; font-size: var(--text-label); pointer-events: none; }
+  .mission { position: absolute; top: 5.7rem; left: var(--gutter); max-width: min(42rem, 90%); color: #fff; font-size: var(--text-label); pointer-events: none; }
 }
 
 @layer components {
- :global([data-map="on"]) .pauseCard { visibility:hidden; }
 }

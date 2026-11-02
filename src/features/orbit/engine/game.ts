@@ -1,4 +1,4 @@
-import { writeRouteMap, type SquadOrder } from "../route-map-state";
+import { writeRouteMap } from "../route-map-state";
 import { MAX_HEARTS } from "../actors/explorer";
 import { Party } from "../actors/party";
 import { Combo, POINTS, Score } from "../actors/score";
@@ -89,28 +89,6 @@ export class Game {
     return this.stage;
   }
   private stage: Stage;
-  private mapResume = false;
-  private mapOpen = false;
-
-  toggleMap(): void {
-    if (this.mapOpen) { this.closeMap(); return; }
-    if (this.phase !== "play" && this.phase !== "paused") return;
-    this.mapResume = this.phase === "play";
-    this.mapOpen = true;
-    this.hud.root.dataset.map = "on";
-    this.input.clear();
-    this.setPhase("paused");
-  }
-
-  closeMap(): void {
-    if (!this.mapOpen) return;
-    this.mapOpen = false;
-    this.hud.root.dataset.map = "off";
-    this.input.clear();
-    if (this.mapResume) this.setPhase("play");
-  }
-
-  orderSquad(order: SquadOrder): void { this.stage.orderSquad?.(order); }
 
   /** Score when the current stage began (restarting the stage rolls back to it). */
   private stageStartScore = 0;
@@ -272,7 +250,6 @@ export class Game {
   /** From the overlay buttons; the keyboard does the same through `flow`. */
   command(command: Command): void {
     this.audio.unlock();
-    if (this.mapOpen) this.closeMap();
     switch (command) {
       case "start":
         if (this.phase === "title") this.beginStage(1);
@@ -376,15 +353,7 @@ export class Game {
     }
     this.accumulator += elapsed * this.timeScale;
     let input = this.input.read();
-    if (input.mapPressed) {
-      this.toggleMap();
-      input = { ...input, mapPressed: false, pausePressed: false };
-    } else if (this.mapOpen && input.pausePressed) {
-      this.closeMap();
-      // Closing the map consumes Escape; the same press must not immediately pause again.
-      input = { ...input, pausePressed: false };
-    }
-    if (!this.mapOpen) this.flow(input, elapsed);
+    this.flow(input, elapsed);
     let steps = 0;
     while (this.accumulator >= STEP && steps < MAX_STEPS) {
       // The stage keeps running under its title card and through the dip between stages: play never stops.
@@ -393,7 +362,7 @@ export class Game {
         this.score.update(STEP);
       }
       // Presses go to the first step only; held state applies to every step.
-      input = { ...input, mapPressed: false, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, masterPressed: false, revivePressed: false, resetPressed: false, pausePressed: false };
+      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, masterPressed: false, revivePressed: false, resetPressed: false, pausePressed: false };
       this.accumulator -= STEP;
       steps++;
     }

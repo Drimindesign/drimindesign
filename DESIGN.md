@@ -502,6 +502,6 @@ The ring includes Idea to Orbit with a static, tier-sized WebP banner, studio de
 
 On landscape screens, the caption uses a solid orange panel with the existing medium radius and surface border. This keeps the title, description and Play link readable as the band turns behind the column, without changing the camera framing.
 
-### Orbit tactical route map
+### Orbit progress strip
 
-The game HUD uses a compact pair of aligned ground/canopy tracks with queen, soldier and objective markers. Amber marks combat, red marks wounded soldiers, and dashed outlines mark waiting. The expanded panel pauses simulation and offers a soldier selector plus hold, regroup, advance and resume orders. Controls retain 44 px targets and visible focus, with a scrollable panel capped at 85svh. No decorative map motion is required in reduced-motion mode. Soldiers keep world positions and role speeds; ropes use visible grip/release and gravity, logs carry passengers, and ledge climbs use hand-supported mantles.
+A short, borderless progress line sits at the top center of the game. A white queen dot and small mint soldier dots show world positions automatically; amber indicates combat and red indicates wounded soldiers. A small metre counter sits below the line. The strip has no controls, background panel, expansion, motion effects or pause behavior. Character rendering, materials and lighting match commit 8a92b1d.

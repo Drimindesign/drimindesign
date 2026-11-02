@@ -4,10 +4,9 @@
  * touches the keyboard.
  */
 
-export type Action = "left" | "right" | "jump" | "interact" | "switch" | "planet" | "attack" | "weapon" | "skill" | "master" | "revive" | "reset" | "pause" | "map";
+export type Action = "left" | "right" | "jump" | "interact" | "switch" | "planet" | "attack" | "weapon" | "skill" | "master" | "revive" | "reset" | "pause";
 
 export interface InputSnapshot {
-  mapPressed: boolean;
   move: number;
   /** ← or → pressed this step: 1 right, -1 left (flips are taps, so holding gas never flips). */
   flipPressed: number;
@@ -51,7 +50,6 @@ const KEYS: Record<string, Action> = {
   KeyR: "reset",
   Escape: "pause",
   KeyP: "pause",
-  KeyT: "map",
 };
 
 /**
@@ -87,7 +85,7 @@ export class Input {
     if (!action || event.metaKey || event.ctrlKey || event.altKey) return;
     // Don't steal keys from links and buttons around the game.
     const target = event.target;
-    if (target instanceof Element && target.closest("a, input, textarea, select, button") && event.code !== "Space" && !(target.closest("[data-route-map]") && (event.code === "Escape" || event.code === "KeyT"))) return;
+    if (target instanceof Element && target.closest("a, input, textarea, select, button") && event.code !== "Space") return;
     event.preventDefault();
     this.press(action, !event.repeat);
   };
@@ -143,7 +141,6 @@ export class Input {
   read(): InputSnapshot {
     this.pollPads();
     const snapshot: InputSnapshot = {
-      mapPressed: this.pressed.has("map"),
       move: (this.held.has("right") ? 1 : 0) - (this.held.has("left") ? 1 : 0),
       flipPressed: (this.pressed.has("right") ? 1 : 0) - (this.pressed.has("left") ? 1 : 0),
       jumpHeld: this.held.has("jump"),

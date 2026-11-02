@@ -19,7 +19,7 @@ Test queen departures at 30, 60, 150 and 300 m with no coordinate discontinuity,
 
 Companions now plan crossings from authored terrain, rope stations and platforms. Shared reservations queue crossings. Rope travel uses gravity, a constrained grip, a real release and ballistic transfer before the next catch. Ledge mantles use bounded hand reach. Moving logs carry passengers; canopy travel uses the actual deck elevation. This is a local authored-route planner, not a general A* graph.
 
-The two-track map shows the queen, soldiers, health/combat state, crossings and objectives. T opens tactical orders and pauses simulation. Players can hold, regroup, advance to a selected distance or restore formation assignments. The soldier selector supplements markers that share a position on the full-level scale.
+The HUD uses a short read-only progress line showing the queen and soldiers at their world positions. There are no map orders, tactical panel or map-triggered pauses; squad assignments remain automatic.
 
 The first village mission has a patrolling key carrier, dropped key, alternate three-hit cage breach, live-time transfer deadline, moving prison convoy and final interception point. Extraction requires the conscious prisoner to arrive with the queen. Checkpoints retain mission progress without duplicating soldiers. Later adventure types above remain planned.
 

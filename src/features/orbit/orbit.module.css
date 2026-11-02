@@ -41,8 +41,10 @@
     touch-action: none;
   }
 
+  /* The pixel-art scene, and the 3D figures' own canvas stacked on it in the same cell (sharp at any zoom). */
   .canvas {
     display: block;
+    grid-area: 1 / 1;
     image-rendering: pixelated;
   }
 
@@ -154,6 +156,100 @@
   .hearts {
     color: #ff6a5e;
     letter-spacing: 0.1em;
+  }
+
+  /* The weapon in hand and the Fire Sword's charge (on foot only). */
+  .arm {
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+    color: #e6dccb;
+  }
+
+  .root[data-armed="true"] .arm {
+    display: inline-flex;
+  }
+
+  .fire {
+    position: relative;
+    display: none;
+    width: 2.4rem;
+    height: 0.35rem;
+    background: rgb(20 15 20 / 0.6);
+    box-shadow: 0 0 0 1px rgb(255 170 90 / 0.45);
+  }
+
+  .root:not([data-fire="locked"]) .fire {
+    display: block;
+  }
+
+  .fireFill {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #c2410c, #ffb347);
+    transform-origin: left;
+    transform: scaleX(var(--fire, 0));
+  }
+
+  .root[data-fire="burning"] .fireFill {
+    transform: none;
+    box-shadow: 0 0 8px rgb(255 140 50 / 0.9);
+  }
+
+  /* The team: names and hearts under the bar at the top. */
+  .team {
+    position: absolute;
+    top: max(2.9rem, calc(env(safe-area-inset-top) + 2.4rem));
+    left: max(var(--gutter), env(safe-area-inset-left));
+    display: none;
+    font-size: var(--text-label);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    white-space: pre;
+    color: #e6dccb;
+    text-shadow: 0 1px 0 rgb(20 15 20 / 0.9);
+    pointer-events: none;
+  }
+
+  .root[data-team="on"]:is([data-phase="play"], [data-phase="intro"]) .team {
+    display: block;
+  }
+
+  /*
+   * Film bars: a scene played out (a taunt before a fight, a prisoner freed, a friend lost) closes
+   * the frame to a wide screen, and opens it again after. Only the bars move (transform).
+   */
+  .cinema {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .cinema::before,
+  .cinema::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 11svh;
+    background: #000;
+    transition: transform 0.7s var(--ease-out-expo);
+  }
+
+  .cinema::before {
+    top: 0;
+    transform: translateY(-100%);
+  }
+
+  .cinema::after {
+    bottom: 0;
+    transform: translateY(100%);
+  }
+
+  .root[data-cinema="on"] .cinema::before,
+  .root[data-cinema="on"] .cinema::after {
+    transform: none;
   }
 
   .root[data-hearts="none"] .hearts {
@@ -349,7 +445,6 @@
   .root[data-phase="title"] .titleCard,
   .root[data-phase="paused"] .pauseCard,
   .root[data-phase="intro"] .introCard,
-  .root[data-phase="complete"][data-reward] .rewardCard,
   .root[data-phase="finished"] .finishCard {
     display: grid;
     gap: 0.75rem;
@@ -357,14 +452,49 @@
     animation: card-in 500ms var(--ease-out-expo) both;
   }
 
-  /* The stage intro is a title over the scene, not a box. */
+  /* The stage intro is a title over the scene while it plays, not a box: high up, never in the way of a touch. */
   .introCard {
+    top: 30%;
     border: 0;
     background: none;
     box-shadow: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     text-shadow: 0 2px 0 rgb(20 15 20 / 0.9);
+    pointer-events: none;
+  }
+
+  /*
+   * The stage just cleared: a small card in the top corner while the next stage plays on, with
+   * the project it unlocked (a link that opens in a new tab).
+   */
+  .root:is([data-phase="intro"], [data-phase="play"]):is([data-reward="village"], [data-reward="jungle"], [data-reward="city"], [data-reward="forest"]) .rewardCard {
+    display: grid;
+    gap: 0.35rem;
+    justify-items: start;
+    animation: toast-in 450ms var(--ease-out-expo) both;
+  }
+
+  .rewardCard {
+    top: max(3.6rem, calc(env(safe-area-inset-top) + 3rem));
+    right: max(var(--gutter), env(safe-area-inset-right));
+    left: auto;
+    width: min(15rem, 40vw);
+    translate: none;
+    padding: 0.7rem 0.8rem;
+    border-radius: 0.9rem;
+    text-align: left;
+  }
+
+  .rewardCard .kicker {
+    font-size: 0.65rem;
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0.01;
+      translate: 1.5rem 0;
+    }
   }
 
   .kicker {
@@ -438,6 +568,7 @@
   }
 
   .root[data-reward="village"] .reward[data-for="village"],
+  .root[data-reward="jungle"] .reward[data-for="jungle"],
   .root[data-reward="city"] .reward[data-for="city"],
   .root[data-reward="forest"] .reward[data-for="forest"] {
     display: grid;
@@ -498,7 +629,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .root[data-phase] .card {
+    .root[data-phase] .card,
+    .root[data-reward] .rewardCard {
       animation: none;
     }
   }
@@ -692,9 +824,41 @@
       bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 4.8rem);
     }
 
-    /* Get out and the sword only matter at a barricade or on foot; calling the truck only on foot. */
+    /* Weapon switch further in; the Fire Sword high in the arc, its ring filling as it recharges. */
+    .pad[data-action="weapon"],
+    .pad[data-action="skill"] {
+      width: 3.2rem;
+      height: 3.2rem;
+    }
+
+    .pad[data-action="weapon"] {
+      right: calc(max(var(--gutter), env(safe-area-inset-right)) + 10.6rem);
+      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 0.6rem);
+    }
+
+    .pad[data-action="skill"] {
+      right: calc(max(var(--gutter), env(safe-area-inset-right)) + 4.6rem);
+      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 9rem);
+      border: 2px solid transparent;
+      background:
+        radial-gradient(circle at 50% 30%, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.04) 60%) padding-box,
+        conic-gradient(#ff8a3c calc(var(--fire, 0) * 360deg), rgb(255 255 255 / 0.12) 0) border-box;
+    }
+
+    .root[data-fire="charging"] .pad[data-action="skill"] {
+      opacity: 0.6;
+    }
+
+    .root[data-fire="burning"] .pad[data-action="skill"] {
+      box-shadow: 0 0 18px rgb(255 120 40 / 0.7);
+    }
+
+    /* Get out only at a barricade or on foot; the sword and weapons on foot; calling the truck only on foot by the road. */
     .root:not([data-actions="true"]) .pad[data-action="interact"],
-    .root:not([data-actions="true"]) .pad[data-action="attack"],
+    .root:not([data-actions="true"]):not([data-armed="true"]) .pad[data-action="attack"],
+    .root:not([data-armed="true"]) .pad[data-action="weapon"],
+    .root:not([data-armed="true"]) .pad[data-action="skill"],
+    .root[data-fire="locked"] .pad[data-action="skill"],
     .root:not([data-foot="true"]) .pad[data-action="switch"] {
       display: none;
     }

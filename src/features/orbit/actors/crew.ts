@@ -62,6 +62,11 @@ export class Crew {
     this.set("car");
   }
 
+  /** Heads for the truck's door and gets in, without a key press (a fight won, the jungle crossed). */
+  board(): void {
+    if (this.mode === "foot" && this.car.vehicle.upright) this.set("walkToDoor");
+  }
+
   /** C on foot: call the truck (the stage brings it down beside her). */
   onCall: (() => void) | null = null;
 

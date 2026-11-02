@@ -1,23 +1,52 @@
 import type * as Three from "three";
+import { WEAPONS as ARSENAL, type WeaponId } from "../actors/arsenal";
 import { GETUP_TIME, type Boar } from "../actors/boar";
 import type { Explorer } from "../actors/explorer";
+import type { Mate, MateKind } from "../actors/party";
 import type { Camera } from "../engine/camera";
-import { ART, PPM } from "../engine/config";
+import { PPM } from "../engine/config";
 import type { Joint, Ragdoll } from "../engine/ragdoll";
 
 type ThreeModule = typeof Three;
 type Kind = "hero" | "raider" | "brute";
 
+/** Where the 3D figures are drawn: a canvas of their own over the game's, at the screen's full resolution. */
+export interface FigureLayer {
+  host: HTMLElement;
+  /** The game canvas's CSS size (px) and the device pixel ratio. */
+  size(): { width: number; height: number; dpr: number };
+}
+
+/** The light the figures stand in, matching the stage's scene. */
+export type FigureLight = "village" | "city" | "forest" | "jungle";
+
+/** A light in the scene that falls on the figures: a torch, a lantern, a fire (where, its colour, how bright). */
+export interface SceneLight {
+  x: number;
+  y: number;
+  color: number;
+  power: number;
+}
+
+/** The game's zoom about its pivot (art px), so the figures frame exactly what the 2D view shows. */
+export interface Framing {
+  zoom: number;
+  pivotX: number;
+  pivotY: number;
+}
+
 /**
- * The fighters: Mixamo characters (Kachujin the hero, the Paladin as raider, Warrok as brute) on
- * one shared skeleton, each clip a separate small file of motion-captured animation.
+ * The fighters: Mixamo characters (Kachujin the hero, the Paladin as raider, Warrok as brute) in
+ * their full-detail versions, on one shared skeleton; each clip a separate small file of
+ * motion-captured animation.
  */
-const BASE = "/game/fighters/";
+const MODEL_BASE = "/game/fighters-hd/";
+const CLIP_BASE = "/game/fighters/";
 const MODELS: Record<Kind, string> = { hero: "hero.glb", raider: "knight.glb", brute: "brute.glb" };
 const CLIPS = [
   "hero_idle", "hero_walk", "hero_run", "hero_slash1", "hero_slash2", "hero_kick", "hero_spin", "hero_hit1", "hero_hit2", "hero_jump",
   "foe_idle", "foe_walk", "foe_run", "foe_slash1", "foe_slash2", "foe_heavy", "foe_block", "foe_blockhit", "foe_hit1", "foe_hit2", "foe_strafe",
-  "getup", "sit_to_stand", "stand_to_sit",
+  "getup", "sit_to_stand", "stand_to_sit", "hero_swing", "hero_rope_climb", "hero_climb",
 ] as const;
 type Clip = (typeof CLIPS)[number];
 /** One-shot clips: they play once and hold their last frame. */
@@ -34,6 +63,12 @@ const ENEMY_SWING = 1.18;
 const GETUP_BLEND = 0.4;
 /** Standing height of each in the world (m). */
 const HEIGHT: Record<Kind, number> = { hero: 1.75, raider: 1.9, brute: 2.3 };
+/** Skin and cloth are matte; the knight's plate has a dull metal sheen; the brute's hide is rough. */
+const SURFACE: Record<Kind, { roughness: number; metalness: number }> = {
+  hero: { roughness: 0.72, metalness: 0 },
+  raider: { roughness: 0.48, metalness: 0.35 },
+  brute: { roughness: 0.8, metalness: 0.05 },
+};
 /**
  * What each one holds (KayKit CC0 props), in which hand, and how long it is (m). Props are modelled
  * with the grip at the origin and the blade up +y; `grip` slides it along the fingers into the fist.
@@ -71,36 +106,114 @@ const ANIMALS: Record<AnimalKind, string> = { wolf: "/game/animals/wolf.glb", do
 const ANIMAL_HEIGHT: Record<AnimalKind, number> = { wolf: 0.95, dog: 0.7, bull: 1.65 };
 /** Turned this far from side-on toward the camera (rad): a three-quarter view reads better than a profile. */
 const THREE_QUARTER = 0.4;
+/**
+ * The toys (KayKit Adventurers, CC0): each body, what it holds in which hand slot, and the clips
+ * they share (one file). The dog is the husky from the animals.
+ */
+const TOYS: Record<Exclude<MateKind, "dog">, { model: string; right?: string; left?: string }> = {
+  knight: { model: "knight.glb", right: "sword_1handed.gltf", left: "shield_round_color.gltf" },
+  barbarian: { model: "barbarian.glb", right: "axe_2handed.gltf" },
+  mage: { model: "mage.glb", right: "staff.gltf" },
+  ranger: { model: "ranger.glb", left: "bow_withString.gltf" },
+  rogue: { model: "rogue.glb", right: "dagger.gltf" },
+};
+const TOY_CLIPS = "/game/toys/toy_clips.glb";
+/** Each mate's standing height (m). */
+const MATE_HEIGHT: Record<Exclude<MateKind, "dog">, number> = { knight: 0.95, barbarian: 1, mage: 0.95, ranger: 0.95, rogue: 0.9 };
+/** The hero's longsword, built in code: slim and long (m), its steel bright and hard. */
+const LONGSWORD = { blade: 1.02, width: 0.034, thick: 0.006, guard: 0.17, grip: 0.21 } as const;
+/** Scene lights (torches, fires) that fall on the figures at once: the nearest few. */
+const SCENE_LIGHTS = 3;
 /** The truck's headlights as a light in the scene: how bright, how far it reaches (m), and how far ahead of the nose it sits. */
 const HEADLIGHT = { intensity: 30, reach: 12, ahead: 2.5 } as const;
+/** The hero's lantern in the dark (jungle): how far it reaches (m), and the flicker (share of its brightness). */
+const TORCH = { reach: 8, flicker: 0.1 } as const;
 /** Cross-fade between animations (s). */
 const FADE = 0.16;
+/** The figures' canvas never renders above this many device pixels per CSS pixel (phones at 3× stay fast). */
+const MAX_DPR = 2;
+/**
+ * The reflex to a blow: the torso and head are thrown by it and spring back, slightly
+ * underdamped (a real body overshoots and recovers), stiffness ω (1/s) and damping ratio ζ.
+ */
+const REFLEX = { omega: 12, damping: 0.34 } as const;
+/** How a blow at each joint throws the body (rad/s per unit of strength): the trunk bending, the head snapping. */
+const REFLEX_KICK: Record<Joint, { bend: number; nod: number }> = {
+  head: { bend: 3.5, nod: 15 },
+  chest: { bend: 8, nod: 7 },
+  pelvis: { bend: 5, nod: 4 },
+  elbowL: { bend: 4, nod: 3 },
+  elbowR: { bend: 4, nod: 3 },
+  handL: { bend: 3, nod: 2 },
+  handR: { bend: 3, nod: 2 },
+  kneeL: { bend: 4, nod: 3 },
+  kneeR: { bend: 4, nod: 3 },
+  footL: { bend: 3, nod: 2 },
+  footR: { bend: 3, nod: 2 },
+};
+
+/**
+ * Each scene's light on the figures: the key (moon or sky), a rim from behind (lanterns, neon,
+ * moonlight), the sky/ground fill, the room reflections' strength, and the hero's lantern.
+ */
+const LIGHTS: Record<FigureLight, { key: number; keyIntensity: number; rim: number; rimIntensity: number; sky: number; ground: number; fill: number; env: number; torch: number }> = {
+  village: { key: 0xdfe8ff, keyIntensity: 1.9, rim: 0xffb070, rimIntensity: 1.7, sky: 0x9fb4d8, ground: 0x2a1e18, fill: 0.75, env: 0.35, torch: 0 },
+  city: { key: 0xd8e4ff, keyIntensity: 1.7, rim: 0xff7a48, rimIntensity: 1.5, sky: 0xa0a8d8, ground: 0x201820, fill: 0.75, env: 0.4, torch: 0 },
+  forest: { key: 0xdfe8ff, keyIntensity: 2, rim: 0x9fb8ff, rimIntensity: 1.3, sky: 0x8fa4c8, ground: 0x1a1814, fill: 0.6, env: 0.3, torch: 0 },
+  jungle: { key: 0xb8c8ff, keyIntensity: 0.35, rim: 0x8aa4d8, rimIntensity: 0.7, sky: 0x2a3850, ground: 0x0a0806, fill: 0.12, env: 0.05, torch: 9 },
+};
+
+interface Reflex {
+  bend: number;
+  vb: number;
+  nod: number;
+  vn: number;
+  twist: number;
+  vt: number;
+  /** The hit count last seen on its body: a new one throws the reflex. */
+  serial: number;
+}
+
+/** One of the hero's weapons on her body: in her right hand, or on her back while she climbs. */
+interface Carried {
+  object: Three.Object3D;
+  hand: { parent: Three.Object3D; matrix: Three.Matrix4 };
+  back: { parent: Three.Object3D; matrix: Three.Matrix4 };
+  /** The blade's steel (it glows when it burns), and the fire on it. */
+  steel: Three.MeshStandardMaterial[];
+  flame: Three.Object3D | null;
+}
 
 interface Actor {
   root: Three.Group;
+  model: Three.Object3D;
   mixer: Three.AnimationMixer;
   actions: Map<string, Three.AnimationAction>;
   current: string;
-  materials: Three.Material[];
+  materials: Three.MeshStandardMaterial[];
   /** The swing being played, so a new swing restarts the clip; which cut a raider is making. */
   swing: number;
   cut: number;
   /** Ragdoll driving: each driven bone with its rest orientation and rest direction. */
   drives: { bone: Three.Bone; from: Joint; to: Joint; rest: Three.Quaternion; restDir: Three.Vector3 }[];
+  /** The bones a blow throws: the spine up to the head. */
+  trunk: { spine: Three.Bone | null; spine1: Three.Bone | null; spine2: Three.Bone | null; neck: Three.Bone | null; head: Three.Bone | null };
+  reflex: Reflex;
   /** The beast state last frame (to catch the moment it starts getting up), and the get-up blend. */
   state: string;
   blend: { t: number; from: Map<Three.Bone, Three.Quaternion>; hips: Three.Vector3 } | null;
 }
 
 /*
- * The people of the game in 3D: the hero and the raiders and brutes who fight on foot. Their
- * bodies stay 2D physics (where they are, how fast, whether they're swinging, hit or down); here
- * each one plays the matching motion-capture clip, cross-faded, facing three-quarters toward the
- * camera, with its weapon in its hand. A limp body's bones follow its ragdoll, and getting up
- * blends out of the fallen pose. Rendered by three.js with flat toon shading into its own
- * transparent canvas at the game's pixel resolution, through an orthographic camera lined up
- * with the 2D projector, and drawn into the frame. Loads in the background; until it's ready (or
- * without WebGL) the 2D explorer is drawn instead.
+ * The people of the game in 3D: the hero and the raiders and brutes who fight on foot, and the
+ * animals. Their bodies stay 2D physics (where they are, how fast, whether they're swinging, hit
+ * or down); here each one plays the matching motion-capture clip, cross-faded, facing
+ * three-quarters toward the camera, with its weapon in its hand. A blow throws the trunk and head
+ * on a spring (the reflex) on top of the hit clip; a limp body's bones follow its ragdoll, and
+ * getting up blends out of the fallen pose. Rendered by three.js with physically based materials
+ * into a canvas of their own over the game, at the screen's full resolution (never pixelated,
+ * however close the camera comes), through an orthographic camera lined up with the 2D view and
+ * its zoom. Loads in the background; until it's ready (or without WebGL) the 2D explorer is drawn.
  */
 export class Fighters3D {
   private three: {
@@ -111,36 +224,83 @@ export class Fighters3D {
     make: (kind: Kind) => Actor;
     makeAnimal: (kind: AnimalKind) => Actor;
     headlight: Three.PointLight;
+    torch: Three.PointLight;
+    cages: Three.Group[];
     hero: Actor;
+    arms: Map<WeaponId, Carried>;
     enemies: Map<Boar, Actor>;
+    mates: Map<Mate, Actor>;
+    makeMate: ((kind: MateKind) => Actor) | null;
+    lamps: Three.PointLight[];
+    scratch: { q: Three.Quaternion; r: Three.Quaternion; p: Three.Quaternion; v: Three.Vector3; w: Three.Vector3; axis: Three.Vector3; up: Three.Vector3 };
   } | null = null;
+  private readonly canvas: HTMLCanvasElement | null;
   private width = 480;
   private height = 270;
+  private pixels = { width: 0, height: 0, css: "" };
+  private shown = false;
+  private opacity = -1;
   private disposed = false;
 
-  constructor() {
-    void this.load();
+  constructor(
+    private readonly layer: FigureLayer | null,
+    private readonly light: FigureLight,
+  ) {
+    if (!layer) {
+      this.canvas = null;
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.setAttribute("aria-hidden", "true");
+    // Stacked on the game's canvas in the same grid cell, never catching a touch.
+    canvas.style.gridArea = "1 / 1";
+    canvas.style.pointerEvents = "none";
+    canvas.style.width = "0px";
+    canvas.style.height = "0px";
+    layer.host.appendChild(canvas);
+    this.canvas = canvas;
+    void this.load(canvas);
   }
 
   get ready(): boolean {
     return this.three !== null;
   }
 
+  /** The 2D view's size in art px. */
   resize(width: number, height: number): void {
     this.width = width;
     this.height = height;
-    if (!this.three) return;
-    this.three.renderer.setSize(Math.round(width * ART), Math.round(height * ART), false);
-    this.frame(this.three.camera);
   }
 
-  /** Draws the hero (when on foot) and the fighters; returns false when not ready, so the caller draws the 2D explorer. */
-  /** `headlight`: the truck's lamps (where, and which way they face), lighting whoever stands in front. */
-  draw(ctx: CanvasRenderingContext2D, camera: Camera, dt: number, alpha: number, hero: Explorer | null, beasts: readonly Boar[], headlight: { x: number; y: number; dir: number } | null = null): boolean {
+  /**
+   * Draws the hero (when on foot), the fighters and the animals; returns false when not ready, so
+   * the caller draws the 2D explorer. `headlight`: the truck's lamps (where, and which way they
+   * face), lighting whoever stands in front. `opacity`: the stage's fade to black. `torch`: the
+   * hero's lantern in the dark, if lit.
+   */
+  draw(camera: Camera, framing: Framing, dt: number, alpha: number, hero: Explorer | null, beasts: readonly Boar[], headlight: { x: number; y: number; dir: number } | null, opacity: number, torch: { x: number; y: number } | null, mates: readonly Mate[] = [], lights: readonly SceneLight[] = [], cages: readonly { x: number; y: number; broken: boolean }[] = []): boolean {
     const t = this.three;
-    if (!t) return false;
+    if (!t || !this.canvas) return false;
+    this.fit(t.renderer);
+    if (opacity !== this.opacity) {
+      this.opacity = opacity;
+      this.canvas.style.opacity = opacity.toFixed(3);
+    }
     t.headlight.intensity = headlight ? HEADLIGHT.intensity : 0;
     if (headlight) t.headlight.position.set(headlight.x + headlight.dir * HEADLIGHT.ahead, headlight.y + 0.7, 1.2);
+    const lantern = LIGHTS[this.light].torch;
+    t.torch.intensity = torch && lantern > 0 ? lantern * (1 - TORCH.flicker * (0.5 + 0.5 * Math.sin(performance.now() / 47) * Math.sin(performance.now() / 131))) : 0;
+    if (torch) t.torch.position.set(torch.x + (hero?.body.facing ?? 1) * 0.35, torch.y + 1.1, 0.9);
+    // The nearest torches and fires light whoever stands by them; their flames flicker.
+    const near = [...lights].sort((a, b) => Math.abs(a.x - camera.x) - Math.abs(b.x - camera.x));
+    t.lamps.forEach((lamp, i) => {
+      const l = near[i];
+      lamp.intensity = l ? l.power * (0.9 + 0.1 * Math.sin(performance.now() / (61 + i * 17) + i)) : 0;
+      if (l) {
+        lamp.color.setHex(l.color);
+        lamp.position.set(l.x, l.y, 1.1);
+      }
+    });
     const view = this.width / PPM / 2 + 3;
     let any = false;
 
@@ -154,8 +314,22 @@ export class Fighters3D {
         this.drive(t.THREE, t.hero, hero.ragdoll, b.facing);
         t.hero.state = "limp";
       } else {
-        t.hero.root.position.set(b.px + (b.x - b.px) * alpha, b.py + (b.y - b.py) * alpha, 0);
-        t.hero.root.rotation.set(0, b.facing > 0 ? Math.PI / 2 - THREE_QUARTER : -Math.PI / 2 + THREE_QUARTER, 0);
+        const x = b.px + (b.x - b.px) * alpha;
+        const y = b.py + (b.y - b.py) * alpha;
+        const yaw = b.facing > 0 ? Math.PI / 2 - THREE_QUARTER : -Math.PI / 2 + THREE_QUARTER;
+        if (hero.ropeAnchor) {
+          // On a rope the body hangs from the hands, in line with the rope as it swings.
+          const roll = hero.ropeAngle;
+          const hands = hero.hands;
+          const hx = hands.x + (x - b.x);
+          const hy = hands.y + (y - b.y);
+          t.hero.root.position.set(hx + Math.sin(roll) * (hands.y - b.y), hy - Math.cos(roll) * (hands.y - b.y), 0);
+          t.hero.root.rotation.set(0, yaw, roll);
+        } else {
+          t.hero.root.position.set(x, y, 0);
+          t.hero.root.rotation.set(0, yaw, 0);
+        }
+        this.carry(t, hero);
         if (hero.getup > 0) {
           if (t.hero.state === "limp") startGetup(t.THREE, t.hero, hero.getup);
           t.hero.state = "getup";
@@ -165,8 +339,22 @@ export class Fighters3D {
         }
         t.hero.mixer.update(dt);
         blendOut(t.hero, dt);
+        this.react(t, t.hero, hero.hitSerial, hero.lastBlow, b.facing, 1, dt);
       }
     }
+
+    // Cages: real bars in front of whoever is locked inside, gone once broken.
+    cages.forEach((cage, i) => {
+      t.cages[i] ??= makeCage(t.THREE, t.scene);
+      const group = t.cages[i];
+      group.visible = !cage.broken && Math.abs(cage.x - camera.x) < view;
+      if (!group.visible) return;
+      group.position.set(cage.x, cage.y, 0.3);
+      any = true;
+    });
+    for (let i = cages.length; i < t.cages.length; i++) t.cages[i].visible = false;
+    for (const [mate, actor] of t.mates) if (!mates.includes(mate)) actor.root.visible = false;
+    for (const mate of mates) any = this.drawMate(t, mate, camera, dt) || any;
 
     for (const beast of beasts) {
       if (beast.animal3D) {
@@ -187,7 +375,7 @@ export class Fighters3D {
       }
       actor.root.visible = true;
       setOpacity(actor, pose.alpha);
-      for (const m of actor.materials) (m as Three.MeshToonMaterial).emissiveIntensity = pose.flash ? 1.5 : 0;
+      for (const m of actor.materials) m.emissiveIntensity = pose.flash ? 0.45 : 0;
       any = true;
       if (beast.limp && beast.ragdoll) {
         this.drive(t.THREE, actor, beast.ragdoll, beast.facing);
@@ -201,17 +389,25 @@ export class Fighters3D {
       actor.state = beast.state;
       actor.mixer.update(dt);
       blendOut(actor, dt);
+      this.react(t, actor, beast.hitSerial, beast.lastBlow, pose.facing, 90 / beast.mass, dt);
     }
-    if (!any) return true;
-
-    t.camera.position.set(camera.x, camera.y, 20);
+    if (!any) {
+      // Nobody on screen: clear once and stop drawing until someone is.
+      if (this.shown) {
+        t.renderer.clear();
+        this.shown = false;
+      }
+      return true;
+    }
+    this.shown = true;
+    this.frame(t.camera, camera, framing);
     t.renderer.render(t.scene, t.camera);
-    ctx.drawImage(t.renderer.domElement, 0, 0, this.width, this.height);
     return true;
   }
 
   dispose(): void {
     this.disposed = true;
+    this.canvas?.remove();
     if (!this.three) return;
     this.three.renderer.dispose();
     this.three.renderer.forceContextLoss();
@@ -219,6 +415,139 @@ export class Fighters3D {
   }
 
   // ---------------------------------------------------------------------------
+
+  /* The canvas at the game's CSS size and the device's resolution (capped). */
+  private fit(renderer: Three.WebGLRenderer): void {
+    if (!this.layer || !this.canvas) return;
+    const { width, height, dpr } = this.layer.size();
+    const scale = Math.min(MAX_DPR, Math.max(1, dpr));
+    const w = Math.max(1, Math.round(width * scale));
+    const h = Math.max(1, Math.round(height * scale));
+    if (w !== this.pixels.width || h !== this.pixels.height) {
+      this.pixels.width = w;
+      this.pixels.height = h;
+      renderer.setSize(w, h, false);
+    }
+    const css = `${width}x${height}`;
+    if (css !== this.pixels.css) {
+      this.pixels.css = css;
+      this.canvas.style.width = `${width}px`;
+      this.canvas.style.height = `${height}px`;
+    }
+  }
+
+  /*
+   * The orthographic camera spans exactly what the 2D view shows, zoom included: the game scales
+   * the art about a pivot, so the visible art px run from pivot·(1 − 1/z) to pivot + (size − pivot)/z.
+   */
+  private frame(camera: Three.OrthographicCamera, at: Camera, framing: Framing): void {
+    const z = Math.max(1, framing.zoom);
+    const x0 = framing.pivotX - framing.pivotX / z;
+    const x1 = framing.pivotX + (this.width - framing.pivotX) / z;
+    const y0 = framing.pivotY - framing.pivotY / z;
+    const y1 = framing.pivotY + (this.height - framing.pivotY) / z;
+    camera.position.set(at.x, at.y, 20);
+    camera.left = (x0 - this.width / 2) / PPM;
+    camera.right = (x1 - this.width / 2) / PPM;
+    camera.top = (this.height / 2 - y0) / PPM;
+    camera.bottom = (this.height / 2 - y1) / PPM;
+    camera.updateProjectionMatrix();
+  }
+
+  /*
+   * The reflex: a new blow (the body's hit count went up) throws the trunk and head by where it
+   * landed and how hard, scaled by the body's lightness; then they spring back with a little
+   * overshoot. Bent back when struck from the front, forward from behind, with a twist.
+   */
+  private react(t: NonNullable<Fighters3D["three"]>, actor: Actor, serial: number, blow: { joint: Joint; power: number; dir: number }, facing: number, share: number, dt: number): void {
+    const r = actor.reflex;
+    if (serial !== r.serial) {
+      if (serial > r.serial) {
+        const strength = Math.min(1.4, (blow.power / 4) * share);
+        const kick = REFLEX_KICK[blow.joint];
+        const back = facing === -blow.dir ? -1 : 1;
+        r.vb += back * kick.bend * strength;
+        r.vn += back * kick.nod * strength;
+        r.vt += (Math.random() - 0.5) * 6 * strength;
+      }
+      r.serial = serial;
+    }
+    const step = Math.min(dt, 1 / 30);
+    const { omega, damping } = REFLEX;
+    for (const [x, v] of [["bend", "vb"], ["nod", "vn"], ["twist", "vt"]] as const) {
+      r[v] += (-omega * omega * r[x] - 2 * damping * omega * r[v]) * step;
+      r[x] += r[v] * step;
+    }
+    if (Math.abs(r.bend) + Math.abs(r.nod) + Math.abs(r.twist) < 1e-3) return;
+    const { trunk } = actor;
+    const s = t.scratch;
+    actor.root.updateMatrixWorld(true);
+    // The body's own side-to-side axis (the model faces +z) and the world's up.
+    s.axis.set(1, 0, 0).applyQuaternion(actor.root.quaternion);
+    s.up.set(0, 1, 0);
+    turnBone(trunk.spine, s.axis, r.bend * 0.35, s);
+    turnBone(trunk.spine1, s.up, r.twist * 0.5, s);
+    turnBone(trunk.spine1, s.axis, r.bend * 0.3, s);
+    turnBone(trunk.spine2, s.axis, r.bend * 0.35, s);
+    turnBone(trunk.neck, s.axis, r.nod * 0.4, s);
+    turnBone(trunk.head, s.axis, r.nod * 0.6, s);
+  }
+
+  /*
+   * The hero's weapons: the one in use in her right hand, put away on her back while both hands
+   * are busy (a rope, a climb, the truck's door); the others not shown. A burning blade glows and flames.
+   */
+  private carry(t: NonNullable<Fighters3D["three"]>, hero: Explorer): void {
+    for (const [id, arm] of t.arms) {
+      const used = id === hero.weapon;
+      arm.object.visible = used;
+      if (!used) continue;
+      const place = hero.sheathed ? arm.back : arm.hand;
+      if (arm.object.parent !== place.parent) {
+        place.parent.add(arm.object);
+        place.matrix.decompose(arm.object.position, arm.object.quaternion, arm.object.scale);
+      }
+      const burning = hero.burning > 0 && !hero.sheathed;
+      for (const m of arm.steel) {
+        m.emissive.setHex(burning ? 0xff5a14 : 0xffffff);
+        m.emissiveIntensity = burning ? 1.1 + 0.25 * Math.sin(performance.now() / 53) : 0;
+      }
+      if (arm.flame) {
+        arm.flame.visible = burning;
+        if (burning) {
+          const k = performance.now() / 1000;
+          arm.flame.children.forEach((c, i) => {
+            c.scale.setScalar(0.85 + 0.3 * Math.abs(Math.sin(k * (9 + i * 2.3) + i)));
+            (c as Three.Sprite).material.rotation = Math.sin(k * 3 + i) * 0.3;
+          });
+        }
+      }
+    }
+  }
+
+  /* A mate: a KayKit toy (or the dog), playing the clip its state asks for, in the light like everyone else. */
+  private drawMate(t: NonNullable<Fighters3D["three"]>, mate: Mate, camera: Camera, dt: number): boolean {
+    if (!t.makeMate) return false;
+    let actor = t.mates.get(mate);
+    if (Math.abs(mate.x - camera.x) > this.width / PPM / 2 + 4 || mate.alpha <= 0.02) {
+      if (actor) actor.root.visible = false;
+      return false;
+    }
+    if (!actor) {
+      actor = t.makeMate(mate.kind);
+      t.mates.set(mate, actor);
+    }
+    actor.root.visible = true;
+    setOpacity(actor, mate.alpha);
+    actor.root.position.set(mate.x, mate.y, 0.35);
+    actor.root.rotation.set(0, mate.facing > 0 ? Math.PI / 2 - THREE_QUARTER : -Math.PI / 2 + THREE_QUARTER, 0);
+    const clip = mate.clip;
+    // A one-shot clip plays from the top when it starts, and again for a fresh hit.
+    play(actor, clip.name, clip.speed, clip.once && (actor.current !== clip.name || mate.hitSerial !== actor.reflex.serial));
+    actor.reflex.serial = mate.hitSerial;
+    actor.mixer.update(dt);
+    return true;
+  }
 
   /* An animal: placed on its 2D body, turned three-quarters to where it's heading, playing its own clips. */
   private drawAnimal(t: NonNullable<Fighters3D["three"]>, beast: Boar, camera: Camera, dt: number): boolean {
@@ -233,10 +562,19 @@ export class Fighters3D {
       t.enemies.set(beast, actor);
     }
     actor.root.visible = true;
+    // A blow jolts the whole animal: it rears and settles back on the same spring as a person's reflex.
+    const r = actor.reflex;
+    if (beast.hitSerial !== r.serial) {
+      if (beast.hitSerial > r.serial) r.vb += 6 * Math.min(1.2, (beast.lastBlow.power / 4) * (90 / beast.mass));
+      r.serial = beast.hitSerial;
+    }
+    const step = Math.min(dt, 1 / 30);
+    r.vb += (-REFLEX.omega * REFLEX.omega * r.bend - 2 * REFLEX.damping * REFLEX.omega * r.vb) * step;
+    r.bend += r.vb * step;
     actor.root.position.set(beast.x, beast.y, -0.3);
-    actor.root.rotation.set(0, pose.facing > 0 ? Math.PI / 2 - THREE_QUARTER * 0.6 : -Math.PI / 2 + THREE_QUARTER * 0.6, pose.angle);
+    actor.root.rotation.set(0, pose.facing > 0 ? Math.PI / 2 - THREE_QUARTER * 0.6 : -Math.PI / 2 + THREE_QUARTER * 0.6, pose.angle + r.bend * 0.35 * pose.facing);
     setOpacity(actor, pose.alpha);
-    for (const m of actor.materials) (m as Three.MeshToonMaterial).emissiveIntensity = pose.flash ? 1.2 : 0;
+    for (const m of actor.materials) m.emissiveIntensity = pose.flash ? 0.35 : 0;
     const speed = Math.abs(beast.vx);
     switch (beast.state) {
       case "down":
@@ -297,6 +635,17 @@ export class Fighters3D {
       if (actor.current !== clip) play(actor, clip, clipLength(actor, clip) / (transition.kind === "out" ? 1.05 : 0.85), true);
       return;
     }
+    // On a rope: hand over hand up it, or hanging and swinging with it (the clip's swing matched
+    // to the pendulum's). Hauling up a rock face: the motion-captured climb, timed to the haul.
+    if (hero.ropeAnchor) {
+      if (hero.ropeClimbing) play(actor, "hero_rope_climb", 1);
+      else play(actor, "hero_swing", 0.7);
+      return;
+    }
+    if (b.climb >= 0) {
+      if (actor.current !== "hero_climb") play(actor, "hero_climb", clipLength(actor, "hero_climb") / b.climbTime, true);
+      return;
+    }
     const swing = hero.swingProgress;
     if (swing >= 0) {
       // The combo, each clip timed to the swing and restarted for each new blow.
@@ -306,7 +655,7 @@ export class Fighters3D {
       return;
     }
     actor.swing = -1;
-    if (hero.hurting) play(actor, actor.current === "hero_hit1" ? "hero_hit1" : "hero_hit2");
+    if (hero.hurting) play(actor, hero.lastBlow.joint === "head" ? "hero_hit1" : "hero_hit2");
     else if (!b.grounded) play(actor, "hero_jump");
     else if (Math.abs(b.vx) < 0.3) play(actor, "hero_idle");
     else if (Math.abs(b.vx) < 3.2) play(actor, "hero_walk", Math.abs(b.vx) / 1.6);
@@ -328,9 +677,12 @@ export class Fighters3D {
       case "block":
         play(actor, beast.blocked ? "foe_blockhit" : "foe_block", 1, beast.blocked && actor.current !== "foe_blockhit");
         break;
-      case "stagger":
-        play(actor, actor.current === "foe_hit1" ? "foe_hit2" : "foe_hit1");
+      case "stagger": {
+        // The head snaps back from a blow to the face; a body blow doubles it over. A fresh blow restarts it.
+        const clip = beast.lastBlow.joint === "head" ? "foe_hit1" : "foe_hit2";
+        play(actor, clip, 1, actor.reflex.serial !== beast.hitSerial);
         break;
+      }
       case "wait":
         play(actor, "foe_idle");
         break;
@@ -344,34 +696,98 @@ export class Fighters3D {
     }
   }
 
-  /* The orthographic camera spans exactly what the 2D projector shows: 1 m = PPM art px. */
-  private frame(camera: Three.OrthographicCamera): void {
-    const w = this.width / PPM / 2;
-    const h = this.height / PPM / 2;
-    camera.left = -w;
-    camera.right = w;
-    camera.top = h;
-    camera.bottom = -h;
-    camera.updateProjectionMatrix();
+  /*
+   * The toys, loaded once the fighters are in: five KayKit bodies sharing one file of clips, each
+   * with what it carries in its hand slots; scaled to toy size and lit like everyone else.
+   */
+  private async loadToys(THREE: ThreeModule, loader: { loadAsync(url: string): Promise<{ scene: Three.Group; animations: Three.AnimationClip[] }> }, clone: (o: Three.Object3D) => Three.Object3D, scene: Three.Scene, makeAnimal: (kind: AnimalKind) => Actor): Promise<void> {
+    try {
+      const kinds = Object.keys(TOYS) as (keyof typeof TOYS)[];
+      const files = [...new Set(kinds.flatMap((k) => [TOYS[k].right, TOYS[k].left].filter((f): f is string => f !== undefined)))];
+      const [bodies, clips, props] = await Promise.all([
+        Promise.all(kinds.map(async (k) => [k, await loader.loadAsync(`/game/toys/${TOYS[k].model}`)] as const)),
+        loader.loadAsync(TOY_CLIPS),
+        Promise.all(files.map(async (f) => [f, await loader.loadAsync(`/game/kaykit/${f}`)] as const)),
+      ]);
+      const t = this.three;
+      if (this.disposed || !t) return;
+      const sources = new Map(bodies);
+      const held = new Map(props);
+      t.makeMate = (kind) => {
+        if (kind === "dog") return makeAnimal("dog");
+        const source = sources.get(kind);
+        if (!source) throw new Error(`Missing toy ${kind}`);
+        const model = clone(source.scene);
+        const materials: Three.MeshStandardMaterial[] = [];
+        const finish = (node: Three.Object3D): void => {
+          const mesh = node as Three.Mesh;
+          if (!mesh.isMesh) return;
+          // Painted plastic: a soft sheen, never metal.
+          const m = (mesh.material as Three.MeshStandardMaterial).clone();
+          m.roughness = 0.55;
+          m.metalness = 0;
+          m.emissiveIntensity = 0;
+          mesh.material = m;
+          mesh.frustumCulled = false;
+          materials.push(m);
+        };
+        model.traverse(finish);
+        // What it holds goes straight into its hand slots (KayKit props fit them as they are).
+        for (const [slot, file] of [["handslotr", TOYS[kind].right], ["handslotl", TOYS[kind].left]] as const) {
+          const bone = model.getObjectByName(slot);
+          const prop = file ? held.get(file) : undefined;
+          if (!bone || !prop) continue;
+          const item = prop.scene.clone();
+          item.traverse(finish);
+          bone.add(item);
+        }
+        const box = new THREE.Box3().setFromObject(source.scene);
+        const scale = MATE_HEIGHT[kind] / Math.max(0.01, box.max.y - box.min.y);
+        model.scale.setScalar(scale);
+        model.position.y = -box.min.y * scale;
+        const root = new THREE.Group();
+        root.rotation.order = "ZYX";
+        root.add(model);
+        scene.add(root);
+        const mixer = new THREE.AnimationMixer(model);
+        const actions = new Map<string, Three.AnimationAction>();
+        for (const clip of clips.animations) {
+          const action = mixer.clipAction(clip);
+          if (["Sit_Floor_StandUp", "Cheering", "Hit_A", "Death_A", "Melee_1H_Attack_Chop", "Melee_2H_Attack_Chop", "Ranged_Magic_Shoot", "Ranged_Bow_Release"].includes(clip.name)) {
+            action.setLoop(THREE.LoopOnce, 1);
+            action.clampWhenFinished = true;
+          }
+          actions.set(clip.name, action);
+        }
+        const trunk = { spine: null, spine1: null, spine2: null, neck: null, head: null };
+        const actor: Actor = { root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives: [], trunk, reflex: newReflex(), state: "", blend: null };
+        play(actor, "Idle_A");
+        return actor;
+      };
+    } catch {
+      // No toys: the team just isn't drawn.
+    }
   }
 
-  private async load(): Promise<void> {
+  private async load(canvas: HTMLCanvasElement): Promise<void> {
     try {
-      const [THREE, { GLTFLoader }, { clone }, { MeshoptDecoder }] = await Promise.all([
+      const [THREE, { GLTFLoader }, { clone }, { MeshoptDecoder }, { RoomEnvironment }] = await Promise.all([
         import("three"),
         import("three/addons/loaders/GLTFLoader.js"),
         import("three/addons/utils/SkeletonUtils.js"),
         import("three/addons/libs/meshopt_decoder.module.js"),
+        import("three/addons/environments/RoomEnvironment.js"),
       ]);
       if (this.disposed) return;
       const loader = new GLTFLoader();
       loader.setMeshoptDecoder(MeshoptDecoder);
       const kinds = Object.keys(MODELS) as Kind[];
       const animalKinds = Object.keys(ANIMALS) as AnimalKind[];
-      const props = [...new Set(kinds.flatMap((kind) => WEAPONS[kind].map((w) => w.file)))];
+      const heroProps = Object.values(ARSENAL).flatMap((w) => (w.look.kind === "prop" ? [w.look.file] : []));
+      const props = [...new Set([...kinds.flatMap((kind) => WEAPONS[kind].map((w) => w.file)), ...heroProps])];
       const [models, clips, held, animalModels] = await Promise.all([
-        Promise.all(kinds.map(async (kind) => [kind, await loader.loadAsync(BASE + MODELS[kind])] as const)),
-        Promise.all(CLIPS.map(async (name) => named(await loader.loadAsync(`${BASE}${name}.glb`), name))),
+        Promise.all(kinds.map(async (kind) => [kind, await loader.loadAsync(MODEL_BASE + MODELS[kind])] as const)),
+        Promise.all(CLIPS.map(async (name) => named(await loader.loadAsync(`${CLIP_BASE}${name}.glb`), name))),
         Promise.all(props.map(async (file) => [file, await loader.loadAsync(`/game/kaykit/${file}`)] as const)),
         Promise.all(animalKinds.map(async (kind) => [kind, await loader.loadAsync(ANIMALS[kind])] as const)),
       ]);
@@ -379,57 +795,80 @@ export class Fighters3D {
       if (this.disposed) return;
       const animations = clips.filter((c): c is Three.AnimationClip => c !== null);
       const weaponScenes = new Map(held);
-      const renderer = new THREE.WebGLRenderer({ canvas: document.createElement("canvas"), alpha: true, antialias: false, premultipliedAlpha: false });
+      // Antialiased and premultiplied: the canvas is composited by the page over the game's, not copied into it.
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
       renderer.setPixelRatio(1);
-      renderer.setSize(Math.round(this.width * ART), Math.round(this.height * ART), false);
       renderer.setClearColor(0x000000, 0);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.AgXToneMapping;
+      renderer.toneMappingExposure = 1.25;
+      this.fit(renderer);
       const scene = new THREE.Scene();
-      // Night light: a cool moon key from the front-left, a warm rim from behind, soft fill.
-      const key = new THREE.DirectionalLight(0xdfe8ff, 2.2);
+      // Soft reflections from a neutral room, so skin, cloth and steel read as different surfaces.
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const room = new RoomEnvironment();
+      scene.environment = pmrem.fromScene(room, 0.04).texture;
+      room.dispose();
+      pmrem.dispose();
+      const look = LIGHTS[this.light];
+      scene.environmentIntensity = look.env;
+      // The scene's light: a key from the front-left, a rim from behind, the sky and ground fill.
+      const key = new THREE.DirectionalLight(look.key, look.keyIntensity);
       key.position.set(-2, 3, 4);
-      const rim = new THREE.DirectionalLight(0xffc89a, 1.6);
+      const rim = new THREE.DirectionalLight(look.rim, look.rimIntensity);
       rim.position.set(2, 2, -3);
-      scene.add(key, rim, new THREE.HemisphereLight(0x9fb4d8, 0x2a1e18, 0.9));
+      scene.add(key, rim, new THREE.HemisphereLight(look.sky, look.ground, look.fill));
       const headlight = new THREE.PointLight(0xeaf2ff, 0, HEADLIGHT.reach, 1.4);
-      scene.add(headlight);
+      const torch = new THREE.PointLight(0xffa25a, 0, TORCH.reach, 1.6);
+      // Torches and fires in the scene: a few lights, moved to whichever are nearest each frame.
+      const lamps = Array.from({ length: SCENE_LIGHTS }, () => new THREE.PointLight(0xff9a4a, 0, 7, 1.7));
+      scene.add(headlight, torch, ...lamps);
       const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-      this.frame(camera);
 
-      // Toon shading in three flat bands, so the models read like pixel art, not plastic.
-      const bands = new THREE.DataTexture(new Uint8Array([90, 90, 90, 255, 175, 175, 175, 255, 255, 255, 255, 255]), 3, 1);
-      bands.minFilter = THREE.NearestFilter;
-      bands.magFilter = THREE.NearestFilter;
-      bands.needsUpdate = true;
-      const heights = new Map<Kind, number>();
+      const heights = new Map<Kind, { height: number; floor: number }>();
       for (const [kind, gltf] of models) {
         const box = new THREE.Box3().setFromObject(gltf.scene);
-        heights.set(kind, Math.max(0.01, box.max.y - box.min.y));
+        heights.set(kind, { height: Math.max(0.01, box.max.y - box.min.y), floor: box.min.y });
       }
       const sources = new Map(models);
+      const scratch = { q: new THREE.Quaternion(), r: new THREE.Quaternion(), p: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), axis: new THREE.Vector3(), up: new THREE.Vector3() };
 
       const make = (kind: Kind): Actor => {
         const source = sources.get(kind);
         if (!source) throw new Error(`Missing model ${kind}`);
         const model = clone(source.scene) as Three.Group;
-        const materials: Three.Material[] = [];
+        const materials: Three.MeshStandardMaterial[] = [];
         model.traverse((node) => {
           const mesh = node as Three.Mesh;
           if (!mesh.isMesh) return;
-          const original = mesh.material as Three.MeshStandardMaterial;
-          const toon = new THREE.MeshToonMaterial({ map: original.map, gradientMap: bands, emissive: 0xffffff, emissiveIntensity: 0, alphaTest: original.transparent ? 0.5 : 0 });
-          mesh.material = toon;
+          // Each figure has its own materials (fading and hit flashes are per body).
+          const m = (mesh.material as Three.MeshStandardMaterial).clone();
+          m.roughness = SURFACE[kind].roughness;
+          m.metalness = SURFACE[kind].metalness;
+          if (m.transparent) {
+            // Hair cards: cut out instead of blended, so they sort correctly.
+            m.transparent = false;
+            m.alphaTest = 0.5;
+          }
+          if (!m.emissiveMap) m.emissive.setRGB(1, 0.92, 0.85);
+          m.emissiveIntensity = 0;
+          mesh.material = m;
           mesh.frustumCulled = false;
-          materials.push(toon);
+          materials.push(m);
         });
         const root = new THREE.Group();
-        model.scale.setScalar(HEIGHT[kind] / (heights.get(kind) ?? 1));
+        root.rotation.order = "ZYX";
+        const size = heights.get(kind) ?? { height: 1, floor: 0 };
+        const scale = HEIGHT[kind] / size.height;
+        model.scale.setScalar(scale);
+        // Soles on the ground: the root sits where the feet are.
+        model.position.y = -size.floor * scale;
         root.add(model);
         root.updateMatrixWorld(true);
-        for (const w of WEAPONS[kind]) {
+        for (const w of kind === "hero" ? [] : WEAPONS[kind]) {
           const hand = model.getObjectByName(bone(`${w.hand}Hand`));
           const prop = weaponScenes.get(w.file);
-          if (hand && prop) arm(THREE, hand, prop.scene.clone(), w.length, w.shield === true, materials, bands);
+          if (hand && prop) arm(THREE, hand, prop.scene.clone(), w.length, w.shield === true, materials);
         }
         // Rest data for the ragdoll, measured with the body unturned (its frame = the world here).
         const drives: Actor["drives"] = [];
@@ -443,6 +882,8 @@ export class Fighters3D {
           toward.getWorldPosition(next);
           drives.push({ bone: b, from: d.from, to: d.to, rest: b.getWorldQuaternion(new THREE.Quaternion()), restDir: next.clone().sub(at).normalize() });
         }
+        const find = (name: string): Three.Bone | null => (model.getObjectByName(bone(name)) as Three.Bone | undefined) ?? null;
+        const trunk = { spine: find("Spine"), spine1: find("Spine1"), spine2: find("Spine2"), neck: find("Neck"), head: find("Head") };
         scene.add(root);
         const mixer = new THREE.AnimationMixer(model);
         const actions = new Map<string, Three.AnimationAction>();
@@ -454,28 +895,33 @@ export class Fighters3D {
           }
           actions.set(clip.name, action);
         }
-        const actor: Actor = { root, mixer, actions, current: "", materials, swing: -1, cut: 0, drives, state: "", blend: null };
+        const actor: Actor = { root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives, trunk, reflex: newReflex(), state: "", blend: null };
         play(actor, kind === "hero" ? "hero_idle" : "foe_idle");
         return actor;
       };
-      // An animal: toon-shaded in its own colours, with the clips that came with it.
+      // An animal: in its own colours, with the clips that came with it.
       const makeAnimal = (kind: AnimalKind): Actor => {
         const source = animalSources.get(kind);
         if (!source) throw new Error(`Missing animal ${kind}`);
         const model = clone(source.scene) as Three.Group;
-        const materials: Three.Material[] = [];
+        const materials: Three.MeshStandardMaterial[] = [];
         model.traverse((node) => {
           const mesh = node as Three.Mesh;
           if (!mesh.isMesh) return;
-          const original = mesh.material as Three.MeshStandardMaterial;
-          const toon = new THREE.MeshToonMaterial({ color: original.color, map: original.map, vertexColors: original.vertexColors, gradientMap: bands, emissive: 0xffffff, emissiveIntensity: 0 });
-          mesh.material = toon;
+          const m = (mesh.material as Three.MeshStandardMaterial).clone();
+          // Fur: no sheen at all.
+          m.roughness = 0.9;
+          m.metalness = 0;
+          if (!m.emissiveMap) m.emissive.setRGB(1, 0.92, 0.85);
+          m.emissiveIntensity = 0;
+          mesh.material = m;
           mesh.frustumCulled = false;
-          materials.push(toon);
+          materials.push(m);
         });
         const box = new THREE.Box3().setFromObject(source.scene);
         model.scale.setScalar(ANIMAL_HEIGHT[kind] / Math.max(0.01, box.max.y - box.min.y));
         const root = new THREE.Group();
+        root.rotation.order = "ZYX";
         root.add(model);
         scene.add(root);
         const mixer = new THREE.AnimationMixer(model);
@@ -488,11 +934,13 @@ export class Fighters3D {
           }
           actions.set(clip.name, action);
         }
-        const actor: Actor = { root, mixer, actions, current: "", materials, swing: -1, cut: 0, drives: [], state: "", blend: null };
+        const trunk = { spine: null, spine1: null, spine2: null, neck: null, head: null };
+        const actor: Actor = { root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives: [], trunk, reflex: newReflex(), state: "", blend: null };
         play(actor, "Idle");
         return actor;
       };
       const hero = make("hero");
+      const arms = equip(THREE, hero, weaponScenes);
       // Warm-up: one of every figure built now, its shaders compiled in the background (solid and
       // fading) and its textures uploaded, so the first knight, brute or animal to come on screen
       // doesn't freeze a frame. They wait hidden and are handed out first.
@@ -506,11 +954,12 @@ export class Fighters3D {
       await renderer.compileAsync(scene, camera);
       fading(false);
       scene.traverse((node) => {
-        const map = ((node as Three.Mesh).material as Three.MeshToonMaterial | undefined)?.map;
+        const map = ((node as Three.Mesh).material as Three.MeshStandardMaterial | undefined)?.map;
         if (map) renderer.initTexture(map);
       });
       // One hidden render uploads every mesh and skeleton to the GPU now rather than mid-fight.
       renderer.render(scene, camera);
+      renderer.clear();
       for (const [key, actor] of warm) {
         actor.root.visible = false;
         spare.set(key, [...(spare.get(key) ?? []), actor]);
@@ -527,13 +976,191 @@ export class Fighters3D {
         make: (kind) => spare.get(kind)?.pop() ?? make(kind),
         makeAnimal: (kind) => spare.get(kind)?.pop() ?? makeAnimal(kind),
         headlight,
+        torch,
+        cages: [],
         hero,
+        arms,
         enemies: new Map(),
+        mates: new Map(),
+        makeMate: null,
+        lamps,
+        scratch,
       };
+      // The toys come after the fighters (they're only needed once one is found).
+      void this.loadToys(THREE, loader, clone, scene, makeAnimal);
     } catch {
       // No WebGL or the models didn't load: the 2D explorer stays.
     }
   }
+}
+
+/*
+ * The hero's weapons, each made once: the slim longsword built in code, the axe and dagger from
+ * KayKit. Each gets its place in her right hand (like any prop) and on her back (diagonally,
+ * the grip over her right shoulder, the blade down to her left hip), measured in the bind pose.
+ */
+function equip(THREE: ThreeModule, actor: Actor, props: Map<string, { scene: Three.Object3D }>): Map<WeaponId, Carried> {
+  const hand = actor.model.getObjectByName(bone("RightHand"));
+  const back = actor.model.getObjectByName(bone("Spine2"));
+  const arms = new Map<WeaponId, Carried>();
+  if (!hand || !back) return arms;
+  actor.root.updateMatrixWorld(true);
+  for (const weapon of Object.values(ARSENAL)) {
+    const steel: Three.MeshStandardMaterial[] = [];
+    let object: Three.Object3D;
+    let length: number;
+    if (weapon.look.kind === "longsword") {
+      object = longsword(THREE, steel);
+      length = LONGSWORD.blade + LONGSWORD.grip;
+    } else {
+      const source = props.get(weapon.look.file);
+      if (!source) continue;
+      object = source.scene.clone();
+      length = weapon.look.length;
+      object.traverse((node) => {
+        const mesh = node as Three.Mesh;
+        if (!mesh.isMesh) return;
+        const m = (mesh.material as Three.MeshStandardMaterial).clone();
+        m.roughness = 0.4;
+        m.metalness = 0.7;
+        m.emissive.setRGB(1, 1, 1);
+        m.emissiveIntensity = 0;
+        mesh.material = m;
+        mesh.frustumCulled = false;
+        steel.push(m);
+      });
+    }
+    // In the hand: placed like any held prop, then its local pose remembered.
+    arm(THREE, hand, object, length, false, actor.materials, false);
+    const handMatrix = object.matrix.clone();
+    // On the back: the pose in the world (bind pose, body unturned, facing +z), carried into Spine2's frame.
+    const spine = back.getWorldPosition(new THREE.Vector3());
+    const handScale = hand.getWorldScale(new THREE.Vector3()).x;
+    const size = object.scale.x * handScale;
+    const world = new THREE.Matrix4().compose(
+      spine.clone().add(new THREE.Vector3(0.17, 0.2, -0.16)),
+      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-0.42, -0.9, -0.05).normalize()),
+      new THREE.Vector3(size, size, size),
+    );
+    const backMatrix = back.matrixWorld.clone().invert().multiply(world);
+    object.visible = false;
+    // It fades with her (into the truck's seat and out).
+    object.traverse((node) => {
+      const mesh = node as Three.Mesh;
+      if (mesh.isMesh) actor.materials.push(mesh.material as Three.MeshStandardMaterial);
+    });
+    const flame = weapon.id === "blade" ? flames(THREE, object) : null;
+    arms.set(weapon.id, { object, hand: { parent: hand, matrix: handMatrix }, back: { parent: back, matrix: backMatrix }, steel, flame });
+  }
+  return arms;
+}
+
+/* The slim longsword: a tapered, pointed blade with a ridge, a straight crossguard, a wrapped grip and a round pommel; grip at the origin, blade up +y. */
+function longsword(THREE: ThreeModule, steel: Three.MeshStandardMaterial[]): Three.Group {
+  const sword = new THREE.Group();
+  const L = LONGSWORD;
+  const outline = new THREE.Shape();
+  outline.moveTo(-L.width / 2, 0);
+  outline.lineTo(L.width / 2, 0);
+  outline.lineTo(L.width * 0.38, L.blade * 0.86);
+  outline.lineTo(0, L.blade);
+  outline.lineTo(-L.width * 0.38, L.blade * 0.86);
+  outline.closePath();
+  const bladeGeometry = new THREE.ExtrudeGeometry(outline, { depth: L.thick, bevelEnabled: true, bevelThickness: L.thick * 0.45, bevelSize: L.width * 0.18, bevelSegments: 1 });
+  bladeGeometry.translate(0, 0, -L.thick / 2);
+  const blade = new THREE.MeshStandardMaterial({ color: 0xd9dee4, metalness: 0.92, roughness: 0.22, emissive: 0xffffff, emissiveIntensity: 0 });
+  steel.push(blade);
+  const bladeMesh = new THREE.Mesh(bladeGeometry, blade);
+  bladeMesh.position.y = L.grip * 0.5 + 0.02;
+  const brass = new THREE.MeshStandardMaterial({ color: 0x8a6a3a, metalness: 0.8, roughness: 0.35 });
+  const leather = new THREE.MeshStandardMaterial({ color: 0x2a1a12, metalness: 0, roughness: 0.85 });
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(L.guard, 0.022, 0.03), brass);
+  guard.position.y = L.grip * 0.5 + 0.01;
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, L.grip, 10), leather);
+  const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.024, 12, 8), brass);
+  pommel.position.y = -L.grip * 0.5 - 0.015;
+  for (const mesh of [bladeMesh, guard, grip, pommel]) {
+    mesh.frustumCulled = false;
+    sword.add(mesh);
+  }
+  return sword;
+}
+
+/* Fire along the blade: soft additive flame sprites from guard to tip, shown only while it burns. */
+function flames(THREE: ThreeModule, sword: Three.Object3D): Three.Object3D {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const g = ctx.createRadialGradient(32, 38, 2, 32, 34, 30);
+    g.addColorStop(0, "rgba(255, 244, 200, 1)");
+    g.addColorStop(0.3, "rgba(255, 170, 60, 0.85)");
+    g.addColorStop(0.7, "rgba(230, 70, 10, 0.35)");
+    g.addColorStop(1, "rgba(120, 20, 0, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const group = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85 }));
+    sprite.position.y = LONGSWORD.grip * 0.5 + 0.08 + (LONGSWORD.blade - 0.1) * (i / 5);
+    sprite.scale.setScalar(0.16 - i * 0.012);
+    group.add(sprite);
+  }
+  const glow = new THREE.PointLight(0xff6a1a, 2.2, 3.5, 1.8);
+  glow.position.y = LONGSWORD.blade * 0.55;
+  group.add(glow);
+  group.visible = false;
+  sword.add(group);
+  return group;
+}
+
+/* A prisoner's cage: a frame of rough timber and iron bars, front and back, about a toy's height and a half. */
+function makeCage(THREE: ThreeModule, scene: Three.Scene): Three.Group {
+  const cage = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x4a3424, roughness: 0.92, metalness: 0 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x3a3b3f, roughness: 0.55, metalness: 0.75 });
+  const W = 1.3;
+  const H = 1.4;
+  const D = 0.9;
+  const beam = (w: number, h: number, d: number, x: number, y: number, z: number, m: Three.Material): void => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    mesh.position.set(x, y, z);
+    mesh.frustumCulled = false;
+    cage.add(mesh);
+  };
+  for (const y of [0.05, H]) beam(W + 0.1, 0.1, D + 0.1, 0, y, 0, wood);
+  for (const x of [-W / 2, W / 2]) for (const z of [-D / 2, D / 2]) beam(0.1, H, 0.1, x, H / 2, z, wood);
+  for (let i = 1; i < 7; i++) {
+    const x = -W / 2 + (W * i) / 7;
+    for (const z of [-D / 2, D / 2]) {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, H - 0.1, 6), iron);
+      bar.position.set(x, H / 2, z);
+      bar.frustumCulled = false;
+      cage.add(bar);
+    }
+  }
+  cage.visible = false;
+  scene.add(cage);
+  return cage;
+}
+
+function newReflex(): Reflex {
+  return { bend: 0, vb: 0, nod: 0, vn: 0, twist: 0, vt: 0, serial: 0 };
+}
+
+/* Turns a bone about a world axis by `angle` (rad), on top of its animated pose. */
+function turnBone(b: Three.Bone | null, axis: Three.Vector3, angle: number, s: { q: Three.Quaternion; r: Three.Quaternion; p: Three.Quaternion }): void {
+  if (!b?.parent || Math.abs(angle) < 1e-4) return;
+  // In the parent's frame a world turn R is P⁻¹·R·P, applied before the bone's own rotation.
+  b.parent.getWorldQuaternion(s.p);
+  s.r.setFromAxisAngle(axis, angle);
+  s.q.copy(s.p).invert().multiply(s.r).multiply(s.p);
+  b.quaternion.premultiply(s.q);
+  b.updateMatrixWorld(true);
 }
 
 /* The moment a body starts to rise: remember the fallen pose to blend out of, and play the get-up over `seconds`. */
@@ -582,9 +1209,10 @@ function named(gltf: { animations: Three.AnimationClip[] }, name: string): Three
 /*
  * Puts a prop in a hand. Props stand blade-up (+y) with the grip at the origin; in the rest pose
  * the thumb points forward (+z), so the blade is turned to come out of the fist that way, the grip
- * slid a little along the fingers, and the whole thing scaled to its real length.
+ * slid a little along the fingers, and the whole thing scaled to its real length. Steel gets a
+ * metal finish.
  */
-function arm(THREE: ThreeModule, hand: Three.Object3D, prop: Three.Object3D, length: number, shield: boolean, materials: Three.Material[], bands: Three.Texture): void {
+function arm(THREE: ThreeModule, hand: Three.Object3D, prop: Three.Object3D, length: number, shield: boolean, materials: Three.MeshStandardMaterial[], finish = true): void {
   const handQ = hand.getWorldQuaternion(new THREE.Quaternion());
   const handScale = hand.getWorldScale(new THREE.Vector3()).x;
   const size = new THREE.Box3().setFromObject(prop).getSize(new THREE.Vector3());
@@ -592,14 +1220,23 @@ function arm(THREE: ThreeModule, hand: Three.Object3D, prop: Three.Object3D, len
   prop.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), shield ? new THREE.Vector3(0, 1, 0) : along);
   prop.scale.setScalar(length / Math.max(size.x, size.y, size.z) / handScale);
   prop.position.set(0, 0.08 / handScale, 0);
+  prop.updateMatrix();
+  if (!finish) {
+    hand.add(prop);
+    prop.updateMatrix();
+    return;
+  }
   prop.traverse((node) => {
     const mesh = node as Three.Mesh;
     if (!mesh.isMesh) return;
-    const original = mesh.material as Three.MeshStandardMaterial;
-    const toon = new THREE.MeshToonMaterial({ map: original.map, gradientMap: bands, emissive: 0xffffff, emissiveIntensity: 0 });
-    mesh.material = toon;
+    const m = (mesh.material as Three.MeshStandardMaterial).clone();
+    m.roughness = 0.38;
+    m.metalness = shield ? 0.4 : 0.75;
+    m.emissive.setRGB(1, 0.92, 0.85);
+    m.emissiveIntensity = 0;
+    mesh.material = m;
     mesh.frustumCulled = false;
-    materials.push(toon);
+    materials.push(m);
   });
   hand.add(prop);
 }
@@ -608,7 +1245,7 @@ function arm(THREE: ThreeModule, hand: Three.Object3D, prop: Three.Object3D, len
 function play(actor: Actor, name: string, speed = 1, restart = false): void {
   const next = actor.actions.get(name);
   if (!next) return;
-  next.timeScale = Math.max(0.2, Math.min(4, speed));
+  next.timeScale = Math.max(0.05, Math.min(4, speed));
   if (actor.current === name && !restart) return;
   const previous = actor.actions.get(actor.current);
   next.reset().play();

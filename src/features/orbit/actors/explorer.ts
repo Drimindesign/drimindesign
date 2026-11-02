@@ -1,8 +1,9 @@
 import { Animator } from "../engine/animator";
+import { FIRE, WEAPONS, type Weapon, type WeaponId } from "./arsenal";
 import type { GameAudio } from "../engine/audio";
 import type { ToScreen } from "../engine/camera";
 import { CharacterController, type MoveInput } from "../engine/character-controller";
-import { Ragdoll } from "../engine/ragdoll";
+import { Ragdoll, type Joint } from "../engine/ragdoll";
 import type { Terrain } from "../engine/terrain";
 import { EXPLORERS, ExplorerSprite, type ExplorerId } from "../pixel/explorer-sprite";
 import { paste, type Painter } from "../pixel/painter";
@@ -53,6 +54,24 @@ const HIT_STOP = 0.06;
 const SWAY = { breathe: 0.09, drift: 0.06, gait: 0.28 } as const;
 /** Invulnerable after a hit, blinking (s). */
 const MERCY = 1.4;
+/**
+ * Hanging from a rope: the hands are this far above the feet (m); ← → pump the swing (rad/s²);
+ * the air takes a little of it (1/s); letting go adds this lift (m/s); and the rope can't be
+ * caught again for this long (s) after. Ropes are caught within `catch` (m) of the hands, never
+ * shorter than `shortest` (m).
+ */
+const ROPE = { hang: 1.95, pump: 1.7, drag: 0.08, lift: 2.6, regrab: 0.45, catch: 0.85, shortest: 2.2 } as const;
+/** Caught low on a rope, she climbs it hand over hand (m/s) until it's this long (m) to her hands: a better swing. */
+const ROPE_CLIMB = { speed: 0.9, length: 4.6 } as const;
+
+/** The explorer hanging from a rope: its anchor (m), the length to the hands, the angle from straight down (rad) and its rate. */
+interface Rope {
+  x: number;
+  y: number;
+  length: number;
+  angle: number;
+  spin: number;
+}
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
@@ -81,6 +100,19 @@ export class Explorer {
   /** Getting into or out of the car, and how far along (for the 3D model's sit and stand clips). */
   transition: { kind: "in" | "out"; progress: number } | null = null;
   private mercy = 0;
+  /** Hits taken so far, and the last one (where, how hard, which way it travelled): the 3D body's reflex reads them. */
+  hitSerial = 0;
+  lastBlow: { joint: Joint; power: number; dir: number } = { joint: "chest", power: 0, dir: 1 };
+  /** On a rope (or not), and how long until a rope can be caught again (s). */
+  private rope: Rope | null = null;
+  private regrab = 0;
+  /** The weapon in hand, and the ones she carries (switched in turn). */
+  weapon: WeaponId = "blade";
+  carried: WeaponId[] = ["blade", "dagger"];
+  /** The Fire Sword: unlocked yet, seconds left burning, and seconds until it can be lit again. */
+  fireUnlocked = false;
+  burning = 0;
+  fireRecharge = 0;
   /** Time into the current swing (s), or -1 when not swinging. */
   private swing = -1;
   /** Which blow of the combo (0 … 2) the current or last swing is, and when the last one ended (s). */
@@ -124,6 +156,7 @@ export class Explorer {
 
   /** Puts the explorer somewhere new (a checkpoint, the car door) without the hair whipping. */
   place(x: number, y = this.terrain.height(x)): void {
+    this.rope = null;
     this.body.place(x, y);
     this.body.grounded = true;
     this.animator.settle(x, y, this.body.facing);
@@ -150,9 +183,52 @@ export class Explorer {
     return this.swing < 0 ? -1 : this.swing / SWING.end;
   }
 
-  /** How long a whole swing takes (s). */
+  /** How long a whole swing takes (s): a light blade is quicker, a heavy one slower. */
   get swingDuration(): number {
-    return SWING.end;
+    return SWING.end / this.arm.speed;
+  }
+
+  get arm(): Weapon {
+    return WEAPONS[this.weapon];
+  }
+
+  /** How hard the current blow lands: the combo's blow, the weapon's weight, and the fire if it's lit. */
+  get impact(): { power: number; breaksGuard: boolean } {
+    return { power: BLOWS[this.combo].power * this.arm.power * (this.burning > 0 ? FIRE.power : 1), breaksGuard: BLOWS[this.combo].guardBreak || this.arm.breaksGuard };
+  }
+
+  /** The weapon is put away on her back: both hands are needed (a rope, a climb, the truck's door). */
+  get sheathed(): boolean {
+    return this.rope !== null || this.body.climb >= 0 || this.transition !== null;
+  }
+
+  /** On a rope: its angle from straight down (rad), and whether she's climbing it. */
+  get ropeAngle(): number {
+    return this.rope?.angle ?? 0;
+  }
+
+  get ropeClimbing(): boolean {
+    return this.rope !== null && this.rope.length > ROPE_CLIMB.length;
+  }
+
+  /** The Fire Sword's charge: 1 ready to light, less while it recharges. */
+  get fireCharge(): number {
+    return this.fireUnlocked ? 1 - this.fireRecharge / FIRE.recharge : 0;
+  }
+
+  /** Q: the next weapon she carries (not mid-swing). */
+  private nextWeapon(): void {
+    if (this.swing >= 0 || this.carried.length < 2) return;
+    const i = this.carried.indexOf(this.weapon);
+    this.weapon = this.carried[(i + 1) % this.carried.length];
+    this.audio.unsheathe(this.arm.pitch);
+  }
+
+  /** Lights the Fire Sword, if it's unlocked and charged. */
+  private ignite(): void {
+    if (!this.fireUnlocked || this.fireRecharge > 0 || this.burning > 0) return;
+    this.burning = FIRE.burn;
+    this.audio.ignite();
   }
 
   /** Just hit: the flinch plays. */
@@ -169,7 +245,7 @@ export class Explorer {
   get hitbox(): { x0: number; x1: number; y0: number; y1: number } {
     const b = this.body;
     const a = b.x + b.facing * 0.15;
-    const c = b.x + b.facing * 1.75;
+    const c = b.x + b.facing * this.arm.reach;
     return { x0: Math.min(a, c), x1: Math.max(a, c), y0: b.y - 0.2, y1: b.y + 2.1 };
   }
 
@@ -183,6 +259,9 @@ export class Explorer {
     this.hearts = Math.max(0, this.hearts - 1);
     this.mercy = MERCY;
     const away = Math.sign(this.body.x - fromX) || -1;
+    this.hitSerial++;
+    this.lastBlow = { joint: heavy ? "chest" : Math.random() < 0.5 ? "head" : "chest", power: heavy ? 6 : 3.5, dir: away };
+    this.rope = null;
     this.audio.land(0.7);
     if (heavy) {
       this.knockDown(away);
@@ -232,6 +311,78 @@ export class Explorer {
   heal(): void {
     this.hearts = MAX_HEARTS;
     this.mercy = 0;
+  }
+
+  /** Where the hands hold the rope (its anchor), while hanging from one. */
+  get ropeAnchor(): { x: number; y: number } | null {
+    return this.rope ? { x: this.rope.x, y: this.rope.y } : null;
+  }
+
+  /** The hands on a rope: where they hold it (m). */
+  get hands(): { x: number; y: number } {
+    return { x: this.body.x, y: this.body.y + ROPE.hang };
+  }
+
+  /**
+   * In the air near a rope hanging straight down from (x, y), `length` long: the hands catch it
+   * where they reach it, and the body's speed carries into the swing. Returns true if caught.
+   */
+  catchRope(x: number, y: number, length: number): boolean {
+    const b = this.body;
+    if (this.rope || this.regrab > 0 || b.grounded || this.ragdoll || b.climb >= 0) return false;
+    const hx = b.x;
+    const hy = b.y + ROPE.hang;
+    if (Math.abs(hx - x) > ROPE.catch || hy > y - ROPE.shortest || hy < y - length - ROPE.catch) return false;
+    const reach = Math.max(ROPE.shortest, y - hy);
+    const angle = Math.asin(Math.max(-0.9, Math.min(0.9, (hx - x) / reach)));
+    // Momentum along the swing: the part of the body's velocity tangent to the arc.
+    const spin = (b.vx * Math.cos(angle) + b.vy * Math.sin(angle)) / reach;
+    this.rope = { x, y, length: reach, angle, spin };
+    this.swing = -1;
+    this.audio.footstep();
+    return true;
+  }
+
+  /*
+   * The swing: a pendulum (θ'' = −g/L·sin θ), pumped by leaning into it with ← →, with a little
+   * air drag. Jump lets go: the hands' velocity along the arc, plus a push up.
+   */
+  private swingRope(dt: number, gravity: number, input: MoveInput): void {
+    const r = this.rope;
+    if (!r) return;
+    const b = this.body;
+    // Caught low: hand over hand up the rope first (a shorter rope swings livelier).
+    if (r.length > ROPE_CLIMB.length) r.length = Math.max(ROPE_CLIMB.length, r.length - ROPE_CLIMB.speed * dt);
+    r.spin += (-(gravity / r.length) * Math.sin(r.angle) + input.move * ROPE.pump - r.spin * ROPE.drag) * dt;
+    r.angle = Math.max(-1.35, Math.min(1.35, r.angle + r.spin * dt));
+    b.px = b.x;
+    b.py = b.y;
+    b.x = r.x + Math.sin(r.angle) * r.length;
+    b.y = r.y - Math.cos(r.angle) * r.length - ROPE.hang;
+    if (Math.abs(r.spin) > 0.15) b.facing = r.spin > 0 ? 1 : -1;
+    const vx = Math.cos(r.angle) * r.spin * r.length;
+    const vy = Math.sin(r.angle) * r.spin * r.length;
+    // A jump lets go; so do feet dragging on the ground.
+    if (input.jumpPressed || b.y < this.terrain.height(b.x)) {
+      this.rope = null;
+      this.regrab = ROPE.regrab;
+      b.refreshAirJump();
+      b.vx = vx;
+      b.vy = vy + (input.jumpPressed ? ROPE.lift : 0);
+      b.grounded = false;
+      if (input.jumpPressed) {
+        this.audio.jump();
+        this.animator.kick(2.2);
+      }
+      return;
+    }
+    b.vx = vx;
+    b.vy = vy;
+  }
+
+  /** Off any rope (a respawn). */
+  letGo(): void {
+    this.rope = null;
   }
 
   /** A bounce off something stomped. */
@@ -286,12 +437,26 @@ export class Explorer {
 
   // ---- simulation -------------------------------------------------------------
 
-  step(dt: number, gravity: number, input: MoveInput & { attackPressed?: boolean }, effects = true): void {
+  step(dt: number, gravity: number, input: MoveInput & { attackPressed?: boolean; weaponPressed?: boolean; skillPressed?: boolean }, effects = true): void {
     this.mercy = Math.max(0, this.mercy - dt);
+    // The fire burns down, then the recharge begins.
+    if (this.burning > 0) {
+      this.burning = Math.max(0, this.burning - dt);
+      if (this.burning === 0) this.fireRecharge = FIRE.recharge;
+    } else {
+      this.fireRecharge = Math.max(0, this.fireRecharge - dt);
+    }
+    if (input.weaponPressed) this.nextWeapon();
+    if (input.skillPressed) this.ignite();
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.parried = Math.max(0, this.parried - dt);
+    this.regrab = Math.max(0, this.regrab - dt);
     this.clock += dt;
     this.swingStarted = false;
+    if (this.rope) {
+      this.swingRope(dt, gravity, input);
+      return;
+    }
     // Knocked down: no control while the ragdoll falls and settles, then the get-up plays.
     if (this.ragdoll) {
       if (this.getup > 0) {
@@ -321,13 +486,13 @@ export class Explorer {
       this.combo = this.sinceSwing < COMBO_WINDOW ? (this.combo + 1) % BLOWS.length : 0;
       this.cooldown = SWORD.cooldown;
       this.struck.clear();
-      this.audio.swing(this.combo === BLOWS.length - 1);
+      this.audio.swing(this.combo === BLOWS.length - 1, this.arm.pitch, this.burning > 0);
     }
     if (this.hitStop > 0) {
       this.hitStop = Math.max(0, this.hitStop - dt);
     } else if (this.swing >= 0) {
       const before = this.swing;
-      this.swing += dt;
+      this.swing += dt * this.arm.speed;
       // The cut carries the body forward into the lunge.
       if (before < SWING.strike && this.swing >= SWING.strike && this.body.grounded) this.body.vx += this.body.facing * 2.2;
       if (this.swing > SWING.end) {
@@ -342,7 +507,10 @@ export class Explorer {
   private effects(): void {
     const c = this.body;
     for (const event of c.drainEvents()) {
-      if (event === "jump") {
+      if (event === "climb") {
+        this.audio.footstep();
+        this.particles.dust(c.x, c.y, 0, 4, 0.4);
+      } else if (event === "jump") {
         this.audio.jump();
         this.animator.kick(2.2);
         this.particles.dust(c.x, c.y, c.vx, 6, 0.6);

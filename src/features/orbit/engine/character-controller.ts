@@ -8,7 +8,7 @@ export interface MoveInput {
   jumpHeld: boolean;
 }
 
-export type CharacterEvent = "jump" | "land" | "bump";
+export type CharacterEvent = "jump" | "land" | "bump" | "climb";
 
 /** Something to stand on that isn't the ground: a truck's roof, a crate, a stall (its span, top, and speed). */
 export interface Platform {
@@ -25,6 +25,12 @@ const MAX_GRADE = 1.8;
 /** Uphill slows the stride, downhill quickens it: speed scales by 1 / (1 + slope × this). */
 const UPHILL = 0.9;
 const DOWNHILL = 0.25;
+/**
+ * Climbing a ledge: a wall up to `vault` (m) high is vaulted straight from the ground; one up to
+ * `reach` (m, the hands' reach above the feet in a jump) is grabbed in the air. A vault takes
+ * `quick` (s), a full haul `haul` (s): most of it rising (`rise` share), the rest stepping `onto` (m) over the top.
+ */
+const CLIMB = { vault: 1.3, reach: 2.1, quick: 0.8, haul: 1.35, rise: 0.65, onto: 0.45 } as const;
 
 /*
  * The explorer's body as the physics sees it: a point at the feet with a velocity, separate
@@ -52,6 +58,12 @@ export class CharacterController {
   /** The platform under the feet, if standing on one. */
   private standing: Platform | null = null;
   private readonly events: CharacterEvent[] = [];
+  /** Hauling up over a ledge: 0 … 1 through the climb, or -1. */
+  climb = -1;
+  /** How long this climb takes (s). */
+  climbTime: number = CLIMB.haul;
+  private climbFrom = { x: 0, y: 0 };
+  private climbTo = { x: 0, y: 0 };
 
   constructor(x: number, private readonly terrain: Terrain) {
     this.x = x;
@@ -75,6 +87,7 @@ export class CharacterController {
   }
 
   place(x: number, y: number): void {
+    this.climb = -1;
     this.x = x;
     this.y = y;
     this.px = x;
@@ -87,6 +100,10 @@ export class CharacterController {
     this.px = this.x;
     this.py = this.y;
     const c = CHARACTER;
+    if (this.climb >= 0) {
+      this.stepClimb(dt);
+      return;
+    }
 
     if (input.move !== 0) this.facing = input.move > 0 ? 1 : -1;
     // Climbing a slope costs speed; running down one adds a little.
@@ -135,6 +152,21 @@ export class CharacterController {
     const face = this.terrain.slope(nextX) * dir > MAX_GRADE && rise > 0.02;
     const blocked = this.grounded ? rise > MAX_STEP || face : rise > 0.05 && (face || this.terrain.height(nextX) - this.terrain.height(this.x) > MAX_STEP);
     if (blocked) {
+      // Pushing into a wall the hands can reach over: grab the top and haul up onto it.
+      const onto = this.x + dir * CLIMB.onto;
+      const top = this.terrain.height(onto);
+      const above = top - this.y;
+      if (dir !== 0 && Math.sign(input.move) === dir && above > MAX_STEP && above <= (this.grounded ? CLIMB.vault : CLIMB.reach) && this.terrain.slope(onto) * dir < MAX_GRADE) {
+        this.climb = 0;
+        this.climbTime = above <= CLIMB.vault ? CLIMB.quick : CLIMB.haul;
+        this.climbFrom = { x: this.x, y: this.y };
+        this.climbTo = { x: onto, y: top };
+        this.vx = 0;
+        this.vy = 0;
+        this.grounded = false;
+        this.events.push("climb");
+        return;
+      }
       this.vx = 0;
       if (!this.grounded) this.events.push("bump");
     } else {
@@ -160,6 +192,30 @@ export class CharacterController {
       this.events.push("land");
     }
     if (this.grounded) this.airJumps = 1;
+  }
+
+  /** A fresh kung fu jump in the air (after letting go of a rope). */
+  refreshAirJump(): void {
+    this.airJumps = 1;
+  }
+
+  /* The haul over a ledge: up the face (eased), then a step forward onto the top. */
+  private stepClimb(dt: number): void {
+    this.climb = Math.min(1, this.climb + dt / this.climbTime);
+    const k = this.climb;
+    const up = Math.min(1, k / CLIMB.rise);
+    const across = Math.max(0, (k - CLIMB.rise) / (1 - CLIMB.rise));
+    const ease = (t: number): number => t * t * (3 - 2 * t);
+    this.x = this.climbFrom.x + (this.climbTo.x - this.climbFrom.x) * ease(across);
+    this.y = this.climbFrom.y + (this.climbTo.y - this.climbFrom.y) * ease(up);
+    if (k >= 1) {
+      this.climb = -1;
+      this.y = this.climbTo.y;
+      this.grounded = true;
+      this.airJumps = 1;
+      this.landSpeed = 0;
+      this.events.push("land");
+    }
   }
 
   /* The highest surface at x that's at or below `below` (the terrain, or a platform's top); notes the platform stood on. */

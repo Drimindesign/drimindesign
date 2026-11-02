@@ -1,17 +1,27 @@
 import type { Combo, Score } from "../actors/score";
 import type { GameAudio } from "../engine/audio";
 import type { InputSnapshot } from "../engine/input";
+import type { FigureLayer } from "../pixel/fighters-3d";
+import type { Party } from "../actors/party";
 import type { Painter } from "../pixel/painter";
 import type { Particles } from "../pixel/particles";
 
-export type StageId = "village" | "city" | "forest";
+export type StageId = "village" | "jungle" | "city" | "forest";
 
-export const STAGE_ORDER: readonly StageId[] = ["village", "city", "forest"];
+/** What the music is doing: driving, walking in the dark, a fight, a brute's fight. */
+export type Mood = "drive" | "explore" | "fight" | "boss";
 
+export const STAGE_ORDER: readonly StageId[] = ["village", "jungle", "city", "forest"];
+
+/*
+ * The story: Kachujin carries the Spark, a big idea, to the launch pad, to send it into orbit.
+ * Mr. Grey's Copycats, who steal ideas instead of making their own, block every road.
+ */
 export const STAGE_TITLES: Record<StageId, { number: string; title: string; goal: string }> = {
-  village: { number: "01", title: "Discover", goal: "Out of the village in the monsoon. Mud steals your grip, a bull rules the road, the bridges are broken." },
-  city: { number: "02", title: "Build", goal: "Through the city by night. Jump the traffic, fly the broken flyovers, land the flips." },
-  forest: { number: "03", title: "Launch", goal: "The forest road to the launch pad. Boars and wolves, ravines: reach the pad and lift off." },
+  village: { number: "01", title: "The Spark", goal: "Mr. Grey's Copycats want the Spark. Get it out of the village before they shut the road." },
+  jungle: { number: "02", title: "Into the Dark", goal: "The road is gone. Cross the night jungle on foot: swing the ropes, climb the cliffs, keep the wolves off. The truck waits on the far side." },
+  city: { number: "03", title: "Copycat City", goal: "Grey's gang owns the city. Jump the traffic, fly the broken flyovers, break their gate." },
+  forest: { number: "04", title: "Launch", goal: "The last road to the launch pad. Get past Grey's guards and send the Spark into orbit." },
 };
 
 /** Shared by every stage for its whole life. */
@@ -31,6 +41,10 @@ export interface StageContext {
    * (no capable device, or no page to host it); otherwise the game pauses until `done(won)`.
    */
   arena?: { request(done: (won: boolean) => void): boolean };
+  /** Where the 3D figures are drawn, over the game's canvas (null without a page: QA tools). */
+  layer: FigureLayer | null;
+  /** The run's team and what it has unlocked: it carries from stage to stage. */
+  party: Party;
 }
 
 export interface StageFx {
@@ -42,6 +56,10 @@ export interface StageFx {
   focus(zoom: number): void;
   /** A short phone vibration (ms), for hits felt in the hand. */
   buzz(ms: number): void;
+  /** Film bars across the top and bottom for this long (s): a scene being played out. */
+  cinema(seconds: number): void;
+  /** Frame the camera at exactly this zoom this frame (wider or closer than anything else asks). */
+  frame(zoom: number): void;
 }
 
 /** What the stage draws into, per frame. */
@@ -55,10 +73,25 @@ export interface View {
   frame: number;
   /** Real seconds since the last drawn frame. */
   dt: number;
+  /** The camera's zoom about its pivot (art px), for anything drawn outside the 2D canvas. */
+  zoom: number;
+  pivot: { x: number; y: number };
+  /** The game's own fade to black between stages (0 … 1), on top of the stage's. */
+  fade: number;
 }
 
 export interface StageHud {
   prompt: string;
+  /** The music's mood. */
+  mood?: Mood;
+  /** On foot with a weapon: the sword and weapon pads show. */
+  armed?: boolean;
+  /** The weapon in hand, and the Fire Sword (locked, ready, burning or recharging, and its charge 0 … 1). */
+  weapon?: string;
+  fire?: "locked" | "ready" | "burning" | "charging";
+  fireCharge?: number;
+  /** The team with her: each one's name and hearts, and whether it's still alive. */
+  team?: readonly { name: string; hearts: number; alive: boolean }[];
   /** She's out of the truck (the controller shows the call-the-truck button). */
   foot?: boolean;
   /** A spoken line on screen: who's talking and what they say (a GTA-style subtitle). */
@@ -105,6 +138,8 @@ export interface Stage {
   respawn(): void;
   /** Releases what the stage holds outside the 2D canvas (the 3D stage's WebGL context). */
   dispose?(): void;
+  /** Starts the stage already moving at this speed (m/s): carried over from the stage before. */
+  rollIn?(speed: number): void;
 }
 
 /** Collectibles: hover, bob, get taken when something passes within reach. */

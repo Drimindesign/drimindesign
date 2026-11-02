@@ -23,6 +23,8 @@ interface Particle {
   gas: boolean;
   /** A spark: a bright fleck of steel (drawn as a streak, dies fast). */
   spark: boolean;
+  /** A drop of blood: flies, falls, and lies where it lands, darkening. */
+  blood: boolean;
   seed: number;
 }
 
@@ -34,6 +36,8 @@ const PUFF = { born: 2, grown: 15 } as const;
 const GAS = ["#ffffff", "#f1f4f6", "#dde3e8", "#c3ccd3", "#a6b1ba"] as const;
 const DUST = ["#9a8a7a", "#7a6a5c", "#5a4c42"] as const;
 const SPARK = ["#fffbe8", "#ffe39a", "#ffb04d", "#e0481c"] as const;
+/** Blood: bright as it flies, dark once it has soaked into the ground. */
+const BLOOD = { flying: "#b0121c", lying: "#5c0a0e" } as const;
 /** Puff sprites are cached at these diameters (art px). */
 const SIZES = 14;
 
@@ -53,7 +57,7 @@ function puffSprites(): HTMLCanvasElement[][] {
 
 export class Particles {
   private readonly pool: Particle[] = Array.from({ length: POOL }, (_, i) => ({
-    x: 0, y: 0, vx: 0, vy: 0, age: 1, life: 0, size: 1, gas: true, spark: false, seed: i,
+    x: 0, y: 0, vx: 0, vy: 0, age: 1, life: 0, size: 1, gas: true, spark: false, blood: false, seed: i,
   }));
   private next = 0;
 
@@ -76,6 +80,8 @@ export class Particles {
     p.life = 1.4 + Math.random() * 1.4;
     p.size = 0;
     p.gas = true;
+    p.spark = false;
+    p.blood = false;
   }
 
   /** Steel striking steel at (x, y): flecks thrown in a cone around `dir` (±1) and upward. */
@@ -93,6 +99,29 @@ export class Particles {
       p.size = 1;
       p.gas = false;
       p.spark = true;
+      p.blood = false;
+    }
+  }
+
+  /**
+   * A blow that draws blood at (x, y): drops thrown out of the wound along `dir` (±1), the way the
+   * blade travelled, in a spray that fans upward; `force` 1 a cut, 2 a heavy blow.
+   */
+  blood(x: number, y: number, dir: number, count: number, force: number): void {
+    for (let i = 0; i < count; i++) {
+      const p = this.take();
+      const a = (Math.random() - 0.2) * 1.2;
+      const speed = (1.5 + Math.random() * 3.5) * force;
+      p.x = x + (Math.random() - 0.5) * 0.15;
+      p.y = y + (Math.random() - 0.5) * 0.2;
+      p.vx = dir * Math.cos(a) * speed;
+      p.vy = Math.sin(a) * speed + 0.8;
+      p.age = 0;
+      p.life = 2.5 + Math.random() * 2;
+      p.size = Math.random() < 0.3 ? 1 : 0.5;
+      p.gas = false;
+      p.spark = false;
+      p.blood = true;
     }
   }
 
@@ -100,6 +129,7 @@ export class Particles {
     for (let i = 0; i < count; i++) {
       const p = this.take();
       p.spark = false;
+      p.blood = false;
       p.x = x + (Math.random() - 0.5) * 0.6;
       p.y = y + 0.02;
       p.vx = vx * 0.2 + (Math.random() - 0.5) * 3 * force;
@@ -135,6 +165,10 @@ export class Particles {
           const push = Math.abs(p.vy) * 0.9;
           p.vx += (p.seed % 2 ? 1 : -1) * push;
           p.vy = push * 0.15;
+        } else if (p.blood) {
+          // A drop hits the ground and stays.
+          p.vy = 0;
+          p.vx = 0;
         } else {
           p.vy = 0;
           p.vx *= 0.5;
@@ -160,6 +194,10 @@ export class Particles {
         // A streak along its flight, white-hot cooling to orange.
         ctx.globalAlpha = 1 - t * 0.5;
         painter.line(x, y, x - p.vx * 0.012 * 16, y + p.vy * 0.012 * 16, SPARK[Math.min(SPARK.length - 1, Math.floor(t * SPARK.length))]);
+      } else if (p.blood) {
+        const lying = p.vx === 0 && p.vy === 0;
+        ctx.globalAlpha = lying ? Math.min(1, (1 - t) * 3) : 1;
+        painter.rect(x, y, p.size, lying ? 0.5 : p.size, lying ? BLOOD.lying : BLOOD.flying);
       } else {
         if (hash(p.seed * 7 + frame, 9) < t * t) continue;
         painter.rect(x, y, 0.5, 0.5, DUST[Math.min(DUST.length - 1, Math.floor(t * DUST.length))]);

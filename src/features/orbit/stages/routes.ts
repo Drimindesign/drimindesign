@@ -1,7 +1,7 @@
 import type { RoadConfig } from "./road";
 
 /*
- * The two road runs. Gaps are sized to the tank: a hop alone clears the short ones at speed;
+ * The road runs, and the jungle crossed on foot. Gaps are sized to the tank: a hop alone clears the short ones at speed;
  * the long ones need the ramp at their lip plus a boost or some hover; the tank (4 s) refills slowly on the road,
  * so fuel is a choice. Traffic stops before ramps, so there's always something to jump.
  */
@@ -48,15 +48,19 @@ export const CITY_RUN: RoadConfig = {
   stops: [
     {
       x: 612,
-      fighters: [[596, "raider"], [603, "brute"]],
+      enemies: 6,
+      together: 3,
+      kinds: ["raider", "raider", "raider", "brute"],
       dialogue: [
-        { who: "Raider", clip: "raider_gate", text: "Nobody gets past the gate tonight.", at: 0.3 },
+        { who: "Copycat", clip: "raider_gate", text: "Nobody gets past the gate tonight.", at: 0.3 },
         { who: "Kachujin", clip: "hero_watch", text: "Watch me.", at: 2.6 },
       ],
     },
   ],
   props: [[80, "stall"], [200, "crates"], [300, "stall"], [390, "crates"], [520, "stall"], [670, "crates"], [830, "stall"], [905, "crates"]],
   beasts: [],
+  // The gang keeps a Ranger locked up behind its gate.
+  cages: [[601, "ranger"]],
 };
 
 /** Stage 2: the forest road at night to the launch pad. Logs, ravines, and packs of boars and wolves. */
@@ -92,17 +96,21 @@ export const FOREST_RUN: RoadConfig = {
   stops: [
     {
       x: 362,
-      fighters: [[348, "raider"], [354, "raider"]],
+      enemies: 5,
+      together: 2,
+      kinds: ["raider", "raider", "wolf"],
       dialogue: [
-        { who: "Raider", clip: "raider_lost", text: "You're a long way from the city, girl.", at: 0.3 },
+        { who: "Copycat", clip: "raider_lost", text: "You're a long way from the city, girl.", at: 0.3 },
         { who: "Kachujin", clip: "hero_far", text: "And you're a long way from walking away.", at: 2.8 },
       ],
     },
     {
       x: 880,
-      fighters: [[862, "brute"], [868, "raider"], [873, "raider"]],
+      enemies: 7,
+      together: 3,
+      kinds: ["raider", "raider", "brute", "wolf"],
       dialogue: [
-        { who: "Brute", clip: "brute_snap", text: "I'll snap you like a twig.", at: 0.3 },
+        { who: "Grey's brute", clip: "brute_snap", text: "I'll snap you like a twig.", at: 0.3 },
         { who: "Kachujin", clip: "hero_big", text: "Big talk. Let's see it.", at: 2.6 },
       ],
     },
@@ -165,18 +173,67 @@ export const VILLAGE_RUN: RoadConfig = {
   ],
   stops: [
     {
-      // Close to the start: the first fight (in the 3D arena where the device runs it) comes up fast.
+      // Close to the start: the first fight comes up fast, and it's an easy one.
       x: 95,
-      fighters: [[82, "raider"], [88, "raider"]],
+      enemies: 4,
+      together: 2,
+      kinds: ["raider", "raider", "raider", "brute"],
       dialogue: [
-        { who: "Raider", clip: "raider_road", text: "Turn back. This road belongs to us.", at: 0.3 },
-        { who: "Kachujin", clip: "hero_take", text: "Then I'll take it from you.", at: 2.8 },
+        { who: "Copycat", clip: "raider_road", text: "Turn back. That Spark belongs to Mr. Grey now.", at: 0.3 },
+        { who: "Kachujin", clip: "hero_take", text: "Then come and take it.", at: 2.8 },
       ],
     },
   ],
   props: [[190, "fence"], [255, "stall"], [300, "crates"], [560, "stall"], [680, "crates"], [750, "fence"], [820, "stall"], [960, "crates"], [1040, "fence"]],
+  // The first barricade's gang has a Knight in a cage by the wall.
+  cages: [[85, "knight"]],
   beasts: [
     [395, "dog"], [399, "dog"], [655, "bull"],
     [840, "dog"], [844, "dog"], [848, "dog"], [1020, "bull"],
+  ],
+};
+
+/**
+ * The night jungle, on foot: no road and no truck until the far side. Ravines too wide to jump
+ * are crossed on ropes hanging from the branches; rock steps are climbed (or dropped off); wolf
+ * packs and a wild gaur come out of the dark around the lantern light. The truck waits at the end.
+ */
+export const JUNGLE_RUN: RoadConfig = {
+  id: "jungle",
+  scene: "jungle",
+  onFoot: true,
+  seed: 47,
+  hills: 0.55,
+  finish: 540,
+  features: [
+    { kind: "ledge", x: 30, size: 1 },
+    { kind: "ravine", x: 56, size: 10 },
+    { kind: "ledge", x: 118, size: 1.9 },
+    { kind: "ledge", x: 150, size: -2.2 },
+    { kind: "ravine", x: 176, size: 11 },
+    { kind: "ledge", x: 236, size: 1.2 },
+    { kind: "ledge", x: 243, size: 1 },
+    { kind: "ravine", x: 282, size: 19 },
+    { kind: "ledge", x: 360, size: -1.6 },
+    { kind: "ravine", x: 398, size: 10 },
+    { kind: "ledge", x: 470, size: 2 },
+  ],
+  // A rope over each ravine, a third of the way across; the wide one has two.
+  ropes: [60, 180.5, 286.5, 294.5, 402],
+  checkpoints: [4, 50, 112, 170, 230, 278, 325, 392, 465],
+  cells: [[20, 1.2], [61, 4.5], [134, 1.2], [182, 5], [250, 3.2], [291, 5], [340, 1.2], [404, 4.5], [500, 1.2]],
+  rings: [],
+  traffic: [],
+  props: [],
+  beasts: [],
+  // Prisoners along the way (the wolves guard the dog; the Mage's cage is past the wide ravine), and torches at the camps.
+  cages: [[126, "rogue"], [212, "dog"], [318, "mage"], [452, "barbarian"]],
+  torches: [8, 52, 172, 280, 394, 467],
+  ambushes: [
+    { x: 90, count: 2, kinds: ["wolf"] },
+    { x: 205, count: 3, kinds: ["wolf"] },
+    { x: 330, count: 3, kinds: ["wolf", "wolf", "bull"] },
+    { x: 440, count: 4, kinds: ["wolf"] },
+    { x: 505, count: 2, kinds: ["raider"] },
   ],
 };

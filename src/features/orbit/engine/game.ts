@@ -1,10 +1,12 @@
 import { MAX_HEARTS } from "../actors/explorer";
+import { MATE_HEARTS, Party } from "../actors/party";
 import { Combo, POINTS, Score } from "../actors/score";
 import { Painter } from "../pixel/painter";
 import { Particles } from "../pixel/particles";
 import type { ExplorerId } from "../pixel/explorer-sprite";
 import { RoadStage } from "../stages/road";
-import { CITY_RUN, FOREST_RUN, VILLAGE_RUN } from "../stages/routes";
+import type { FigureLayer } from "../pixel/fighters-3d";
+import { CITY_RUN, FOREST_RUN, JUNGLE_RUN, VILLAGE_RUN } from "../stages/routes";
 import { STAGE_ORDER, STAGE_TITLES, type Stage, type StageContext, type StageFx, type StageId } from "../stages/types";
 import { GameAudio } from "./audio";
 import { ART, MAX_STEPS, SIM_HZ, VIEW_MIN } from "./config";
@@ -28,8 +30,14 @@ const ZOOM = { close: 1.07, fullSpeed: 110, omega: 6, punch: 9, max: 1.85 } as c
 const STEP = 1 / SIM_HZ;
 /** How long a stage card stays up before play starts on its own (s). */
 const INTRO_TIME = 2.6;
-/** Pause after reaching a goal before the reward card (s): let the moment land. */
+/** Pause after reaching a goal before the screen dips to black (s): let the moment land. */
 const COMPLETE_DELAY = 0.9;
+/**
+ * Between stages there's no stop: the screen dips to black over `out` (s), the next stage comes
+ * up out of it over `in` (s) already moving, and the project it unlocked shows in a corner for
+ * `reward` (s) while you play on.
+ */
+const TRANSITION = { out: 0.55, in: 0.7, reward: 8 } as const;
 /** Finishing fast pays: points per second under PAR at the end of the run. */
 const PAR_SECONDS = 600;
 const TIME_BONUS_PER_SECOND = 5;
@@ -98,6 +106,12 @@ export class Game {
   private slowFor = 0;
   private slowScale = 1;
   private focusZoom = 0;
+  /** A zoom asked for exactly this frame (wider or closer than anything else), or 0. */
+  private frameZoom = 0;
+  /** Film bars: seconds left. */
+  private cinemaLeft = 0;
+  /** The run's team and unlocks, carried from stage to stage. */
+  private party = new Party();
   /* Effects the stages ask for at big moments; reduced motion turns them off. */
   private readonly fx: StageFx = {
     punch: (strength) => {
@@ -110,12 +124,24 @@ export class Game {
     focus: (zoom) => {
       if (!this.still) this.focusZoom = Math.max(this.focusZoom, zoom);
     },
+    cinema: (seconds) => {
+      this.cinemaLeft = Math.max(this.cinemaLeft, seconds);
+    },
+    frame: (zoom) => {
+      if (!this.still) this.frameZoom = zoom;
+    },
     slowmo: (seconds, scale = 0.35) => {
       if (this.still) return;
       this.slowFor = Math.max(this.slowFor, seconds);
       this.slowScale = scale;
     },
   };
+  /** Coming up out of the dip to black into a new stage (1 → 0), and how long the last stage's reward stays up (s). */
+  private fadeIn = 0;
+  private rewardLeft = 0;
+  /** The canvas's CSS size and the device pixel ratio, for the 3D figures' layer. */
+  private css = { width: 0, height: 0, dpr: 1 };
+  private readonly layer: FigureLayer | null;
   private frameDt = 1 / 60;
   private raf = 0;
   private last = 0;
@@ -144,6 +170,9 @@ export class Game {
     if (!ctx) throw new Error("Canvas 2D is not available");
     this.ctx = ctx;
     this.painter = new Painter(ctx);
+    // The 3D figures draw into a canvas of their own stacked on this one, at the screen's resolution.
+    const host = canvas.parentElement;
+    this.layer = host ? { host, size: () => this.css } : null;
     this.stage = this.makeStage("village");
     this.writeBest();
   }
@@ -183,6 +212,7 @@ export class Game {
     this.canvas.height = pixelsH;
     this.canvas.style.width = `${(pixelsW * scale) / dpr}px`;
     this.canvas.style.height = `${(pixelsH * scale) / dpr}px`;
+    this.css = { width: (pixelsW * scale) / dpr, height: (pixelsH * scale) / dpr, dpr };
     this.ctx.imageSmoothingEnabled = false;
     this.stage.resize(this.width, this.height);
     this.draw(1);
@@ -213,6 +243,8 @@ export class Game {
         }
         break;
       case "quit":
+        this.dropReward();
+        this.party = new Party();
         this.runTime = 0;
         this.score.total = 0;
         this.totals = { collected: 0, available: 0, landings: 0 };
@@ -285,12 +317,13 @@ export class Game {
     this.flow(input, elapsed);
     let steps = 0;
     while (this.accumulator >= STEP && steps < MAX_STEPS) {
-      if (this.phase === "play" || this.phase === "complete") {
+      // The stage keeps running under its title card and through the dip between stages: play never stops.
+      if (this.phase === "play" || this.phase === "complete" || this.phase === "intro") {
         this.stage.step(STEP, input);
         this.score.update(STEP);
       }
       // Presses go to the first step only; held state applies to every step.
-      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, resetPressed: false, pausePressed: false };
+      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, resetPressed: false, pausePressed: false };
       this.accumulator -= STEP;
       steps++;
     }
@@ -303,7 +336,7 @@ export class Game {
     if (this.frame % 3 === 0 || this.phase !== "play") this.writeHud();
     const hud = this.stage.hud();
     const playing = this.phase === "play";
-    this.audio.update({ driving: playing && hud.speed !== null, speed: (hud.speed ?? 0) / 3.6, throttle: input.move, thrust: input.jumpHeld && hud.speed !== null && playing ? 1 : 0, combat: playing && hud.combat === true });
+    this.audio.update({ driving: playing && hud.speed !== null, speed: (hud.speed ?? 0) / 3.6, throttle: input.move, thrust: input.jumpHeld && hud.speed !== null && playing ? 1 : 0, combat: playing && hud.combat === true, mood: hud.mood });
     this.raf = requestAnimationFrame(this.tick);
   };
 
@@ -313,8 +346,8 @@ export class Game {
     // The stage being replaced lets go of anything outside the canvas (the 3D stage's WebGL context).
     (this.stage as Stage | undefined)?.dispose?.();
     this.combo.break();
-    const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo, fx: this.fx, arena: { request: (done) => this.requestArena(done) } };
-    const route = id === "village" ? VILLAGE_RUN : id === "city" ? CITY_RUN : FOREST_RUN;
+    const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo, fx: this.fx, arena: { request: (done) => this.requestArena(done) }, layer: this.layer, party: this.party };
+    const route = id === "village" ? VILLAGE_RUN : id === "jungle" ? JUNGLE_RUN : id === "city" ? CITY_RUN : FOREST_RUN;
     const stage = new RoadStage(context, this.look, route);
     stage.resize(this.width, this.height);
     return stage;
@@ -326,12 +359,13 @@ export class Game {
     const root = this.hud.root;
     root.dataset.phase = phase;
     root.dataset.stage = this.stage.id;
-    if (phase !== "complete") delete root.dataset.reward;
     const title = STAGE_TITLES[this.stage.id];
     this.text("stage-number", title.number);
     this.text("stage-title", title.title);
     this.text("stage-goal", title.goal);
+    if (phase === "intro") this.cinemaLeft = Math.max(this.cinemaLeft, INTRO_TIME);
     if (phase === "complete") {
+      this.audio.sting("victory", 9);
       this.score.total += POINTS.stageClear;
       this.text("stage-found", `${this.stage.collected} / ${this.stage.available}`);
       this.text("stage-bonus", `+${POINTS.stageClear}`);
@@ -353,11 +387,22 @@ export class Game {
     this.totals.collected += stage.collected;
     this.totals.available += stage.available;
     this.totals.landings += stage.cleanLandings;
-    if (this.stageIndex + 1 < STAGE_ORDER.length) this.beginStage(this.stageIndex + 1);
-    else this.setPhase("finished");
+    if (this.stageIndex + 1 >= STAGE_ORDER.length) {
+      this.setPhase("finished");
+      return;
+    }
+    // Straight on into the next stage, still moving, with the project this one unlocked in the corner.
+    const carry = (stage.hud().speed ?? 0) / 3.6;
+    this.hud.root.dataset.reward = stage.id;
+    this.rewardLeft = TRANSITION.reward;
+    this.beginStage(this.stageIndex + 1);
+    this.stage.rollIn?.(carry);
+    this.fadeIn = 1;
   }
 
   private restartRun(): void {
+    this.dropReward();
+    this.party = new Party();
     this.totals = { collected: 0, available: 0, landings: 0 };
     this.runTime = 0;
     this.score.total = 0;
@@ -365,16 +410,29 @@ export class Game {
     this.beginStage(0);
   }
 
+  private dropReward(): void {
+    this.rewardLeft = 0;
+    delete this.hud.root.dataset.reward;
+  }
+
   /** Phase changes driven by time and by the keyboard outside of play. */
   private flow(input: InputSnapshot, dt: number): void {
     this.phaseTime += dt;
+    this.cinemaLeft = Math.max(0, this.cinemaLeft - dt);
+    this.fadeIn = Math.max(0, this.fadeIn - dt / TRANSITION.in);
+    if (this.rewardLeft > 0) {
+      this.rewardLeft -= dt;
+      if (this.rewardLeft <= 0) this.dropReward();
+    }
     const advance = input.jumpPressed || input.interactPressed;
     switch (this.phase) {
       case "title":
         if (advance) this.command("start");
         break;
       case "intro":
-        if (this.phaseTime > INTRO_TIME || (advance && this.phaseTime > 0.3)) this.setPhase("play");
+        // The title sits over the stage while it plays; it goes on its own (or with a press).
+        if (input.pausePressed) this.setPhase("paused");
+        else if (this.phaseTime > INTRO_TIME || (advance && this.phaseTime > 0.3)) this.setPhase("play");
         break;
       case "play":
         this.runTime += dt;
@@ -386,8 +444,7 @@ export class Game {
         if (input.pausePressed || (advance && this.phaseTime > 0.2)) this.setPhase("play");
         break;
       case "complete":
-        if (this.phaseTime > COMPLETE_DELAY) this.hud.root.dataset.reward = this.stage.id;
-        if (advance && this.phaseTime > COMPLETE_DELAY + 0.3) this.next();
+        if (this.phaseTime > COMPLETE_DELAY + TRANSITION.out) this.next();
         break;
       case "finished":
         if (input.interactPressed && this.phaseTime > 1) this.command("again");
@@ -429,9 +486,10 @@ export class Game {
     const hud = this.stage.hud();
     const fast = Math.min(1, (hud.speed ?? 0) / ZOOM.fullSpeed);
     const travel = this.phase === "play" && hud.landIn === null ? ZOOM.close - (ZOOM.close - 1) * fast : 1;
-    // A fight on foot pulls the camera in close.
-    const target = Math.max(travel, this.focusZoom);
+    // A fight on foot pulls the camera in close; a moment that frames itself (a rope, a climb, a rescue) has the last word.
+    const target = this.frameZoom > 0 ? this.frameZoom : Math.max(travel, this.focusZoom);
     this.focusZoom = 0;
+    this.frameZoom = 0;
     const dt = Math.min(this.frameDt, 1 / 20);
     this.zoomVelocity += (ZOOM.omega * ZOOM.omega * (target - this.zoom) - 2 * ZOOM.omega * this.zoomVelocity) * dt;
     this.zoom = Math.max(1, Math.min(ZOOM.max, this.zoom + this.zoomVelocity * dt));
@@ -440,10 +498,14 @@ export class Game {
     const cy = this.height * 0.56;
     ctx.setTransform(ART * z, 0, 0, ART * z, ART * cx * (1 - z), ART * cy * (1 - z));
     ctx.imageSmoothingEnabled = false;
-    this.stage.draw({ ctx, painter: this.painter, width: this.width, height: this.height, time: this.time, frame: this.frame, dt: this.frameDt }, alpha);
+    // The dip to black between stages: down at the end of one, up out of it into the next.
+    const out = this.phase === "complete" ? Math.min(1, Math.max(0, (this.phaseTime - COMPLETE_DELAY) / TRANSITION.out)) : 0;
+    const veil = Math.max(out, this.fadeIn);
+    this.stage.draw({ ctx, painter: this.painter, width: this.width, height: this.height, time: this.time, frame: this.frame, dt: this.frameDt, zoom: z, pivot: { x: cx, y: cy }, fade: veil }, alpha);
     ctx.setTransform(ART, 0, 0, ART, 0, 0);
-    if (this.stage.fade > 0) {
-      ctx.fillStyle = `rgba(4, 4, 10, ${this.stage.fade})`;
+    const fade = Math.max(this.stage.fade, veil);
+    if (fade > 0) {
+      ctx.fillStyle = `rgba(4, 4, 10, ${fade})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
   }
@@ -479,6 +541,15 @@ export class Game {
     this.set("airborne", hud.landIn === null ? "false" : "true");
     this.set("actions", hud.actions ? "true" : "false");
     this.set("foot", hud.foot ? "true" : "false");
+    this.set("armed", hud.armed ? "true" : "false");
+    this.set("cinema", this.cinemaLeft > 0 ? "on" : "off");
+    // The weapon in hand and the Fire Sword's charge; the team's names and hearts.
+    this.text("weapon", hud.weapon ?? "");
+    this.set("fire", hud.fire ?? "locked");
+    root.style.setProperty("--fire", (hud.fireCharge ?? 0).toFixed(3));
+    const team = hud.team ?? [];
+    this.set("team", team.length > 0 ? "on" : "off");
+    this.text("team", team.map((m) => (m.alive ? `${m.name} ${"♥".repeat(m.hearts)}${"♡".repeat(MATE_HEARTS - m.hearts)}` : `${m.name} ✝`)).join("   "));
     root.style.setProperty("--hull", (1 - (hud.damage ?? 0)).toFixed(3));
     this.set("hull", (hud.damage ?? 0) > 0.6 ? "low" : "ok");
     // Booster charges as pips: filled for each in hand.

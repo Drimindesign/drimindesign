@@ -4,7 +4,7 @@
  * touches the keyboard.
  */
 
-export type Action = "left" | "right" | "jump" | "interact" | "switch" | "planet" | "attack" | "reset" | "pause";
+export type Action = "left" | "right" | "jump" | "interact" | "switch" | "planet" | "attack" | "weapon" | "skill" | "reset" | "pause";
 
 export interface InputSnapshot {
   move: number;
@@ -15,8 +15,10 @@ export interface InputSnapshot {
   interactPressed: boolean;
   switchPressed: boolean;
   planetPressed: boolean;
-  /** Swing the staff. */
+  /** Swing the weapon; switch to the next one; light the Fire Sword. */
   attackPressed: boolean;
+  weaponPressed: boolean;
+  skillPressed: boolean;
   /** Back to the last checkpoint. */
   resetPressed: boolean;
   pausePressed: boolean;
@@ -36,6 +38,8 @@ const KEYS: Record<string, Action> = {
   KeyG: "planet",
   KeyF: "attack",
   KeyX: "attack",
+  KeyQ: "weapon",
+  KeyV: "skill",
   KeyR: "reset",
   Escape: "pause",
   KeyP: "pause",
@@ -43,8 +47,8 @@ const KEYS: Record<string, Action> = {
 
 /**
  * A gamepad (standard mapping: Xbox, PlayStation, most Bluetooth controllers): the stick or D-pad
- * moves; A jumps and fires the thrusters, X swings, B gets in and out, Y calls the truck,
- * Start pauses, Select goes back to the checkpoint.
+ * moves; A jumps and fires the thrusters, X swings, B gets in and out, Y calls the truck, RB
+ * switches weapon, LB lights the Fire Sword, Start pauses, Select goes back to the checkpoint.
  */
 const PAD_BUTTONS: readonly (readonly [number, Action])[] = [
   [0, "jump"],
@@ -52,6 +56,8 @@ const PAD_BUTTONS: readonly (readonly [number, Action])[] = [
   [2, "attack"],
   [1, "interact"],
   [3, "switch"],
+  [5, "weapon"],
+  [4, "skill"],
   [9, "pause"],
   [8, "reset"],
   [14, "left"],
@@ -132,6 +138,8 @@ export class Input {
       switchPressed: this.pressed.has("switch"),
       planetPressed: this.pressed.has("planet"),
       attackPressed: this.pressed.has("attack"),
+      weaponPressed: this.pressed.has("weapon"),
+      skillPressed: this.pressed.has("skill"),
       resetPressed: this.pressed.has("reset"),
       pausePressed: this.pressed.has("pause"),
     };

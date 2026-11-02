@@ -9,6 +9,8 @@
  * tuned to one pentatonic scale, so overlapping sounds stay consonant.
  */
 
+import type { Mood } from "../stages/types";
+
 export interface AudioState {
   /** Someone is in the car. */
   driving: boolean;
@@ -20,18 +22,31 @@ export interface AudioState {
   thrust: number;
   /** A fight is on (the combat music takes over). */
   combat: boolean;
+  /** What the music should be doing (driving, walking in the dark, a fight, a brute). */
+  mood?: Mood;
 }
 
 const MASTER = 0.65;
-/** Background music level: low, under the effects (it dips a little more while the thrusters fire). */
-const MUSIC = 0.13;
-/** "Skylines" by Alex-Productions (chosic.com), re-encoded at 96 kb/s; streamed, not decoded whole. */
-const MUSIC_URL = "/audio/skylines.mp3";
-/** The combat track (Pixabay licence), and how loud it plays over a fight. */
-const FIGHT_URL = "/audio/fight.mp3";
-const FIGHT = 0.16;
-/** After the last blow the fight music holds this long (s) before the driving music returns. */
+/**
+ * The score: Kevin MacLeod (incompetech.com), CC BY 4.0, re-encoded at 72 kb/s and streamed (only
+ * the pieces a run reaches are ever fetched). Each moment has its piece and its level, low under
+ * the effects: "Lightless Dawn" on the road, "Gathering Darkness" on foot in the dark, "Clash
+ * Defiant" in a fight, "Final Battle of the Dark Wizards" against a brute; "Heartbreaking" when a
+ * friend falls and "Echoes of Time" for a rescue or a stage won, played over the rest for a while.
+ */
+const TRACKS = {
+  drive: { url: "/audio/music/drive.mp3", level: 0.14 },
+  explore: { url: "/audio/music/explore.mp3", level: 0.17 },
+  fight: { url: "/audio/music/fight.mp3", level: 0.16 },
+  boss: { url: "/audio/music/boss.mp3", level: 0.17 },
+  loss: { url: "/audio/music/loss.mp3", level: 0.2 },
+  victory: { url: "/audio/music/victory.mp3", level: 0.16 },
+} as const;
+export type Track = keyof typeof TRACKS;
+/** After the last blow the fight music holds this long (s) before the moment's own piece returns. */
 const FIGHT_HOLD = 4;
+/** A piece faded out for this long (s) is paused, so a phone isn't decoding music no one hears. */
+const IDLE_PAUSE = 4;
 /** Recorded sounds (Pixabay licence), decoded once: the sword's slice. */
 const SLICE_URL = "/audio/sword-slice.mp3";
 /**
@@ -56,8 +71,9 @@ export class GameAudio {
   private noise: AudioBuffer | null = null;
   private thrust: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private muted = false;
-  private music: { element: HTMLAudioElement; gain: GainNode } | null = null;
-  private fight: { element: HTMLAudioElement; gain: GainNode } | null = null;
+  private readonly tracks = new Map<Track, { element: HTMLAudioElement; gain: GainNode; idle: number }>();
+  /** A piece played over the moment's own (a rescue, a loss) until this time (s, audio clock). */
+  private playing: { track: Track; until: number } | null = null;
   private fightLeft = 0;
   private slice: AudioBuffer | null = null;
   private motor: { low: OscillatorNode; high: OscillatorNode; gain: GainNode } | null = null;
@@ -125,7 +141,6 @@ export class GameAudio {
     this.noise = noise;
 
     this.buildThrust(ctx);
-    this.buildMusic(ctx);
     this.buildMotor(ctx);
     void this.decode(SLICE_URL).then((buffer) => {
       this.slice = buffer;
@@ -169,7 +184,7 @@ export class GameAudio {
       if (!b || !this.ctx) return;
       this.sample(b, 1, 0.9, 0.12);
       const now = this.ctx.currentTime;
-      for (const m of [this.music, this.fight]) m?.gain.gain.setTargetAtTime(0.03, now, 0.08);
+      for (const m of this.tracks.values()) m.gain.gain.setTargetAtTime(Math.min(m.gain.gain.value, 0.03), now, 0.08);
       this.duckUntil = now + b.duration;
     });
   }
@@ -178,16 +193,24 @@ export class GameAudio {
 
   /** The tab is hidden or the game stopped: silence everything, music included. */
   suspend(): void {
-    this.music?.element.pause();
-    this.fight?.element.pause();
+    for (const m of this.tracks.values()) m.element.pause();
     void this.ctx?.suspend();
   }
 
   resume(): void {
     if (!this.ctx) return;
     void this.ctx.resume();
-    void this.music?.element.play().catch(() => undefined);
-    if (this.fightLeft > 0) void this.fight?.element.play().catch(() => undefined);
+    for (const m of this.tracks.values()) if (m.idle < IDLE_PAUSE) void m.element.play().catch(() => undefined);
+  }
+
+  /** Plays a piece over the moment's own for `seconds`, from its start: a rescue, a friend lost, a stage won. */
+  sting(track: Track, seconds: number): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const piece = this.track(ctx, track);
+    if (!piece) return;
+    piece.element.currentTime = 0;
+    this.playing = { track, until: ctx.currentTime + seconds };
   }
 
   setMuted(muted: boolean): void {
@@ -211,14 +234,26 @@ export class GameAudio {
       const pulling = state.driving && state.throttle > 0 ? state.throttle * (0.4 + Math.min(1, Math.abs(state.speed) / 25) * 0.6) : 0;
       this.motor.gain.gain.setTargetAtTime(pulling * MOTOR.level, now, pulling > 0 ? 0.3 : 0.5);
     }
-    // Music: the fight track takes over while blows are flying, then hands back; voices dip both.
+    // Music: one piece at a time, crossfading as the moment changes. The fight's piece holds a
+    // few seconds after the last blow; a sting (a rescue, a loss) plays over everything while it
+    // lasts; voices dip it all.
     if (state.combat) this.fightLeft = FIGHT_HOLD;
     else this.fightLeft = Math.max(0, this.fightLeft - 1 / 60);
-    if (this.fightLeft > 0 && !this.fight) this.buildFight(ctx);
-    if (now < this.duckUntil) return;
-    const fighting = this.fightLeft > 0;
-    this.music?.gain.gain.setTargetAtTime(fighting ? 0 : MUSIC * (1 - state.thrust * 0.35), now, fighting ? 0.5 : 1.2);
-    this.fight?.gain.gain.setTargetAtTime(fighting ? FIGHT : 0, now, fighting ? 0.5 : 1.5);
+    const mood = state.mood ?? (state.driving ? "drive" : "explore");
+    if (this.playing && now > this.playing.until) this.playing = null;
+    const wanted: Track = this.playing ? this.playing.track : mood === "boss" ? "boss" : mood === "fight" || this.fightLeft > 0 ? "fight" : mood;
+    const ducked = now < this.duckUntil;
+    for (const name of Object.keys(TRACKS) as Track[]) {
+      const on = name === wanted;
+      const piece = on ? this.track(ctx, name) : this.tracks.get(name);
+      if (!piece) continue;
+      piece.idle = on ? 0 : piece.idle + 1 / 60;
+      if (on && piece.element.paused) void piece.element.play().catch(() => undefined);
+      if (!on && piece.idle > IDLE_PAUSE && !piece.element.paused) piece.element.pause();
+      if (ducked) continue;
+      const level = on ? TRACKS[name].level * (name === "drive" ? 1 - state.thrust * 0.35 : 1) : 0;
+      piece.gain.gain.setTargetAtTime(level, now, on ? 0.9 : 1.4);
+    }
   }
 
   footstep(): void {
@@ -246,9 +281,22 @@ export class GameAudio {
   }
 
   /** The blade cutting the air: the recorded slice, pitched a little each time; heavier blows lower and louder. */
-  swing(heavy = false): void {
-    if (this.slice) this.sample(this.slice, (heavy ? 0.85 : 1) * (0.94 + Math.random() * 0.14), heavy ? 0.55 : 0.38);
+  /** A swing through the air: pitched to the weapon (a dagger hisses, an axe whooms), with a roar of flame when it burns. */
+  swing(heavy = false, pitch = 1, burning = false): void {
+    if (this.slice) this.sample(this.slice, pitch * (heavy ? 0.85 : 1) * (0.94 + Math.random() * 0.14), heavy ? 0.55 : 0.38);
     else this.whoosh({ duration: 0.18, from: 500, to: 2000, q: 1, gain: 0.08 });
+    if (burning) this.whoosh({ duration: 0.35, from: 300, to: 900, q: 0.6, gain: 0.07, wet: 0.35 });
+  }
+
+  /** Steel drawn: a short bright scrape, pitched to the weapon. */
+  unsheathe(pitch = 1): void {
+    this.whoosh({ duration: 0.22, from: 2200 * pitch, to: 5200 * pitch, q: 4, gain: 0.05, attack: 0.02 });
+  }
+
+  /** The blade catching fire: a low roar swelling up. */
+  ignite(): void {
+    this.whoosh({ duration: 0.9, from: 180, to: 1400, q: 0.5, gain: 0.14, attack: 0.08, wet: 0.4 });
+    this.thump(70, 45, 0.18, 0.5);
   }
 
   /** A blow landing on a body: a dull, heavy thud with a slap of cloth. */
@@ -348,8 +396,8 @@ export class GameAudio {
   }
 
   dispose(): void {
-    this.music?.element.pause();
-    this.music = null;
+    for (const m of this.tracks.values()) m.element.pause();
+    this.tracks.clear();
     void this.ctx?.close();
     this.ctx = null;
   }
@@ -457,16 +505,25 @@ export class GameAudio {
     this.thrust = { gain, filter };
   }
 
-  /* The fight track, started the first time a fight breaks out (streamed, looping, silent until faded in). */
-  private buildFight(ctx: AudioContext): void {
-    if (!this.master) return;
-    const element = new Audio(FIGHT_URL);
+  /*
+   * A piece of the score, made the first time it's wanted: streamed from a media element (decoding
+   * minutes of music up front would cost tens of MB on a phone), looping, silent until faded in,
+   * joining after the compressor so the effects never pump it.
+   */
+  private track(ctx: AudioContext, name: Track): { element: HTMLAudioElement; gain: GainNode; idle: number } | null {
+    const existing = this.tracks.get(name);
+    if (existing) return existing;
+    if (!this.master) return null;
+    const element = new Audio(TRACKS[name].url);
     element.loop = true;
+    element.preload = "auto";
     const gain = ctx.createGain();
     gain.gain.value = 0;
     ctx.createMediaElementSource(element).connect(gain).connect(this.master);
     void element.play().catch(() => undefined);
-    this.fight = { element, gain };
+    const piece = { element, gain, idle: 0 };
+    this.tracks.set(name, piece);
+    return piece;
   }
 
   /* The motor: two soft sine tones an octave apart through a gentle band, silent until the truck pulls. */
@@ -490,24 +547,6 @@ export class GameAudio {
     low.start();
     high.start();
     this.motor = { low, high, gain };
-  }
-
-  /*
-   * Background music: streamed from a media element (decoding three minutes up front would
-   * cost ~65 MB on a phone), looping, fading in over two seconds. It joins after the
-   * compressor so the effects never pump it.
-   */
-  private buildMusic(ctx: AudioContext): void {
-    if (!this.master) return;
-    const element = new Audio(MUSIC_URL);
-    element.loop = true;
-    element.preload = "auto";
-    const gain = ctx.createGain();
-    gain.gain.value = 0;
-    ctx.createMediaElementSource(element).connect(gain).connect(this.master);
-    gain.gain.setTargetAtTime(MUSIC, ctx.currentTime + 0.3, 0.7);
-    void element.play().catch(() => undefined);
-    this.music = { element, gain };
   }
 }
 

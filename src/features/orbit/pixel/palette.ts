@@ -156,6 +156,47 @@ export const NIGHT: Palette = {
   stars: 9,
 };
 
+/*
+ * The night jungle: the same moonlit night as NIGHT, under a canopy. Greener and darker, the moon
+ * low and faint through the leaves, no lake glint, and almost no rim light: it's the hero's
+ * lantern that shows the way.
+ */
+export const JUNGLE: Palette = {
+  ...NIGHT,
+  sky: ["#020504", "#030806", "#050c09", "#07110c", "#0a1610", "#0d1c14", "#112218", "#15291d"],
+  sunHalo: ["#1b2e24", "#16271e", "#122019"],
+  cloud: "#0f1d16",
+  mountain: "#0a140f",
+  mountainRim: "#1f3a2c",
+  haze: "#0e1c15",
+  farPine: "#08120c",
+  farPineRim: "#1c3326",
+  midTree: "#060d09",
+  midTreeAlt: "#050b08",
+  midRim: "#2c4a3a",
+  mist: "#13241b",
+  lake: ["#0d1a14", "#0b1611", "#08110d", "#060d0a"],
+  lakeGlint: "#7f9f8c",
+  trunkRim: "#3a5a4a",
+  moss: "#0f1f15",
+  leafDark: "#050d08",
+  leafRim: "#2f5040",
+  bush: "#06100a",
+  grassTop: "#3d5e48",
+  grass: "#10241a",
+  grassDark: "#0b1a12",
+  blade: "#173022",
+  bladeTip: "#4a7058",
+  front: "#010302",
+  frontRim: "#1a2e24",
+  mote: "#c8ff9a",
+  rim: [120, 170, 140],
+  sunHeight: 0.12,
+  rays: 0.05,
+  rayRgb: "150, 200, 170",
+  stars: 2,
+};
+
 export function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];

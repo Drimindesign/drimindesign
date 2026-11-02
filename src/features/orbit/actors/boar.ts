@@ -102,6 +102,9 @@ export class Boar {
   facing = -1;
   /** White flash after a hit (s). */
   private flash = 0;
+  /** Blows taken so far, and the last one (where it landed, how hard, which way it travelled): the 3D body's reflex reads them. */
+  hitSerial = 0;
+  lastBlow: { joint: Joint; power: number; dir: number } = { joint: "chest", power: 0, dir: 1 };
   /** Tumbling after a car hit or a blast: angle (rad) and spin (rad/s). */
   private angle = 0;
   private spin = 0;
@@ -194,6 +197,7 @@ export class Boar {
 
   /** A blow on the guard: no harm, a jolt back, the flinch. */
   absorb(dir: number): void {
+    this.struck("handL", 1.2, dir);
     this.vx = dir * 1.5 * (90 / this.spec.mass);
     this.blockFlinch = 0.35;
     this.timer = Math.max(this.timer, 0.4);
@@ -201,6 +205,7 @@ export class Boar {
 
   /** A kick into the guard: it's knocked open and reels. */
   breakGuard(dir: number): void {
+    this.struck("chest", 3, dir);
     this.vx = dir * 3.5 * (90 / this.spec.mass);
     this.vy = 1;
     this.flash = 0.15;
@@ -406,6 +411,7 @@ export class Boar {
    */
   hit(dir: number, power: number, joint: Joint = "chest", heavy = false): boolean {
     if (!this.unkillable) this.health--;
+    this.struck(joint, power, dir);
     const share = 90 / this.spec.mass;
     this.vx = dir * power * share;
     // A stumble back, not a hop.
@@ -424,11 +430,30 @@ export class Boar {
   /** Landed on from above. Returns true if this drove it off. */
   stomp(): boolean {
     this.health--;
+    this.struck("head", 3, this.facing);
     this.vx *= 0.2;
     this.flash = 0.15;
     this.timer = STOMP_STAGGER;
     this.state = "stagger";
     return this.health <= 0;
+  }
+
+  /* Notes a blow for the reflex. */
+  private struck(joint: Joint, power: number, dir: number): void {
+    this.hitSerial++;
+    this.lastBlow = { joint, power, dir: Math.sign(dir) || 1 };
+  }
+
+  /**
+   * Comes into a fight already moving: running in from off screen, or leaping over a barricade
+   * (`vy` > 0) to land in front of it.
+   */
+  enter(vx: number, vy: number): void {
+    this.vx = vx;
+    this.vy = vy;
+    if (vy > 0) this.y += 0.05;
+    this.facing = Math.sign(vx) || this.facing;
+    this.state = "charge";
   }
 
   /** Caught under the thruster jet: flung up and away, spinning, and gone. */
@@ -466,6 +491,7 @@ export class Boar {
    */
   hitByCar(carVx: number, carMass: number): number {
     const total = carMass + this.spec.mass;
+    this.struck("pelvis", Math.min(8, Math.abs(carVx)), carVx);
     this.vx = ((2 * carMass) / total) * carVx * 0.7;
     this.vy = 3.5 + Math.abs(carVx) * 0.15;
     this.spin = -Math.sign(carVx) * 9 * (90 / this.spec.mass);

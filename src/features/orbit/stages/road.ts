@@ -769,8 +769,7 @@ export class RoadStage implements Stage {
   }
 
   private speak(line: Line): void {
-    if (line.who === "Dog") this.context.audio.animal("dog", line.text.startsWith("Grrr"));
-    else this.context.audio.say(line.clip, line.text, line.who);
+    this.context.audio.say(line.clip, line.text, line.who);
     this.line = { who: line.who, text: line.text, left: LINE_TIME };
   }
 

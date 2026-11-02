@@ -138,5 +138,15 @@
     "speaker": "Kachujin",
     "clip": "dialogue-28",
     "text": "No... I'm sorry, little one. Rest now."
+  },
+  {
+    "speaker": "Dog",
+    "clip": "dog-freed",
+    "text": "Thank you! I'm coming with you!"
+  },
+  {
+    "speaker": "Dog",
+    "clip": "dog-warning",
+    "text": "Wolves. Many. That way."
   }
 ]

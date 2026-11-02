@@ -32,7 +32,7 @@ export const MATES: Record<MateKind, MateSpec> = {
   mage: { name: "Mage", height: 0.95, attack: "magic", range: 7, every: 3.2, power: 2.2, speed: 4.4, unlocks: { fire: true }, freed: "Your blade... let me give it fire. Press V when you need it.", warns: "I feel them in the dark. Careful." },
   ranger: { name: "Ranger", height: 0.95, attack: "arrow", range: 11, every: 1.7, power: 1.4, speed: 4.8, freed: "Thank you. I never miss. Well. Almost never.", warns: "Movement ahead. I have them in my sights." },
   rogue: { name: "Rogue", height: 0.9, attack: "melee", range: 1.1, every: 0.9, power: 1, speed: 5, freed: "I'd have picked that lock myself. Eventually. Thanks.", warns: "Shh. Something's coming." },
-  dog: { name: "Dog", height: 0.62, attack: "bite", range: 1, every: 1.1, power: 1, speed: 5.2, freed: "Woof! (Thank you! I'm coming with you!)", warns: "Grrr... (Wolves. Many. That way.)" },
+  dog: { name: "Dog", height: 0.62, attack: "bite", range: 1, every: 1.1, power: 1, speed: 5.2, freed: "Thank you! I'm coming with you!", warns: "Wolves. Many. That way." },
 };
 
 /** Hearts each mate has. */

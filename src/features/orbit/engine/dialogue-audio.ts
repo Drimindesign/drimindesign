@@ -27,5 +27,7 @@ export const DIALOGUE_AUDIO: Readonly<Record<string, string>> = {
   "Kachujin:Then keep them off my back.": "dialogue-25",
   "Kachujin:Sure you would. Come on.": "dialogue-26",
   "Kachujin:Good dog. Let's go.": "dialogue-27",
-  "Kachujin:No... I'm sorry, little one. Rest now.": "dialogue-28"
+  "Kachujin:No... I'm sorry, little one. Rest now.": "dialogue-28",
+  "Dog:Thank you! I'm coming with you!": "dog-freed",
+  "Dog:Wolves. Many. That way.": "dog-warning"
 };

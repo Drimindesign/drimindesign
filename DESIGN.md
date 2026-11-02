@@ -489,3 +489,5 @@ Rules: no outlines around shapes; volume through two-tone fills; asymmetric stru
 Game controls: keyboard instructions and contextual action hints live inside the pause (II) menu on desktop and mobile, keeping the gameplay view clear. Touch action pads remain available during play; the pause panel scrolls on short screens.
 
 Game audio: pause menu includes touch-friendly Music, Sound effects & animals, and Dialogue sliders (defaults 80%, 80%, 100%). Preferences persist locally. Music ducks under spoken dialogue; prerecorded speech and animal clips load on demand. Device media volume controls the final output.
+
+Animal companions speak their written dialogue in a distinct character voice, just like the toy companions. Barks and growls are additional action effects, not replacements for conversation.

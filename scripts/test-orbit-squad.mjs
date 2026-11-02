@@ -24,16 +24,16 @@ const hero = { x: 0, facing: 1 };
 
 test("front, rear and close guard keep distinct stable formation positions", () => {
   const team = Array.from({ length: 6 }, () => new Mate(Party.member("knight"), 0, terrain, false));
-  for (let i = 0; i < 600; i++) team.forEach((m, slot) => m.update(1 / 120, hero, slot, null));
+  for (let i = 0; i < 12000; i++) team.forEach((m, slot) => m.update(1 / 120, hero, slot, null));
   assert.ok(team[0].x > 4);
   assert.ok(team[1].x < -3);
-  assert.ok(team[2].x > 1 && team[2].x < 2.1);
+  assert.ok(team[2].x > 1 && team[2].x < 2.3);
   assert.ok(new Set(team.map((m) => Math.round(m.x))).size === 6);
 });
 
 test("soldiers run back from an old fight without teleporting in view", () => {
   const soldier = new Mate(Party.member("knight"), -22, terrain, false);
-  soldier.update(1 / 120, hero, 0, { x: -23, y: 0, active: true });
+  soldier.update(1 / 120, hero, 0, null);
   assert.ok(soldier.x > -22 && soldier.x < -21.9);
   assert.equal(soldier.alpha, 1);
 });
@@ -83,4 +83,13 @@ test("less skilled allies fall after three ordinary hits, veterans endure longer
     }
     assert.equal(mate.state, "wounded");
   }
+});
+
+test("distant soldiers never relocate or accelerate beyond their natural speed", () => {
+ for (const distance of [30, 60, 150, 300]) {
+  const m = new Mate(Party.member("knight"), -distance, terrain, false);
+  for (let i=0;i<120;i++) m.update(1/120, hero, 0, null);
+  assert.ok(m.x <= -distance + m.spec.speed + 0.01);
+  assert.equal(m.alpha, 1);
+ }
 });

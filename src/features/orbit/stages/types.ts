@@ -78,6 +78,7 @@ export interface View {
 }
 
 export interface StageHud {
+  objective?: string;
   prompt: string;
   /** A conversation is being played (the world holds still; the Skip button shows). */
   talking?: boolean;
@@ -96,7 +97,7 @@ export interface StageHud {
   master?: number;
   stroke?: boolean;
   /** The team with her: each one's name and hearts, and whether it's still alive. */
-  team?: readonly { name: string; health: number; alive: boolean; down: boolean }[];
+  team?: readonly { distance?: number; fighting?: boolean; name: string; health: number; alive: boolean; down: boolean }[];
   /** She's out of the truck (the controller shows the call-the-truck button). */
   foot?: boolean;
   /** A spoken line on screen: who's talking and what they say (a GTA-style subtitle). */

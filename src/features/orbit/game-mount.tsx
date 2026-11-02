@@ -236,6 +236,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         </button>
       </div>
 
+      <p data-hud="objective" className={styles.mission} aria-live="polite" />
       <p data-hud="team" className={styles.team} aria-label="Your team" />
       {/* The level's name, a small notice that slides in and out while play goes on. */}
       <p className={styles.notice} aria-live="polite">

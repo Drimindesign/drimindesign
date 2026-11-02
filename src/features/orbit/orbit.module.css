@@ -1089,3 +1089,7 @@
     }
   }
 }
+
+@layer components {
+  .mission { position: absolute; top: 5rem; left: var(--gutter); max-width: min(42rem, 90%); color: #fff; font-size: var(--text-label); pointer-events: none; }
+}

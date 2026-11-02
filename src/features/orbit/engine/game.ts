@@ -645,9 +645,10 @@ export class Game {
     this.text("weapon", hud.weapon ?? "");
     this.set("fire", hud.fire ?? "locked");
     root.style.setProperty("--fire", (hud.fireCharge ?? 0).toFixed(3));
+    this.text("objective", hud.objective ?? "");
     const team = hud.team ?? [];
     this.set("team", team.length > 0 ? "on" : "off");
-    this.text("team", team.map((m) => (!m.alive ? `${m.name} ✝` : m.down ? `${m.name} ⚠ DOWN` : `${m.name} ${"▰".repeat(Math.ceil(m.health * 5))}${"▱".repeat(5 - Math.ceil(m.health * 5))}`)).join("   "));
+    this.text("team", team.map((m) => (!m.alive ? `${m.name} ✝` : m.down ? `${m.name} ⚠ DOWN` : `${m.name} ${m.distance === undefined ? "" : `${m.distance < 0 ? "←" : "→"}${Math.abs(m.distance)}m ${m.fighting ? "⚔" : ""}`} ${"▰".repeat(Math.ceil(m.health * 5))}${"▱".repeat(5 - Math.ceil(m.health * 5))}`)).join("   "));
     // The Master Stroke's meter.
     root.style.setProperty("--master", (hud.master ?? 0).toFixed(3));
     this.set("master", hud.master === undefined ? "none" : hud.master >= 1 ? "ready" : "charging");

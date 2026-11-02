@@ -67,6 +67,8 @@ export interface LogSpec {
 }
 
 export interface RoadConfig {
+  /** Prison break: extract every authored prisoner before leaving. */
+  rescueObjective?: boolean;
   id: StageId;
   scene: FigureLight;
   /** Crossed on foot: no truck until the far side, where it waits at the finish. */
@@ -626,7 +628,7 @@ export class RoadStage implements Stage {
         this.respawn();
       }
       if (!this.truck) {
-        if (e.x >= this.config.finish) {
+        if (e.x >= this.config.finish && this.rescueComplete()) {
           this.context.audio.complete();
           this.done = true;
         }
@@ -640,7 +642,7 @@ export class RoadStage implements Stage {
       return;
     }
     if (v.y < FALL_LIMIT) this.respawn();
-    if (v.x >= this.config.finish && v.grounded) {
+    if (v.x >= this.config.finish && v.grounded && this.rescueComplete()) {
       this.context.audio.complete();
       // The forest road ends on the launch pad: the car lifts off. Elsewhere the stage just ends.
       if (this.config.scene === "forest") {
@@ -650,6 +652,11 @@ export class RoadStage implements Stage {
         this.done = true;
       }
     }
+  }
+
+  private rescueComplete(): boolean {
+    if (!this.config.rescueObjective) return true;
+    return this.cages.every((c) => c.broken && this.mates.some((m) => m.member === c.mate.member && m.active && Math.abs(m.x - this.config.finish) < 45));
   }
 
   /* Rings: fly through the middle for points, a burst of speed and a third of a tank. */
@@ -1080,7 +1087,7 @@ export class RoadStage implements Stage {
       }
       let foe: (typeof foes)[number] | null = null;
       for (const b of foes) {
-        if ((assigned.get(b) ?? 0) >= 2 || Math.abs(b.x - e.x) > 16) continue;
+        if ((assigned.get(b) ?? 0) >= 2) continue;
         if (!foe || Math.abs(b.x - mate.x) < Math.abs(foe.x - mate.x)) foe = b;
       }
       if (foe) assigned.set(foe, (assigned.get(foe) ?? 0) + 1);
@@ -2258,7 +2265,8 @@ export class RoadStage implements Stage {
       fireCharge: e.fireCharge,
       master: e.master,
       stroke: e.stroke >= 0,
-      team: this.mates.filter((m) => m.state !== "caged").map((m) => ({ name: m.spec.name, health: m.health, alive: m.alive, down: m.state === "wounded" })),
+      objective: this.config.rescueObjective ? this.cages.some((c) => !c.broken) ? "MISSION · Free the imprisoned Knight" : this.rescueComplete() ? "MISSION · Prisoner safe — escape together" : "MISSION · Bring the Knight alive to extraction; revive them if down. Restart the stage if captured." : undefined,
+      team: this.mates.filter((m) => m.state !== "caged").map((m) => ({ name: m.spec.name, distance: Math.round(m.x - e.body.x), fighting: m.state === "attack", health: m.health, alive: m.alive, down: m.state === "wounded" })),
       prompt,
       speed: driving ? v.speed * 3.6 : null,
       tank: driving ? v.tank / CAR.thrustTank : null,
@@ -2295,6 +2303,7 @@ export class RoadStage implements Stage {
   private footPrompt(): string {
     const e = this.crew.explorer;
     const x = e.body.x;
+    if (this.config.rescueObjective && !this.rescueComplete() && x > this.config.finish - 25) return "Extraction: rescue every prisoner and bring them here alive. Check squad distances.";
     if (e.ropeAnchor) return "← → Swing    Space · Let go";
     if (e.onVine) return "Climbing…    ← or → with Space · Jump off";
     const vine = this.walks.find((w) => w.x0 - x > -1 && w.x0 - x < 6 && e.body.y < w.y - 1);

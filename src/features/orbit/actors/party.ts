@@ -116,7 +116,7 @@ export class Party {
  */
 /** Companions engage locally and only relocate when well outside the visible play area (m). */
 const SPOT = { melee: 7, ranged: 10 } as const;
-const STRAY = 48;
+
 /** A step up it hops (m); a leaper bounds up this much, and across a gap this wide (m). */
 const HOP = { climb: 2.3, leap: 2.6, gap: 7, time: 0.5 } as const;
 /** Hurt: it flinches this long (s), and can't be hurt again for this long (s). */
@@ -335,8 +335,7 @@ export class Mate {
         // An enemy in sight: a soldier goes for it (out ahead of her if need be), then falls back in.
         const spot = spec.attack === "arrow" || spec.attack === "magic" ? SPOT.ranged : SPOT.melee;
         const target = hero.x + formationOffset(slot, this.kind) * hero.facing;
-        const regroup = Math.abs(this.x - hero.x) > 17;
-        if (!regroup && foe && Math.abs(foe.x - hero.x) < 16 && Math.abs(foe.x - this.x) < spot) {
+        if (foe && Math.abs(foe.x - this.x) < spot) {
           const d = foe.x - this.x;
           this.facing = Math.sign(d) || this.facing;
           if (Math.abs(d) <= spec.range && this.reload === 0) {
@@ -352,31 +351,18 @@ export class Mate {
         }
         // Keep the assigned front, rear or close-guard slot while the hero advances.
         const gap = target - this.x;
-        if (Math.abs(hero.x - this.x) > Math.max(STRAY, (hero.viewHalf ?? 0) + 8)) {
-          this.catchUp(target);
-          return null;
-        }
-        const want = Math.abs(gap) < 0.25 ? 0 : Math.sign(gap) * Math.min(spec.speed + (Math.abs(gap) > 6 ? 2 : 0), Math.abs(gap) * 2.4);
+        const want = Math.abs(gap) < 0.25 ? 0 : Math.sign(gap) * Math.min(spec.speed, Math.abs(gap) * 2.4);
         this.vx = approach(this.vx, want, 12 * dt);
         if (Math.abs(this.vx) > 0.2) this.facing = Math.sign(this.vx);
         else this.facing = hero.facing;
-        this.move(dt, target);
+        this.move(dt);
         return null;
       }
     }
   }
 
-  /* Out of sight, it finds its way round and turns up behind her. */
-  private catchUp(x: number): void {
-    this.x = x;
-    this.y = this.terrain.height(x);
-    this.alpha = 0;
-    this.vx = 0;
-    this.hop = null;
-  }
-
   /* Walks along the ground; hops up a ledge (bounds, on four legs, up higher and over gaps); otherwise stops at what it can't take. */
-  private move(dt: number, target?: number): void {
+  private move(dt: number): void {
     const next = this.x + this.vx * dt;
     const here = this.terrain.height(this.x);
     const there = this.terrain.height(next);
@@ -398,8 +384,6 @@ export class Mate {
         return;
       }
       this.vx = 0;
-      // Stuck behind something it can't take while she's gone on: catch up out of sight.
-      if (target !== undefined && Math.abs(target - this.x) > STRAY) this.catchUp(target);
       return;
     }
     this.x = next;

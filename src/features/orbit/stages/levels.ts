@@ -64,6 +64,7 @@ export function level(n: number): Level {
     const cut = <T extends readonly unknown[]>(list: T, x: (item: T[number]) => number): T[number][] => list.filter((item) => x(item) < VILLAGE_END - 10);
     const config: RoadConfig = {
       ...VILLAGE_RUN,
+      rescueObjective: true,
       finish: VILLAGE_END,
       features: cut(VILLAGE_RUN.features, (f) => f.x + f.size),
       checkpoints: cut(VILLAGE_RUN.checkpoints, (c) => c),
@@ -73,7 +74,7 @@ export function level(n: number): Level {
       beasts: cut(VILLAGE_RUN.beasts, (b) => b[0]),
       props: cut(VILLAGE_RUN.props ?? [], (p) => p[0]),
     };
-    return { config, number: 1, title: "The Spark", goal: "Mr. Grey's Copycats want the Spark. Get it out of the village before they shut the road." };
+    return { config, number: 1, title: "The Prison Break", goal: "Free the imprisoned Knight, keep them alive, and escape the village together. Reach the truck to bring your rescued soldier aboard." };
   }
   if (n === 2) return { config: { ...JUNGLE_RUN, truck: false }, number: 2, title: "Into the Dark", goal: "The road is gone. Cross the night jungle on foot: swing the ropes, climb the cliffs, keep the wolves off." };
   const biome = CHAIN[(n - 3) % CHAIN.length];

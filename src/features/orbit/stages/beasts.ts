@@ -1,6 +1,7 @@
 import { BOAR_BACK, type Boar } from "../actors/boar";
 import type { Crew } from "../actors/crew";
 import type { Mate } from "../actors/party";
+import { MASTER } from "../actors/arsenal";
 import { POINTS, STUNTS } from "../actors/score";
 import { CAR } from "../engine/config";
 import type { StageContext } from "./types";
@@ -26,7 +27,14 @@ const KILL_STOP = { time: 0.32, scale: 0.22 } as const;
  * is wrecked. On foot: sword blows (each swing can hit several), stomps, and charges that cost
  * hearts. Returns true when the explorer has lost their last heart.
  */
-export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageContext, dt: number, gravity: number, mates: readonly Mate[] = [], onLost?: (mate: Mate) => void): boolean {
+/** What a stage hears from the fight: a teammate going down, an enemy falling (for the kill shot), a heavy blow landing. */
+export interface FightEvents {
+  down?(mate: Mate): void;
+  kill?(beast: Boar): void;
+  heavy?(beast: Boar): void;
+}
+
+export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageContext, dt: number, gravity: number, mates: readonly Mate[] = [], events: FightEvents = {}): boolean {
   const { audio, score, combo, particles } = context;
   const car = crew.car;
   const v = car.vehicle;
@@ -135,15 +143,25 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
           particles.sparks(beast.x - b.facing * 0.3, beast.y + 1.2, b.facing, 5);
         }
         context.fx.buzz(blow.heavy ? 45 : 20);
-        const off = beast.hit(b.facing, impact.power, blow.joint, blow.heavy);
-        // A burning blade throws embers off the wound.
-        if (e.burning > 0) particles.sparks(beast.x - b.facing * 0.2, beast.y + 1.2, b.facing, 12);
+        // Fire hits twice as hard and sets it alight; every blow that lands charges the Master Stroke and the combo.
+        const fire = e.burning > 0 && e.weapon === "blade";
+        const off = beast.hit(b.facing, impact.power, blow.joint, blow.heavy || fire, fire ? 2 : 1);
+        e.charge(MASTER.perHit);
+        combo.add(1);
+        if (fire) {
+          beast.ignite();
+          particles.sparks(beast.x - b.facing * 0.2, beast.y + 1.2, b.facing, 18);
+          audio.ignite();
+        }
+        if (off) events.kill?.(beast);
+        else if (blow.heavy || fire) events.heavy?.(beast);
         // The cut opens a wound: blood thrown the way the blade went, more for a heavy or final blow.
         const share = blow.joint === "head" ? WOUND.head : blow.joint === "pelvis" ? WOUND.pelvis : WOUND.chest;
         const hard = blow.heavy || off;
         particles.blood(beast.x - b.facing * 0.1, beast.y + (STATURE[beast.kind] ?? 1.5) * (beast.animal3D ? 0.7 : share), b.facing, hard ? 26 : 12, hard ? 1.6 : 1);
         context.fx.slowmo(off ? KILL_STOP.time : HIT_STOP.time, off ? KILL_STOP.scale : HIT_STOP.scale);
-        score.add(off ? POINTS.swordHit * 2 : POINTS.swordHit, off ? "Driven off" : "Slash", beast.x, beast.y + 1.6);
+        const points = (off ? POINTS.swordHit * 2 : POINTS.swordHit) * combo.multiplier;
+        score.add(points, off ? `Down ×${combo.multiplier}` : combo.multiplier > 1 ? `Hit ×${combo.multiplier}` : "Slash", beast.x, beast.y + 1.6);
         context.fx.punch(off ? 0.07 : 0.04);
         continue;
       }
@@ -160,16 +178,17 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
     // A blow meant for one of the team lands on it.
     const mate = target.mate;
     if (mate?.open && beast.dangerous && Math.abs(beast.x - mate.x) < reach && (!beast.fighter || Math.sign(mate.x - beast.x) === beast.facing)) {
-      const killed = mate.hurt(beast.x);
+      // A brute's axe, the chief's or a bull's horns cost three times a wolf's bite.
+      const killed = mate.hurt(beast.x, beast.kind === "brute" || beast.kind === "chief" || beast.kind === "bull" ? 3 : 1);
       particles.blood(mate.x, mate.y + mate.spec.height * 0.6, Math.sign(mate.x - beast.x) || 1, killed ? 16 : 8, 1);
       audio.thwack();
       if (!beast.fighter) beast.rebound(Math.sign(beast.x - mate.x) || 1);
-      if (killed) onLost?.(mate);
+      if (killed) events.down?.(mate);
       continue;
     }
     const facing = !beast.fighter || Math.sign(b.x - beast.x) === beast.facing;
-    // A brute's blow takes the hero off their feet.
-    if (beast.dangerous && facing && Math.abs(beast.x - b.x) < reach && b.y < beast.y + 1.4 && b.y > beast.y - 0.5 && e.hurt(beast.x, beast.kind === "brute" || beast.kind === "bull")) {
+    // A brute's blow (and the chief's, and a bull's horns) takes the hero off their feet.
+    if (beast.dangerous && facing && Math.abs(beast.x - b.x) < reach && b.y < beast.y + 1.4 && b.y > beast.y - 0.5 && e.hurt(beast.x, beast.kind === "brute" || beast.kind === "bull" || beast.kind === "chief")) {
       context.fx.buzz(beast.kind === "brute" ? 70 : 35);
       context.fx.punch(beast.kind === "brute" ? 0.09 : 0.05);
       context.fx.slowmo(HIT_STOP.time * 1.5, HIT_STOP.scale);

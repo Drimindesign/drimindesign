@@ -34,4 +34,12 @@ export const WEAPONS: Record<WeaponId, Weapon> = {
  * The Fire Sword: the blade bursts into flame for `burn` seconds (heavier, burning blows that
  * light up the dark), then it has to recharge for `recharge` seconds before it can be lit again.
  */
-export const FIRE = { burn: 10, recharge: 60, power: 1.5 } as const;
+export const FIRE = { burn: 10, recharge: 60, power: 2 } as const;
+
+/**
+ * The Master Stroke: a spinning blow whose shockwave throws everyone around her off their feet.
+ * The meter fills with blows landed (`perHit`) and taken (`perHurt`); the stroke reaches `reach`
+ * (m), costs each enemy `damage` blows, and lands `at` (s) into the spin of `time` (s), during
+ * which nothing can touch her.
+ */
+export const MASTER = { perHit: 0.09, perHurt: 0.16, reach: 6.5, damage: 2, at: 0.38, time: 1 } as const;

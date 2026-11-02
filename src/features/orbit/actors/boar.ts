@@ -7,7 +7,7 @@ import { BOAR, type Sprite } from "../pixel/props";
 export type BoarState = "wait" | "charge" | "circle" | "attack" | "block" | "stagger" | "knocked" | "getup" | "flee" | "down" | "blasted" | "gone";
 
 /** The creatures on the roads: animals, raiders and brutes. */
-export type BeastKind = "boar" | "wolf" | "dog" | "raider" | "brute" | "bull";
+export type BeastKind = "boar" | "wolf" | "dog" | "raider" | "brute" | "bull" | "chief";
 
 interface BeastSpec {
   /** Top charging speed (m/s) and how hard it accelerates into it (m/s²). */
@@ -36,8 +36,10 @@ const SPECS: Record<BeastKind, BeastSpec> = {
   // Fighters on foot (drawn as 3D models): they walk up, wind up and strike; they don't run off.
   raider: { speed: 2.8, accel: 10, notice: 16, leapRange: 0, leap: 0, health: 3, mass: 90, scale: 1, filter: "none" },
   brute: { speed: 2.1, accel: 7, notice: 16, leapRange: 0, leap: 0, health: 5, mass: 125, scale: 1, filter: "none" },
-  // A bull: charges whatever moves; massive, it wrecks a slow truck and is only ever knocked over, never killed.
-  bull: { speed: 7.5, accel: 9, notice: 24, leapRange: 0, leap: 0, health: 99, mass: 650, scale: 1, filter: "none" },
+  // A bull (a wild gaur in the jungle): charges whatever moves; massive, it takes a lot of beating before it falls.
+  bull: { speed: 7.5, accel: 9, notice: 24, leapRange: 0, leap: 0, health: 8, mass: 650, scale: 1, filter: "none" },
+  // Grey's chief: a brute bigger than the rest, the boss of a level; slow, and every blow of his floors you.
+  chief: { speed: 2.2, accel: 7, notice: 18, leapRange: 0, leap: 0, health: 16, mass: 170, scale: 1, filter: "none" },
 };
 /**
  * A fighter's swing (s): wind up, the strike window (the only time it hurts), recover. It swings
@@ -49,7 +51,7 @@ const ATTACK = { windup: 0.42, strike: 0.16, recover: 0.6, range: 1.15, reach: 1
  * knight often, the brute rarely) and hold it this long (s), or a raider may step back out of
  * reach. A guard broken by a kick leaves it reeling (s).
  */
-const GUARD: Partial<Record<BeastKind, number>> = { raider: 0.45, brute: 0.12 };
+const GUARD: Partial<Record<BeastKind, number>> = { raider: 0.45, brute: 0.12, chief: 0.25 };
 const DODGE: Partial<Record<BeastKind, number>> = { raider: 0.2 };
 const BLOCK_TIME = 0.9;
 const GUARD_BROKEN = 1.1;
@@ -62,7 +64,7 @@ const KNOCK_MIN = 0.7;
 const KNOCK_MAX = 2.6;
 export const GETUP_TIME = 1.5;
 /** A fighter's standing height (m), for its ragdoll. */
-const FIGHTER_HEIGHT: Partial<Record<BeastKind, number>> = { raider: 1.9, brute: 2.05 };
+const FIGHTER_HEIGHT: Partial<Record<BeastKind, number>> = { raider: 1.9, brute: 2.05, chief: 2.5 };
 
 /** A blow leaves it dazed this long (s); a stomp longer. */
 const STAGGER = 0.7;
@@ -105,6 +107,8 @@ export class Boar {
   /** Blows taken so far, and the last one (where it landed, how hard, which way it travelled): the 3D body's reflex reads them. */
   hitSerial = 0;
   lastBlow: { joint: Joint; power: number; dir: number } = { joint: "chest", power: 0, dir: 1 };
+  /** On fire (s left): a burning blade sets it alight; it smokes, glows, and the fire hurts it once more as it goes out. */
+  burning = 0;
   /** Tumbling after a car hit or a blast: angle (rad) and spin (rad/s). */
   private angle = 0;
   private spin = 0;
@@ -218,14 +222,50 @@ export class Boar {
     return this.kind === "wolf" || this.kind === "dog" || this.kind === "bull";
   }
 
-  /** Can't be killed: knocked about, it always gets back up (cattle). */
+  /** Never killed outright (none now: even the bull falls in the end). */
   get unkillable(): boolean {
-    return this.kind === "bull";
+    return false;
+  }
+
+  /** How many blows it can take in all (for the health bar over the big ones). */
+  get maxHealth(): number {
+    return this.spec.health;
+  }
+
+  /** Big enough to carry a health bar: the bull, brutes and the chief. */
+  get big(): boolean {
+    return this.kind === "bull" || this.kind === "brute" || this.kind === "chief";
+  }
+
+  /** Set alight by a burning blade. */
+  ignite(): void {
+    this.burning = 2.5;
+  }
+
+  /*
+   * The Master Stroke's shockwave: thrown off its feet away from her (a fighter as a ragdoll that
+   * gets back up, unless this finishes it; an animal sent tumbling), and it costs it `damage` blows.
+   */
+  topple(dir: number, damage: number): void {
+    this.health = Math.max(0, this.health - damage);
+    this.struck("chest", 6, dir);
+    this.flash = 0.2;
+    if (this.fighter) {
+      this.facing = -dir;
+      const share = 90 / this.spec.mass;
+      this.fall(this.health > 0, "chest", dir * 9 * share, 3 * share);
+      return;
+    }
+    this.vx = dir * 7 * Math.min(1, 200 / this.spec.mass);
+    this.vy = 3.5;
+    this.spin = dir * 6;
+    this.timer = 1.4;
+    this.state = "stagger";
   }
 
   /** Fights on foot with a weapon (drawn in 3D) rather than charging like an animal. */
   get fighter(): boolean {
-    return this.kind === "raider" || this.kind === "brute";
+    return this.kind === "raider" || this.kind === "brute" || this.kind === "chief";
   }
 
   /** 0 … 1 through the current swing, or -1 when not attacking. */
@@ -271,6 +311,11 @@ export class Boar {
     this.blockFlinch = Math.max(0, this.blockFlinch - dt);
     this.leapIn = Math.max(0, this.leapIn - dt);
     this.flash = Math.max(0, this.flash - dt);
+    // Burning out: one last bite of the fire as it dies.
+    if (this.burning > 0) {
+      this.burning = Math.max(0, this.burning - dt);
+      if (this.burning === 0 && this.health > 0 && this.active) this.health--;
+    }
     switch (this.state) {
       case "wait":
         if (Math.abs(this.x - targetX) < spec.notice) {
@@ -353,8 +398,8 @@ export class Boar {
         return started;
       case "stagger":
         if (this.grounded) this.vx = approach(this.vx, 0, 14 * dt);
-        if (this.timer === 0) this.state = this.health > 0 || this.unkillable ? "charge" : this.kind === "wolf" ? "down" : "flee";
-        // A wolf that's taken its last blow drops and lies still before fading.
+        if (this.timer === 0) this.state = this.health > 0 ? "charge" : this.kind === "wolf" || this.kind === "bull" ? "down" : "flee";
+        // A wolf (or the bull) that's taken its last blow drops and lies still before fading.
         if (this.state === "down") this.timer = DOWN_TIME;
         break;
       case "flee": {
@@ -409,8 +454,8 @@ export class Boar {
    * `joint`. A fighter staggers back; a `heavy` blow knocks it down (it gets up); its last blow
    * drops it for good. The blow's momentum goes into the joint it hit, scaled by the body's mass.
    */
-  hit(dir: number, power: number, joint: Joint = "chest", heavy = false): boolean {
-    if (!this.unkillable) this.health--;
+  hit(dir: number, power: number, joint: Joint = "chest", heavy = false, damage = 1): boolean {
+    this.health = Math.max(0, this.health - damage);
     this.struck(joint, power, dir);
     const share = 90 / this.spec.mass;
     this.vx = dir * power * share;

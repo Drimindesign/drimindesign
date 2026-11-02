@@ -50,7 +50,7 @@ function gap(x: number, from: number, to: number, depth: number): number {
 const MUD_GRIP = 0.45;
 
 export interface RoadFeature {
-  kind: "log" | "barrier" | "ramp" | "ravine" | "mud" | "ledge";
+  kind: "log" | "barrier" | "ramp" | "ravine" | "mud" | "ledge" | "water";
   x: number;
   /** Ramp length, ravine width, mud stretch, or a ledge's height (m; below zero, a drop). */
   size: number;
@@ -80,6 +80,8 @@ export class RoadTerrain extends Terrain {
       else if (f.kind === "barrier") h += bump(x, f.x, 0.35, 0.7);
       else if (f.kind === "ramp") h += ramp(x, f.x, f.size, f.size * 0.22);
       else if (f.kind === "ravine") h += gap(x, f.x, f.x + f.size, 40);
+      // A river: banks dropping to a riverbed well under the surface (see WATER_DEPTH).
+      else if (f.kind === "water") h += gap(x, f.x, f.x + f.size, 7);
       // A rock step: a sheer face to climb (or drop off), the ground carrying on at the new level.
       else if (f.kind === "ledge") h += f.size * smoothstep(f.x - 0.1, f.x + 0.1, x);
       // Mud sits a hand's depth below the road, with soft edges.

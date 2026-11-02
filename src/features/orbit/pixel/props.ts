@@ -141,15 +141,38 @@ export function blit(ctx: CanvasRenderingContext2D, sprite: Sprite, x: number, y
   paste(ctx, sprite.canvas, x - sprite.ax, y - sprite.ay);
 }
 
+/*
+ * Halos are drawn from a cached image per colour (one radial gradient, made once), scaled to the
+ * radius and faded by strength: building a gradient per glow per frame is what costs phones.
+ */
+const halos = new Map<string, HTMLCanvasElement>();
+const HALO = 64;
+function halo(rgb: string): HTMLCanvasElement {
+  let canvas = halos.get(rgb);
+  if (canvas) return canvas;
+  canvas = document.createElement("canvas");
+  canvas.width = HALO;
+  canvas.height = HALO;
+  const c = canvas.getContext("2d");
+  if (c) {
+    const g = c.createRadialGradient(HALO / 2, HALO / 2, 0, HALO / 2, HALO / 2, HALO / 2);
+    g.addColorStop(0, `rgba(${rgb}, 1)`);
+    g.addColorStop(1, `rgba(${rgb}, 0)`);
+    c.fillStyle = g;
+    c.fillRect(0, 0, HALO, HALO);
+  }
+  halos.set(rgb, canvas);
+  return canvas;
+}
+
 /* A soft halo around a glowing thing (smooth, screen-composited): sparks, cells, lamps. */
 export function glow(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, rgb: string, strength: number): void {
-  const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  g.addColorStop(0, `rgba(${rgb}, ${strength})`);
-  g.addColorStop(1, `rgba(${rgb}, 0)`);
+  if (strength <= 0 || radius <= 0) return;
   ctx.save();
   ctx.globalCompositeOperation = "screen";
-  ctx.fillStyle = g;
-  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  ctx.globalAlpha = Math.min(1, strength);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(halo(rgb), x - radius, y - radius, radius * 2, radius * 2);
   ctx.restore();
 }
 

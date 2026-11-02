@@ -148,5 +148,155 @@
     "speaker": "Dog",
     "clip": "dog-warning",
     "text": "Wolves. Many. That way."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-31",
+    "text": "He'll get neither."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-32",
+    "text": "I've got you. Get up!"
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-33",
+    "text": "Enough!"
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-34",
+    "text": "Then carry me, big one. We've a long way to go."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-35",
+    "text": "Deeper in. Stay sharp."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-36",
+    "text": "The river. There has to be a way across."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-37",
+    "text": "Up. All the way up."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-38",
+    "text": "Torches. Someone's been down here."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-39",
+    "text": "Grey's men. I can smell their smoke."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-40",
+    "text": "The sea. We're getting close."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-41",
+    "text": "Cold. Keep moving or freeze."
+  },
+  {
+    "speaker": "Grey's chief",
+    "clip": "voice-42",
+    "text": "Grey sent me to bring back that Spark. And your head."
+  },
+  {
+    "speaker": "Grey's chief",
+    "clip": "voice-43",
+    "text": "Enough games. Come here."
+  },
+  {
+    "speaker": "Gorr",
+    "clip": "voice-44",
+    "text": "Gorr is free. Gorr carries you now, small queen. Press E."
+  },
+  {
+    "speaker": "Gorr",
+    "clip": "voice-45",
+    "text": "Gorr smells them. Many."
+  },
+  {
+    "speaker": "Gorr",
+    "clip": "voice-46",
+    "text": "Up you go, small queen."
+  },
+  {
+    "speaker": "Gorr",
+    "clip": "voice-47",
+    "text": "Help! I'm down!"
+  },
+  {
+    "speaker": "Knight",
+    "clip": "voice-48",
+    "text": "Help! I'm down!"
+  },
+  {
+    "speaker": "Barbarian",
+    "clip": "voice-49",
+    "text": "Help! I'm down!"
+  },
+  {
+    "speaker": "Mage",
+    "clip": "voice-50",
+    "text": "Help! I'm down!"
+  },
+  {
+    "speaker": "Ranger",
+    "clip": "voice-51",
+    "text": "Help! I'm down!"
+  },
+  {
+    "speaker": "Rogue",
+    "clip": "voice-52",
+    "text": "Help! I'm down!"
+  },
+  {
+    "speaker": "Dog",
+    "clip": "voice-53",
+    "text": "Help! I'm down!"
+  },
+  {
+    "speaker": "Knight",
+    "clip": "voice-54",
+    "text": "Thank you! I'll find my way home."
+  },
+  {
+    "speaker": "Barbarian",
+    "clip": "voice-55",
+    "text": "Thank you! I'll find my way home."
+  },
+  {
+    "speaker": "Mage",
+    "clip": "voice-56",
+    "text": "Thank you! I'll find my way home."
+  },
+  {
+    "speaker": "Ranger",
+    "clip": "voice-57",
+    "text": "Thank you! I'll find my way home."
+  },
+  {
+    "speaker": "Rogue",
+    "clip": "voice-58",
+    "text": "Thank you! I'll find my way home."
+  },
+  {
+    "speaker": "Dog",
+    "clip": "voice-59",
+    "text": "Thank you! I'll find my way home."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-60",
+    "text": "Run. Don't look back."
   }
 ]

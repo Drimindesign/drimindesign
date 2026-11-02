@@ -58,6 +58,9 @@ export class CharacterController {
   /** The platform under the feet, if standing on one. */
   private standing: Platform | null = null;
   private readonly events: CharacterEvent[] = [];
+  /** Carried (on Gorr's shoulders): his stride on the ground and his spring in a jump, as multiples of hers. */
+  stride = 1;
+  spring = 1;
   /** Hauling up over a ledge: 0 … 1 through the climb, or -1. */
   climb = -1;
   /** How long this climb takes (s). */
@@ -109,7 +112,7 @@ export class CharacterController {
     // Climbing a slope costs speed; running down one adds a little.
     const climb = this.terrain.slope(this.x) * Math.sign(input.move);
     const grade = climb > 0 ? 1 / (1 + climb * UPHILL) : 1 + Math.min(0.3, -climb * DOWNHILL);
-    const target = input.move * c.runSpeed * (this.grounded ? grade : 1);
+    const target = input.move * c.runSpeed * this.stride * (this.grounded ? grade : 1);
     if (this.grounded) {
       if (input.move === 0 || Math.sign(target) !== Math.sign(this.vx)) {
         this.vx = approach(this.vx, input.move === 0 ? 0 : target, c.decel * dt);
@@ -124,7 +127,7 @@ export class CharacterController {
     this.buffer = input.jumpPressed ? c.jumpBuffer : Math.max(0, this.buffer - dt);
     this.coyote = this.grounded ? c.coyoteTime : Math.max(0, this.coyote - dt);
     if (this.buffer > 0 && this.coyote > 0) {
-      this.vy = c.jumpSpeed;
+      this.vy = c.jumpSpeed * this.spring;
       this.grounded = false;
       this.buffer = 0;
       this.coyote = 0;
@@ -132,7 +135,7 @@ export class CharacterController {
     } else if (input.jumpPressed && !this.grounded && this.airJumps > 0) {
       // Kung fu: a second push off nothing, mid-air.
       this.airJumps--;
-      this.vy = Math.max(this.vy, c.airJumpSpeed);
+      this.vy = Math.max(this.vy, c.airJumpSpeed * this.spring);
       this.buffer = 0;
       this.events.push("jump");
     }
@@ -156,7 +159,7 @@ export class CharacterController {
       const onto = this.x + dir * CLIMB.onto;
       const top = this.terrain.height(onto);
       const above = top - this.y;
-      if (dir !== 0 && Math.sign(input.move) === dir && above > MAX_STEP && above <= (this.grounded ? CLIMB.vault : CLIMB.reach) && this.terrain.slope(onto) * dir < MAX_GRADE) {
+      if (dir !== 0 && Math.sign(input.move) === dir && above > MAX_STEP && above <= (this.grounded ? CLIMB.vault : CLIMB.reach) * this.spring && this.terrain.slope(onto) * dir < MAX_GRADE) {
         this.climb = 0;
         this.climbTime = above <= CLIMB.vault ? CLIMB.quick : CLIMB.haul;
         this.climbFrom = { x: this.x, y: this.y };

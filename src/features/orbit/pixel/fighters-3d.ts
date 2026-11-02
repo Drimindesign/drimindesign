@@ -9,7 +9,7 @@ import { PPM } from "../engine/config";
 import type { Joint, Ragdoll } from "../engine/ragdoll";
 
 type ThreeModule = typeof Three;
-type Kind = "hero" | "raider" | "brute";
+type Kind = "hero" | "raider" | "brute" | "chief" | "giant";
 
 /** Where the 3D figures are drawn: a canvas of their own over the game's, at the screen's full resolution. */
 export interface FigureLayer {
@@ -19,7 +19,7 @@ export interface FigureLayer {
 }
 
 /** The light the figures stand in, matching the stage's scene. */
-export type FigureLight = "village" | "city" | "forest" | "jungle";
+export type FigureLight = "village" | "city" | "forest" | "jungle" | "river" | "hills" | "caves" | "ruins" | "coast" | "snow";
 
 /** A light in the scene that falls on the figures: a torch, a lantern, a fire (where, its colour, how bright). */
 export interface SceneLight {
@@ -34,6 +34,10 @@ export interface Framing {
   zoom: number;
   pivotX: number;
   pivotY: number;
+  /** The camera's tilt (rad) and shake offset (art px), matching the 2D view's. */
+  roll: number;
+  ox: number;
+  oy: number;
 }
 
 /**
@@ -43,18 +47,22 @@ export interface Framing {
  */
 const MODEL_BASE = "/game/fighters-hd/";
 const CLIP_BASE = "/game/fighters/";
-const MODELS: Record<Kind, string> = { hero: "hero.glb", raider: "knight.glb", brute: "brute.glb" };
+const MODELS: Record<Kind, string> = { hero: "hero.glb", raider: "knight.glb", brute: "brute.glb", chief: "brute.glb", giant: "brute.glb" };
+/** Bodies shared by more than one kind load once. */
+const BODY: Record<Kind, Exclude<Kind, "chief" | "giant">> = { hero: "hero", raider: "raider", brute: "brute", chief: "brute", giant: "brute" };
+/** Gorr's hide and Grey's chief: the brute's body, tinted (multiplied into its colours) so they read as someone else. */
+const TINT: Partial<Record<Kind, [number, number, number]>> = { giant: [0.72, 0.62, 0.52], chief: [0.85, 0.55, 0.5] };
 const CLIPS = [
   "hero_idle", "hero_walk", "hero_run", "hero_slash1", "hero_slash2", "hero_kick", "hero_spin", "hero_hit1", "hero_hit2", "hero_jump",
   "foe_idle", "foe_walk", "foe_run", "foe_slash1", "foe_slash2", "foe_heavy", "foe_block", "foe_blockhit", "foe_hit1", "foe_hit2", "foe_strafe",
-  "getup", "sit_to_stand", "stand_to_sit", "hero_swing", "hero_rope_climb", "hero_climb",
+  "getup", "sit_to_stand", "stand_to_sit", "hero_swing", "hero_rope_climb", "hero_climb", "hero_master", "foe_death",
 ] as const;
 type Clip = (typeof CLIPS)[number];
 /** One-shot clips: they play once and hold their last frame. */
 const ONCE = new Set<string>([
   "hero_slash1", "hero_slash2", "hero_kick", "hero_spin", "hero_hit1", "hero_hit2",
   "foe_slash1", "foe_slash2", "foe_heavy", "foe_blockhit", "foe_hit1", "foe_hit2",
-  "getup", "sit_to_stand", "stand_to_sit",
+  "getup", "sit_to_stand", "stand_to_sit", "hero_master", "foe_death",
 ]);
 /** The hero's combo, blow by blow: two cuts, a kick that breaks a guard, a spinning finisher. */
 const HERO_COMBO: readonly Clip[] = ["hero_slash1", "hero_slash2", "hero_kick", "hero_spin"];
@@ -63,12 +71,14 @@ const ENEMY_SWING = 1.18;
 /** Getting up blends out of the ragdoll's pose over this long (s). */
 const GETUP_BLEND = 0.4;
 /** Standing height of each in the world (m). */
-const HEIGHT: Record<Kind, number> = { hero: 1.75, raider: 1.9, brute: 2.3 };
+const HEIGHT: Record<Kind, number> = { hero: 1.75, raider: 1.9, brute: 2.3, chief: 2.75, giant: 2.45 };
 /** Skin and cloth are matte; the knight's plate has a dull metal sheen; the brute's hide is rough. */
 const SURFACE: Record<Kind, { roughness: number; metalness: number }> = {
   hero: { roughness: 0.72, metalness: 0 },
   raider: { roughness: 0.48, metalness: 0.35 },
   brute: { roughness: 0.8, metalness: 0.05 },
+  chief: { roughness: 0.75, metalness: 0.1 },
+  giant: { roughness: 0.85, metalness: 0 },
 };
 /**
  * What each one holds (KayKit CC0 props), in which hand, and how long it is (m). Props are modelled
@@ -81,6 +91,8 @@ const WEAPONS: Record<Kind, readonly { file: string; hand: "Right" | "Left"; len
     { file: "shield_badge.gltf", hand: "Left", length: 0.7, shield: true },
   ],
   brute: [{ file: "axe_2handed.gltf", hand: "Right", length: 1.3 }],
+  chief: [{ file: "axe_2handed.gltf", hand: "Right", length: 1.6 }],
+  giant: [],
 };
 /**
  * Bones the ragdoll drives, parent before child: each follows the segment between two ragdoll
@@ -111,7 +123,7 @@ const THREE_QUARTER = 0.4;
  * The toys (KayKit Adventurers, CC0): each body, what it holds in which hand slot, and the clips
  * they share (one file). The dog is the husky from the animals.
  */
-const TOYS: Record<Exclude<MateKind, "dog">, { model: string; right?: string; left?: string }> = {
+const TOYS: Record<Exclude<MateKind, "dog" | "giant">, { model: string; right?: string; left?: string }> = {
   knight: { model: "knight.glb", right: "sword_1handed.gltf", left: "shield_round_color.gltf" },
   barbarian: { model: "barbarian.glb", right: "axe_2handed.gltf" },
   mage: { model: "mage.glb", right: "staff.gltf" },
@@ -120,7 +132,7 @@ const TOYS: Record<Exclude<MateKind, "dog">, { model: string; right?: string; le
 };
 const TOY_CLIPS = "/game/toys/toy_clips.glb";
 /** Each mate's standing height (m). */
-const MATE_HEIGHT: Record<Exclude<MateKind, "dog">, number> = { knight: 0.95, barbarian: 1, mage: 0.95, ranger: 0.95, rogue: 0.9 };
+const MATE_HEIGHT: Record<Exclude<MateKind, "dog" | "giant">, number> = { knight: 0.95, barbarian: 1, mage: 0.95, ranger: 0.95, rogue: 0.9 };
 /** The hero's longsword, built in code: slim and long (m), its steel bright and hard. */
 const LONGSWORD = { blade: 1.02, width: 0.034, thick: 0.006, guard: 0.17, grip: 0.21 } as const;
 /** Scene lights (torches, fires) that fall on the figures at once: the nearest few. */
@@ -162,6 +174,18 @@ const LIGHTS: Record<FigureLight, { key: number; keyIntensity: number; rim: numb
   city: { key: 0xd8e4ff, keyIntensity: 1.7, rim: 0xff7a48, rimIntensity: 1.5, sky: 0xa0a8d8, ground: 0x201820, fill: 0.75, env: 0.4, torch: 0 },
   forest: { key: 0xdfe8ff, keyIntensity: 2, rim: 0x9fb8ff, rimIntensity: 1.3, sky: 0x8fa4c8, ground: 0x1a1814, fill: 0.6, env: 0.3, torch: 0 },
   jungle: { key: 0xb8c8ff, keyIntensity: 0.35, rim: 0x8aa4d8, rimIntensity: 0.7, sky: 0x2a3850, ground: 0x0a0806, fill: 0.12, env: 0.05, torch: 9 },
+  // River at dusk: a low warm sun behind the trees, cool water light under the chin.
+  river: { key: 0xffc890, keyIntensity: 1.3, rim: 0x9fd0ff, rimIntensity: 1.1, sky: 0x8aa8c8, ground: 0x23302a, fill: 0.45, env: 0.25, torch: 4 },
+  // The hills at dawn: a gold key from the east, a pink rim, an airy fill.
+  hills: { key: 0xffd9a8, keyIntensity: 2.2, rim: 0xff9a8a, rimIntensity: 1.3, sky: 0xc8b8d8, ground: 0x4a3a30, fill: 0.7, env: 0.35, torch: 0 },
+  // Caves: almost nothing but fire; the torches and the lantern do all the work.
+  caves: { key: 0x9a8a7a, keyIntensity: 0.15, rim: 0xff8a4a, rimIntensity: 0.35, sky: 0x1a1410, ground: 0x0a0806, fill: 0.08, env: 0.03, torch: 11 },
+  // Old ruins under a hard moon: cold key, cold rim, the lantern warm against it.
+  ruins: { key: 0xc8d4ff, keyIntensity: 0.9, rim: 0xa8b8ff, rimIntensity: 1.1, sky: 0x2a3048, ground: 0x0e0c10, fill: 0.2, env: 0.1, torch: 7 },
+  // The moonlit coast: silver light off the sea from behind.
+  coast: { key: 0xd8e6ff, keyIntensity: 1.1, rim: 0xe8f2ff, rimIntensity: 1.6, sky: 0x4a6080, ground: 0x141a22, fill: 0.3, env: 0.2, torch: 5 },
+  // A snowy pass at night: blue-white bounce from the snow, a pale moon.
+  snow: { key: 0xe8f0ff, keyIntensity: 1.2, rim: 0xc8dcff, rimIntensity: 1, sky: 0xa8b8d8, ground: 0x8898b0, fill: 0.55, env: 0.3, torch: 5 },
 };
 
 interface Reflex {
@@ -186,6 +210,8 @@ interface Carried {
 }
 
 interface Actor {
+  /** What it is (its pool when it's free to reuse). */
+  kind: string;
   root: Three.Group;
   model: Three.Object3D;
   mixer: Three.AnimationMixer;
@@ -227,6 +253,10 @@ export class Fighters3D {
     headlight: Three.PointLight;
     torch: Three.PointLight;
     firelight: Three.PointLight;
+    key: Three.DirectionalLight;
+    rim: Three.DirectionalLight;
+    fill: Three.HemisphereLight;
+    spare: Map<string, Actor[]>;
     cages: Three.Group[];
     hero: Actor;
     arms: Map<WeaponId, Carried>;
@@ -244,11 +274,20 @@ export class Fighters3D {
   private opacity = -1;
   private disposed = false;
   private release: (() => void) | null = null;
+  /** The scene's light (set per level), the hero's hands and blade tip in the world (for the rope and the embers), and the render quality (device px per CSS px). */
+  private light: FigureLight;
+  hands: { x: number; y: number } | null = null;
+  tip: { x: number; y: number } | null = null;
+  private quality = 2;
+  private slow = 0;
 
   constructor(
     private readonly layer: FigureLayer | null,
-    private readonly light: FigureLight,
+    light: FigureLight,
   ) {
+    this.light = light;
+    // Phones start a notch lower; any device steps down further if frames run slow (see `fit`).
+    this.quality = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 1.5 : MAX_DPR;
     if (!layer) {
       this.canvas = null;
       return;
@@ -269,6 +308,49 @@ export class Fighters3D {
     return this.three !== null;
   }
 
+  /** A new level's light: the key, rim, fill and reflections restyled in place (no new lights, so no shader rebuilds). */
+  setLight(light: FigureLight): void {
+    this.light = light;
+    const t = this.three;
+    if (!t) return;
+    const look = LIGHTS[light];
+    t.key.color.setHex(look.key);
+    t.key.intensity = look.keyIntensity;
+    t.rim.color.setHex(look.rim);
+    t.rim.intensity = look.rimIntensity;
+    t.fill.color.setHex(look.sky);
+    t.fill.groundColor.setHex(look.ground);
+    t.fill.intensity = look.fill;
+    t.scene.environmentIntensity = look.env;
+  }
+
+  /*
+   * A level is over: everyone but the hero goes back to the pool (hidden, ready to be handed out
+   * again), so the next level reuses the same bodies instead of building and compiling new ones.
+   */
+  reset(): void {
+    const t = this.three;
+    if (!t) return;
+    for (const actor of t.enemies.values()) this.recycle(t, actor);
+    for (const actor of t.mates.values()) this.recycle(t, actor);
+    t.enemies.clear();
+    t.mates.clear();
+    for (const cage of t.cages) cage.visible = false;
+    this.hands = null;
+    this.tip = null;
+  }
+
+  private recycle(t: NonNullable<Fighters3D["three"]>, actor: Actor): void {
+    actor.root.visible = false;
+    actor.state = "";
+    actor.blend = null;
+    actor.swing = -1;
+    actor.reflex = newReflex();
+    setOpacity(actor, 1);
+    for (const m of actor.materials) m.emissiveIntensity = 0;
+    t.spare.set(actor.kind, [...(t.spare.get(actor.kind) ?? []), actor]);
+  }
+
   /** The 2D view's size in art px. */
   resize(width: number, height: number): void {
     this.width = width;
@@ -284,6 +366,11 @@ export class Fighters3D {
   draw(camera: Camera, framing: Framing, dt: number, alpha: number, hero: Explorer | null, beasts: readonly Boar[], headlight: { x: number; y: number; dir: number } | null, opacity: number, torch: { x: number; y: number } | null, mates: readonly Mate[] = [], lights: readonly SceneLight[] = [], cages: readonly { x: number; y: number; broken: boolean }[] = []): boolean {
     const t = this.three;
     if (!t || !this.canvas) return false;
+    this.slow = this.slow * 0.97 + (dt > 1 / 42 ? 0.03 : 0);
+    if (this.slow > 0.55 && this.quality > 1) {
+      this.quality = Math.max(1, this.quality - 0.25);
+      this.slow = 0;
+    }
     this.fit(t.renderer);
     if (opacity !== this.opacity) {
       this.opacity = opacity;
@@ -293,11 +380,12 @@ export class Fighters3D {
     if (headlight) t.headlight.position.set(headlight.x + headlight.dir * HEADLIGHT.ahead, headlight.y + 0.7, 1.2);
     // Keep the light in the scene even when off: toggling fire must not change shader light counts.
     const burning = hero !== null && hero.alpha > 0.05 && hero.burning > 0 && !hero.sheathed && hero.weapon === "blade";
-    t.firelight.intensity = burning ? 2.2 : 0;
+    t.firelight.intensity = burning ? 1 : 0;
     if (hero && burning) t.firelight.position.set(hero.body.x + hero.body.facing * 0.6, hero.body.y + 1, 0.4);
     const lantern = LIGHTS[this.light].torch;
     t.torch.intensity = torch && lantern > 0 ? lantern * (1 - TORCH.flicker * (0.5 + 0.5 * Math.sin(performance.now() / 47) * Math.sin(performance.now() / 131))) : 0;
-    if (torch) t.torch.position.set(torch.x + (hero?.body.facing ?? 1) * 0.35, torch.y + 1.1, 0.9);
+    // The lantern hangs from her side, a little forward and high: it lights her from the side (shape, not a flat glare).
+    if (torch) t.torch.position.set(torch.x + (hero?.body.facing ?? 1) * 0.55, torch.y + 1.5, 0.35);
     // The nearest torches and fires light whoever stands by them; their flames flicker.
     const near = [...lights].sort((a, b) => Math.abs(a.x - camera.x) - Math.abs(b.x - camera.x));
     t.lamps.forEach((lamp, i) => {
@@ -333,7 +421,8 @@ export class Fighters3D {
           t.hero.root.position.set(hx + Math.sin(roll) * (hands.y - b.y), hy - Math.cos(roll) * (hands.y - b.y), 0);
           t.hero.root.rotation.set(0, yaw, roll);
         } else {
-          t.hero.root.position.set(x, y, 0);
+          // Riding Gorr: up on his shoulders (and in front of him, so he doesn't hide her).
+          t.hero.root.position.set(x, y + (hero.riding ? 2.05 : 0), hero.riding ? 0.5 : 0);
           t.hero.root.rotation.set(0, yaw, 0);
         }
         this.carry(t, hero);
@@ -347,7 +436,11 @@ export class Fighters3D {
         t.hero.mixer.update(dt);
         blendOut(t.hero, dt);
         this.react(t, t.hero, hero.hitSerial, hero.lastBlow, b.facing, 1, dt);
+        this.measure(t, hero);
       }
+    } else {
+      this.hands = null;
+      this.tip = null;
     }
 
     // Cages: real bars in front of whoever is locked inside, gone once broken.
@@ -373,16 +466,30 @@ export class Fighters3D {
       const pose = beast.pose();
       const visible = pose.visible && Math.abs(beast.x - camera.x) < view;
       if (!visible) {
-        if (actor) actor.root.visible = false;
+        if (actor) {
+          // Gone for good: its body goes back to the pool.
+          if (beast.state === "gone") {
+            this.recycle(t, actor);
+            t.enemies.delete(beast);
+          } else {
+            actor.root.visible = false;
+          }
+        }
         continue;
       }
       if (!actor) {
-        actor = t.make(beast.kind === "brute" ? "brute" : "raider");
+        actor = t.make(beast.kind === "brute" ? "brute" : beast.kind === "chief" ? "chief" : "raider");
         t.enemies.set(beast, actor);
       }
       actor.root.visible = true;
       setOpacity(actor, pose.alpha);
-      for (const m of actor.materials) m.emissiveIntensity = pose.flash ? 0.45 : 0;
+      // A hit flashes it pale; on fire it glows from within, flickering.
+      const burn = beast.burning > 0 ? 0.3 + 0.12 * Math.sin(performance.now() / 41) : 0;
+      for (const m of actor.materials) {
+        if (burn > 0) m.emissive.setRGB(1, 0.36, 0.08);
+        else m.emissive.setRGB(1, 0.92, 0.85);
+        m.emissiveIntensity = pose.flash ? 0.18 : burn;
+      }
       any = true;
       if (beast.limp && beast.ragdoll) {
         this.drive(t.THREE, actor, beast.ragdoll, beast.facing);
@@ -427,7 +534,7 @@ export class Fighters3D {
   private fit(renderer: Three.WebGLRenderer): void {
     if (!this.layer || !this.canvas) return;
     const { width, height, dpr } = this.layer.size();
-    const scale = Math.min(MAX_DPR, Math.max(1, dpr));
+    const scale = Math.min(this.quality, Math.max(1, dpr));
     const w = Math.max(1, Math.round(width * scale));
     const h = Math.max(1, Math.round(height * scale));
     if (w !== this.pixels.width || h !== this.pixels.height) {
@@ -454,10 +561,11 @@ export class Fighters3D {
     const y0 = framing.pivotY - framing.pivotY / z;
     const y1 = framing.pivotY + (this.height - framing.pivotY) / z;
     camera.position.set(at.x, at.y, 20);
-    camera.left = (x0 - this.width / 2) / PPM;
-    camera.right = (x1 - this.width / 2) / PPM;
-    camera.top = (this.height / 2 - y0) / PPM;
-    camera.bottom = (this.height / 2 - y1) / PPM;
+    camera.rotation.set(0, 0, framing.roll);
+    camera.left = (x0 - framing.ox - this.width / 2) / PPM;
+    camera.right = (x1 - framing.ox - this.width / 2) / PPM;
+    camera.top = (this.height / 2 - y0 + framing.oy) / PPM;
+    camera.bottom = (this.height / 2 - y1 + framing.oy) / PPM;
     camera.updateProjectionMatrix();
   }
 
@@ -500,6 +608,27 @@ export class Fighters3D {
     turnBone(trunk.head, s.axis, r.nod * 0.6, s);
   }
 
+  /* Where her hands are (between the two: the rope is drawn to them) and the tip of a burning blade (embers come off it). */
+  private measure(t: NonNullable<Fighters3D["three"]>, hero: Explorer): void {
+    const s = t.scratch;
+    const right = t.hero.model.getObjectByName(bone("RightHand"));
+    const left = t.hero.model.getObjectByName(bone("LeftHand"));
+    if (right && left) {
+      t.hero.root.updateMatrixWorld(true);
+      right.getWorldPosition(s.v);
+      left.getWorldPosition(s.w);
+      this.hands = { x: (s.v.x + s.w.x) / 2, y: (s.v.y + s.w.y) / 2 };
+    }
+    const blade = t.arms.get("blade");
+    if (hero.weapon === "blade" && hero.burning > 0 && !hero.sheathed && blade) {
+      s.v.set(0, LONGSWORD.grip * 0.5 + LONGSWORD.blade * 0.95, 0);
+      blade.object.localToWorld(s.v);
+      this.tip = { x: s.v.x, y: s.v.y };
+    } else {
+      this.tip = null;
+    }
+  }
+
   /*
    * The hero's weapons: the one in use in her right hand, put away on her back while both hands
    * are busy (a rope, a climb, the truck's door); the others not shown. A burning blade glows and flames.
@@ -517,16 +646,19 @@ export class Fighters3D {
       const burning = hero.burning > 0 && !hero.sheathed;
       for (const m of arm.steel) {
         m.emissive.setHex(burning ? 0xff5a14 : 0xffffff);
-        m.emissiveIntensity = burning ? 1.1 + 0.25 * Math.sin(performance.now() / 53) : 0;
+        m.emissiveIntensity = burning ? 0.55 + 0.12 * Math.sin(performance.now() / 53) : 0;
       }
       if (arm.flame) {
         arm.flame.visible = burning;
+        const clock = arm.flame.userData.time as { value: number } | undefined;
+        if (burning && clock) clock.value = performance.now() / 1000;
         if (burning) {
           const k = performance.now() / 1000;
           arm.flame.children.forEach((c, i) => {
             const sprite = c as Three.Sprite;
             if (!sprite.isSprite) return;
-            sprite.scale.setScalar(0.85 + 0.3 * Math.abs(Math.sin(k * (9 + i * 2.3) + i)));
+            // Small tongues of flame along the steel (m), flickering; never a ball of light.
+            sprite.scale.setScalar((0.15 - i * 0.012) * (0.8 + 0.35 * Math.abs(Math.sin(k * (9 + i * 2.3) + i))));
             sprite.material.rotation = Math.sin(k * 3 + i) * 0.3;
           });
         }
@@ -583,7 +715,7 @@ export class Fighters3D {
     actor.root.position.set(beast.x, beast.y, -0.3);
     actor.root.rotation.set(0, pose.facing > 0 ? Math.PI / 2 - THREE_QUARTER * 0.6 : -Math.PI / 2 + THREE_QUARTER * 0.6, pose.angle + r.bend * 0.35 * pose.facing);
     setOpacity(actor, pose.alpha);
-    for (const m of actor.materials) m.emissiveIntensity = pose.flash ? 0.35 : 0;
+    for (const m of actor.materials) m.emissiveIntensity = pose.flash ? 0.15 : 0;
     const speed = Math.abs(beast.vx);
     switch (beast.state) {
       case "down":
@@ -642,6 +774,15 @@ export class Fighters3D {
     if (transition) {
       const clip = transition.kind === "out" ? "sit_to_stand" : "stand_to_sit";
       if (actor.current !== clip) play(actor, clip, clipLength(actor, clip) / (transition.kind === "out" ? 1.05 : 0.85), true);
+      return;
+    }
+    // The Master Stroke: the motion-captured spin, timed to the stroke. Riding Gorr: seated.
+    if (hero.stroke >= 0) {
+      if (actor.current !== "hero_master") play(actor, "hero_master", clipLength(actor, "hero_master") / 1, true);
+      return;
+    }
+    if (hero.riding) {
+      if (actor.current !== "stand_to_sit") play(actor, "stand_to_sit", 2, true);
       return;
     }
     // On a rope: hand over hand up it, or hanging and swinging with it (the clip's swing matched
@@ -724,6 +865,7 @@ export class Fighters3D {
       const held = new Map(props);
       const makeMate = (kind: MateKind): Actor => {
         if (kind === "dog") return makeAnimal("dog");
+        if (kind === "giant") return t.make("giant");
         const source = sources.get(kind);
         if (!source) throw new Error(`Missing toy ${kind}`);
         const model = clone(source.scene);
@@ -769,7 +911,7 @@ export class Fighters3D {
           actions.set(clip.name, action);
         }
         const trunk = { spine: null, spine1: null, spine2: null, neck: null, head: null };
-        const actor: Actor = { root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives: [], trunk, reflex: newReflex(), state: "", blend: null };
+        const actor: Actor = { kind, root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives: [], trunk, reflex: newReflex(), state: "", blend: null };
         play(actor, "Idle_A");
         return actor;
       };
@@ -795,6 +937,9 @@ export class Fighters3D {
       }
       if (this.disposed) return;
       t.makeMate = (kind) => {
+        const reused = t.spare.get(kind)?.pop();
+        if (reused) return reused;
+        if (kind === "giant") return t.make("giant");
         const actor = prepared.get(kind);
         if (actor) { prepared.delete(kind); return actor; }
         return makeMate(kind);
@@ -817,11 +962,12 @@ export class Fighters3D {
       const loader = new GLTFLoader();
       loader.setMeshoptDecoder(MeshoptDecoder);
       const kinds = Object.keys(MODELS) as Kind[];
+      const bodies = [...new Set(kinds.map((kind) => BODY[kind]))];
       const animalKinds = Object.keys(ANIMALS) as AnimalKind[];
       const heroProps = Object.values(ARSENAL).flatMap((w) => (w.look.kind === "prop" ? [w.look.file] : []));
       const props = [...new Set([...kinds.flatMap((kind) => WEAPONS[kind].map((w) => w.file)), ...heroProps])];
       const [models, clips, held, animalModels] = await Promise.all([
-        Promise.all(kinds.map(async (kind) => [kind, await loader.loadAsync(MODEL_BASE + MODELS[kind])] as const)),
+        Promise.all(bodies.map(async (body) => [body, await loader.loadAsync(MODEL_BASE + MODELS[body])] as const)),
         Promise.all(CLIPS.map(async (name) => named(await loader.loadAsync(`${CLIP_BASE}${name}.glb`), name))),
         Promise.all(props.map(async (file) => [file, await loader.loadAsync(`/game/kaykit/${file}`)] as const)),
         Promise.all(animalKinds.map(async (kind) => [kind, await loader.loadAsync(ANIMALS[kind])] as const)),
@@ -860,7 +1006,8 @@ export class Fighters3D {
       key.position.set(-2, 3, 4);
       const rim = new THREE.DirectionalLight(look.rim, look.rimIntensity);
       rim.position.set(2, 2, -3);
-      scene.add(key, rim, new THREE.HemisphereLight(look.sky, look.ground, look.fill));
+      const fill = new THREE.HemisphereLight(look.sky, look.ground, look.fill);
+      scene.add(key, rim, fill);
       const headlight = new THREE.PointLight(0xeaf2ff, 0, HEADLIGHT.reach, 1.4);
       const torch = new THREE.PointLight(0xffa25a, 0, TORCH.reach, 1.6);
       // Torches and fires in the scene: a few lights, moved to whichever are nearest each frame.
@@ -870,6 +1017,7 @@ export class Fighters3D {
       const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
 
       const heights = new Map<Kind, { height: number; floor: number }>();
+      // (keyed by body: the chief and Gorr share the brute's)
       for (const [kind, gltf] of models) {
         const box = new THREE.Box3().setFromObject(gltf.scene);
         heights.set(kind, { height: Math.max(0.01, box.max.y - box.min.y), floor: box.min.y });
@@ -878,7 +1026,8 @@ export class Fighters3D {
       const scratch = { q: new THREE.Quaternion(), r: new THREE.Quaternion(), p: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), axis: new THREE.Vector3(), up: new THREE.Vector3() };
 
       const make = (kind: Kind): Actor => {
-        const source = sources.get(kind);
+        const source = sources.get(BODY[kind]);
+        const tint = TINT[kind];
         if (!source) throw new Error(`Missing model ${kind}`);
         const model = clone(source.scene) as Three.Group;
         const materials: Three.MeshStandardMaterial[] = [];
@@ -895,6 +1044,7 @@ export class Fighters3D {
             m.alphaTest = 0.5;
           }
           if (!m.emissiveMap) m.emissive.setRGB(1, 0.92, 0.85);
+          if (tint) m.color.multiply(new THREE.Color(...tint));
           m.emissiveIntensity = 0;
           mesh.material = m;
           mesh.frustumCulled = false;
@@ -902,7 +1052,7 @@ export class Fighters3D {
         });
         const root = new THREE.Group();
         root.rotation.order = "ZYX";
-        const size = heights.get(kind) ?? { height: 1, floor: 0 };
+        const size = heights.get(BODY[kind]) ?? { height: 1, floor: 0 };
         const scale = HEIGHT[kind] / size.height;
         model.scale.setScalar(scale);
         // Soles on the ground: the root sits where the feet are.
@@ -939,7 +1089,7 @@ export class Fighters3D {
           }
           actions.set(clip.name, action);
         }
-        const actor: Actor = { root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives, trunk, reflex: newReflex(), state: "", blend: null };
+        const actor: Actor = { kind, root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives, trunk, reflex: newReflex(), state: "", blend: null };
         play(actor, kind === "hero" ? "hero_idle" : "foe_idle");
         return actor;
       };
@@ -979,7 +1129,7 @@ export class Fighters3D {
           actions.set(clip.name, action);
         }
         const trunk = { spine: null, spine1: null, spine2: null, neck: null, head: null };
-        const actor: Actor = { root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives: [], trunk, reflex: newReflex(), state: "", blend: null };
+        const actor: Actor = { kind, root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives: [], trunk, reflex: newReflex(), state: "", blend: null };
         play(actor, "Idle");
         return actor;
       };
@@ -989,10 +1139,13 @@ export class Fighters3D {
       // fading) and its textures uploaded, so the first knight, brute or animal to come on screen
       // doesn't freeze a frame. They wait hidden and are handed out first.
       const spare = new Map<string, Actor[]>();
-      const warm: [string, Actor][] = [...(["raider", "brute"] as const).map((k): [string, Actor] => [k, make(k)]), ...animalKinds.map((k): [string, Actor] => [k, makeAnimal(k)])];
+      const warm: [string, Actor][] = [...(["raider", "brute", "chief", "giant"] as const).map((k): [string, Actor] => [k, make(k)]), ...animalKinds.map((k): [string, Actor] => [k, makeAnimal(k)])];
       const fading = (on: boolean): void => {
         for (const [, actor] of [["hero", hero] as const, ...warm]) for (const m of actor.materials) m.transparent = on;
       };
+      // A cage too: its timber and iron compile now, not when the first prisoner comes on screen.
+      const firstCage = makeCage(THREE, scene);
+      firstCage.visible = true;
       // Include the hidden blade and flame shader in warm-up, before fire can be unlocked.
       for (const arm of arms.values()) { arm.object.visible = true; if (arm.flame) arm.flame.visible = true; }
       await renderer.compileAsync(scene, camera);
@@ -1009,6 +1162,7 @@ export class Fighters3D {
       renderer.render(scene, camera);
       renderer.clear();
       for (const arm of arms.values()) { arm.object.visible = false; if (arm.flame) arm.flame.visible = false; }
+      firstCage.visible = false;
       for (const [key, actor] of warm) {
         actor.root.visible = false;
         spare.set(key, [...(spare.get(key) ?? []), actor]);
@@ -1022,12 +1176,20 @@ export class Fighters3D {
         renderer,
         scene,
         camera,
-        make: (kind) => spare.get(kind)?.pop() ?? make(kind),
+        make: (kind) => {
+          const actor = spare.get(kind)?.pop() ?? make(kind);
+          actor.root.visible = true;
+          return actor;
+        },
         makeAnimal: (kind) => spare.get(kind)?.pop() ?? makeAnimal(kind),
         headlight,
         torch,
         firelight,
-        cages: [],
+        key,
+        rim,
+        fill,
+        spare,
+        cages: [firstCage],
         hero,
         arms,
         enemies: new Map(),
@@ -1138,30 +1300,62 @@ function longsword(THREE: ThreeModule, steel: Three.MeshStandardMaterial[]): Thr
   return sword;
 }
 
-/* Fire along the blade: soft additive flame sprites from guard to tip, shown only while it burns. */
+/*
+ * Fire along the blade: two crossed ribbons (so it reads from any turn of the wrist) running a
+ * flame shader. Two layers of value noise scroll from guard to tip, faster at the fine scale, so
+ * the flame licks and tears like real fire; it's widest at the guard and thins to wisps at the
+ * tip, white-yellow at its core, orange to deep red at its edges. Additive, so it glows where it
+ * overlaps; shown only while the blade burns.
+ */
 function flames(THREE: ThreeModule, sword: Three.Object3D): Three.Object3D {
-  const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    const g = ctx.createRadialGradient(32, 38, 2, 32, 34, 30);
-    g.addColorStop(0, "rgba(255, 244, 200, 1)");
-    g.addColorStop(0.3, "rgba(255, 170, 60, 0.85)");
-    g.addColorStop(0.7, "rgba(230, 70, 10, 0.35)");
-    g.addColorStop(1, "rgba(120, 20, 0, 0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 64, 64);
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  const time = { value: 0 };
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uTime: time },
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      varying vec2 vUv;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+      }
+      void main() {
+        float x = vUv.x * 2.0 - 1.0;
+        float y = vUv.y;
+        float n = noise(vec2(x * 2.6, y * 7.0 - uTime * 5.5)) * 0.62 + noise(vec2(x * 6.0 + 3.1, y * 16.0 - uTime * 10.0)) * 0.38;
+        float width = (1.0 - y * 0.8) * (0.3 + 0.7 * n);
+        float body = 1.0 - smoothstep(width * 0.35, width, abs(x));
+        float ends = smoothstep(0.0, 0.06, y) * (1.0 - smoothstep(0.7, 1.0, y + n * 0.25));
+        float a = body * ends * (0.45 + 0.55 * n);
+        vec3 col = mix(vec3(0.9, 0.16, 0.02), vec3(1.0, 0.82, 0.42), clamp(body * n * 1.4, 0.0, 1.0));
+        gl_FragColor = vec4(col * a, a);
+      }
+    `,
+  });
   const group = new THREE.Group();
-  for (let i = 0; i < 6; i++) {
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85 }));
-    sprite.position.y = LONGSWORD.grip * 0.5 + 0.08 + (LONGSWORD.blade - 0.1) * (i / 5);
-    sprite.scale.setScalar(0.16 - i * 0.012);
-    group.add(sprite);
+  const length = LONGSWORD.blade * 1.08;
+  for (const turn of [0, Math.PI / 2]) {
+    const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(0.15, length), material);
+    ribbon.position.y = LONGSWORD.grip * 0.5 + 0.03 + length / 2;
+    ribbon.rotation.y = turn;
+    ribbon.frustumCulled = false;
+    ribbon.renderOrder = 2;
+    group.add(ribbon);
   }
+  group.userData.time = time;
   group.visible = false;
   sword.add(group);
   return group;

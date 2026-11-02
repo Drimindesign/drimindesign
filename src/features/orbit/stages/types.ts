@@ -1,28 +1,15 @@
 import type { Combo, Score } from "../actors/score";
 import type { GameAudio } from "../engine/audio";
 import type { InputSnapshot } from "../engine/input";
-import type { FigureLayer } from "../pixel/fighters-3d";
+import type { FigureLayer, Fighters3D } from "../pixel/fighters-3d";
 import type { Party } from "../actors/party";
 import type { Painter } from "../pixel/painter";
 import type { Particles } from "../pixel/particles";
 
-export type StageId = "village" | "jungle" | "city" | "forest";
+export type StageId = "village" | "jungle" | "city" | "forest" | "river" | "hills" | "caves" | "ruins" | "coast" | "snow";
 
 /** What the music is doing: driving, walking in the dark, a fight, a brute's fight. */
 export type Mood = "drive" | "explore" | "fight" | "boss";
-
-export const STAGE_ORDER: readonly StageId[] = ["village", "jungle", "city", "forest"];
-
-/*
- * The story: Kachujin carries the Spark, a big idea, to the launch pad, to send it into orbit.
- * Mr. Grey's Copycats, who steal ideas instead of making their own, block every road.
- */
-export const STAGE_TITLES: Record<StageId, { number: string; title: string; goal: string }> = {
-  village: { number: "01", title: "The Spark", goal: "Mr. Grey's Copycats want the Spark. Get it out of the village before they shut the road." },
-  jungle: { number: "02", title: "Into the Dark", goal: "The road is gone. Cross the night jungle on foot: swing the ropes, climb the cliffs, keep the wolves off. The truck waits on the far side." },
-  city: { number: "03", title: "Copycat City", goal: "Grey's gang owns the city. Jump the traffic, fly the broken flyovers, break their gate." },
-  forest: { number: "04", title: "Launch", goal: "The last road to the launch pad. Get past Grey's guards and send the Spark into orbit." },
-};
 
 /** Shared by every stage for its whole life. */
 export interface StageContext {
@@ -45,6 +32,8 @@ export interface StageContext {
   layer: FigureLayer | null;
   /** The run's team and what it has unlocked: it carries from stage to stage. */
   party: Party;
+  /** The 3D figures, made once for the whole run and handed from level to level (no reloading, no recompiling). */
+  figures: Fighters3D | null;
 }
 
 export interface StageFx {
@@ -60,6 +49,10 @@ export interface StageFx {
   cinema(seconds: number): void;
   /** Frame the camera at exactly this zoom this frame (wider or closer than anything else asks). */
   frame(zoom: number): void;
+  /** Shake the camera (1 a heavy blow), decaying fast. */
+  shake(amount: number): void;
+  /** Tilt the frame by this much (rad) and let it spring back: a huge blow. */
+  roll(angle: number): void;
 }
 
 /** What the stage draws into, per frame. */
@@ -76,12 +69,18 @@ export interface View {
   /** The camera's zoom about its pivot (art px), for anything drawn outside the 2D canvas. */
   zoom: number;
   pivot: { x: number; y: number };
+  /** The camera's tilt (rad) and shake offset (art px), for anything drawn outside the 2D canvas. */
+  roll: number;
+  ox: number;
+  oy: number;
   /** The game's own fade to black between stages (0 … 1), on top of the stage's. */
   fade: number;
 }
 
 export interface StageHud {
   prompt: string;
+  /** A conversation is being played (the world holds still; the Skip button shows). */
+  talking?: boolean;
   /** The music's mood. */
   mood?: Mood;
   /** On foot with a weapon: the sword and weapon pads show. */
@@ -90,8 +89,11 @@ export interface StageHud {
   weapon?: string;
   fire?: "locked" | "ready" | "burning" | "charging";
   fireCharge?: number;
+  /** The Master Stroke's meter (0 … 1), and whether the stroke is under way. */
+  master?: number;
+  stroke?: boolean;
   /** The team with her: each one's name and hearts, and whether it's still alive. */
-  team?: readonly { name: string; hearts: number; alive: boolean }[];
+  team?: readonly { name: string; health: number; alive: boolean; down: boolean }[];
   /** She's out of the truck (the controller shows the call-the-truck button). */
   foot?: boolean;
   /** A spoken line on screen: who's talking and what they say (a GTA-style subtitle). */
@@ -140,6 +142,8 @@ export interface Stage {
   dispose?(): void;
   /** Starts the stage already moving at this speed (m/s): carried over from the stage before. */
   rollIn?(speed: number): void;
+  /** Skips the conversation being played, if any. */
+  skipTalk?(): void;
 }
 
 /** Collectibles: hover, bob, get taken when something passes within reach. */

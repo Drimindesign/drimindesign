@@ -1,5 +1,5 @@
 import { Animator } from "../engine/animator";
-import { FIRE, WEAPONS, type Weapon, type WeaponId } from "./arsenal";
+import { FIRE, MASTER, WEAPONS, type Weapon, type WeaponId } from "./arsenal";
 import type { GameAudio } from "../engine/audio";
 import type { ToScreen } from "../engine/camera";
 import { CharacterController, type MoveInput } from "../engine/character-controller";
@@ -60,7 +60,7 @@ const MERCY = 1.4;
  * caught again for this long (s) after. Ropes are caught within `catch` (m) of the hands, never
  * shorter than `shortest` (m).
  */
-const ROPE = { hang: 1.95, pump: 1.7, drag: 0.08, lift: 2.6, regrab: 0.45, catch: 0.85, shortest: 2.2 } as const;
+const ROPE = { hang: 1.95, pump: 1.3, drag: 0.08, lift: 2.6, regrab: 0.45, catch: 0.85, shortest: 2.2, highest: 1.1 } as const;
 /** Caught low on a rope, she climbs it hand over hand (m/s) until it's this long (m) to her hands: a better swing. */
 const ROPE_CLIMB = { speed: 0.9, length: 4.6 } as const;
 
@@ -113,6 +113,12 @@ export class Explorer {
   fireUnlocked = false;
   burning = 0;
   fireRecharge = 0;
+  /** The Master Stroke: its meter (0 … 1), seconds into the stroke (or -1), and the moment its shockwave lands this step. */
+  master = 0;
+  stroke = -1;
+  shockwave = false;
+  /** Riding on the giant's shoulders (he carries her: further, faster, higher). */
+  riding = false;
   /** Time into the current swing (s), or -1 when not swinging. */
   private swing = -1;
   /** Which blow of the combo (0 … 2) the current or last swing is, and when the last one ended (s). */
@@ -250,12 +256,28 @@ export class Explorer {
   }
 
   get vulnerable(): boolean {
-    return this.mercy === 0;
+    return this.mercy === 0 && this.stroke < 0;
+  }
+
+  /** Fills the Master Stroke's meter. */
+  charge(amount: number): void {
+    this.master = Math.min(1, this.master + amount);
+  }
+
+  /** M: the Master Stroke, when the meter is full and she's on her feet. */
+  private strike(): void {
+    if (this.master < 1 || this.stroke >= 0 || this.ragdoll || this.rope || this.riding) return;
+    this.master = 0;
+    this.stroke = 0;
+    this.swing = -1;
+    this.body.vx = 0;
+    this.audio.swing(true, 0.7, this.burning > 0);
   }
 
   /** Knocked by something coming from `fromX`. Returns false while still blinking from the last hit. */
   hurt(fromX: number, heavy = false): boolean {
-    if (this.mercy > 0 || this.ragdoll) return false;
+    if (this.mercy > 0 || this.ragdoll || this.stroke >= 0) return false;
+    this.charge(MASTER.perHurt);
     this.hearts = Math.max(0, this.hearts - 1);
     this.mercy = MERCY;
     const away = Math.sign(this.body.x - fromX) || -1;
@@ -353,8 +375,15 @@ export class Explorer {
     const b = this.body;
     // Caught low: hand over hand up the rope first (a shorter rope swings livelier).
     if (r.length > ROPE_CLIMB.length) r.length = Math.max(ROPE_CLIMB.length, r.length - ROPE_CLIMB.speed * dt);
-    r.spin += (-(gravity / r.length) * Math.sin(r.angle) + input.move * ROPE.pump - r.spin * ROPE.drag) * dt;
-    r.angle = Math.max(-1.35, Math.min(1.35, r.angle + r.spin * dt));
+    // Leaning into the swing pumps it (only with it, never against: a body can't push off air).
+    const pump = Math.sign(input.move) === Math.sign(r.spin) ? input.move * ROPE.pump : 0;
+    r.spin += (-(gravity / r.length) * Math.sin(r.angle) + pump - r.spin * ROPE.drag) * dt;
+    r.angle += r.spin * dt;
+    // At the top of the arc the rope goes slack: the swing stops rising there.
+    if (Math.abs(r.angle) > ROPE.highest) {
+      r.angle = Math.sign(r.angle) * ROPE.highest;
+      r.spin = Math.min(0, r.spin * Math.sign(r.angle)) * Math.sign(r.angle);
+    }
     b.px = b.x;
     b.py = b.y;
     b.x = r.x + Math.sin(r.angle) * r.length;
@@ -437,8 +466,18 @@ export class Explorer {
 
   // ---- simulation -------------------------------------------------------------
 
-  step(dt: number, gravity: number, input: MoveInput & { attackPressed?: boolean; weaponPressed?: boolean; skillPressed?: boolean }, effects = true): void {
+  step(dt: number, gravity: number, input: MoveInput & { attackPressed?: boolean; weaponPressed?: boolean; skillPressed?: boolean; masterPressed?: boolean }, effects = true): void {
     this.mercy = Math.max(0, this.mercy - dt);
+    this.shockwave = false;
+    // The Master Stroke: she spins in place (untouchable), the shockwave goes out partway through.
+    if (input.masterPressed) this.strike();
+    if (this.stroke >= 0) {
+      const before = this.stroke;
+      this.stroke += dt;
+      if (before < MASTER.at && this.stroke >= MASTER.at) this.shockwave = true;
+      if (this.stroke >= MASTER.time) this.stroke = -1;
+      input = { ...input, move: 0, jumpPressed: false, attackPressed: false };
+    }
     // The fire burns down, then the recharge begins.
     if (this.burning > 0) {
       this.burning = Math.max(0, this.burning - dt);

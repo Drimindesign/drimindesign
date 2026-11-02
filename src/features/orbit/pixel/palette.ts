@@ -197,6 +197,92 @@ export const JUNGLE: Palette = {
   stars: 2,
 };
 
+/* The river at dusk: a low amber sky over dark green banks, the water holding the last light. */
+export const RIVER: Palette = {
+  ...JUNGLE,
+  sky: ["#1a1420", "#2a1c2a", "#3e2632", "#5a3434", "#7a4634", "#9a5c3a", "#b8763e", "#d49448"],
+  sun: "#ffd28a",
+  sunHalo: ["#c8783e", "#a85e36", "#88482e"],
+  cloud: "#5a3a3a",
+  mountain: "#2a2030",
+  mountainRim: "#a8643e",
+  haze: "#4a3034",
+  lake: ["#7a5a48", "#5a4440", "#3a3038", "#242230"],
+  lakeGlint: "#ffd8a0",
+  rim: [255, 190, 130],
+  sunHeight: 0.62,
+  rays: 0.35,
+  rayRgb: "255, 190, 130",
+  stars: 0,
+};
+
+/* Caves: no sky at all, only rock in torchlight, warm where the fire reaches and black beyond. */
+export const CAVE: Palette = {
+  ...JUNGLE,
+  sky: ["#050302", "#070403", "#090504", "#0b0705", "#0d0806", "#0f0a07", "#120b08", "#140d09"],
+  sun: "#2a1a10",
+  sunHalo: ["#120a06", "#100806", "#0e0705"],
+  cloud: "#0c0806",
+  mountain: "#140d09",
+  mountainRim: "#3a2214",
+  haze: "#100a07",
+  farPine: "#120c08",
+  farPineRim: "#3a2416",
+  midTree: "#0e0906",
+  midTreeAlt: "#0c0805",
+  midRim: "#4a2c18",
+  mist: "#1a1009",
+  lake: ["#140d09", "#100a07", "#0c0806", "#080504"],
+  lakeGlint: "#5a3a20",
+  grassTop: "#4a3424",
+  grass: "#1e140d",
+  grassDark: "#160f0a",
+  blade: "#2a1c12",
+  bladeTip: "#5a3c24",
+  mote: "#ffb070",
+  rim: [255, 150, 80],
+  rays: 0,
+  stars: 0,
+};
+
+/* The moonlit coast: a big pale moon over the sea, silver on every edge. */
+export const COAST: Palette = {
+  ...NIGHT,
+  sky: ["#03050c", "#060a18", "#0a1226", "#0e1a34", "#132444", "#182e54", "#1e3a64", "#264674"],
+  lake: ["#2a4670", "#1e3858", "#162a44", "#0e1c30"],
+  lakeGlint: "#f0f6ff",
+  grassTop: "#9aa8b8",
+  grass: "#2a2a30",
+  grassDark: "#1e1e24",
+  sunHeight: 0.22,
+  rays: 0.2,
+  stars: 14,
+};
+
+/* A snowy pass at night: blue-white ground, pale peaks, falling snow. */
+export const SNOW: Palette = {
+  ...NIGHT,
+  sky: ["#0a0e1a", "#101828", "#162236", "#1e2c44", "#283852", "#324460", "#3e526e", "#4a5e7c"],
+  mountain: "#5a6a84",
+  mountainRim: "#c8d6ee",
+  haze: "#4a5a74",
+  farPine: "#2a3448",
+  farPineRim: "#a8b8d8",
+  midTree: "#1a2232",
+  midRim: "#c8d8f0",
+  mist: "#6a7a94",
+  grassTop: "#e8f0fa",
+  grass: "#b8c6d8",
+  grassDark: "#94a4ba",
+  blade: "#d8e2f0",
+  bladeTip: "#ffffff",
+  path: "#8a96a8",
+  pathLight: "#aab6c8",
+  soil: "#5a6476",
+  soilDark: "#4a5466",
+  stars: 8,
+};
+
 export function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];

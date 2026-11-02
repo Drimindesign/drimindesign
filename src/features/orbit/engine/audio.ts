@@ -200,6 +200,13 @@ export class GameAudio {
   }
 
   /** A spoken line (a small recorded file under /audio/voice/), with the music dipped under it. */
+  /** Stops whatever's being said (a skipped conversation). */
+  hush(): void {
+    this.voiceSerial++;
+    this.voiceSource?.stop();
+    this.voiceSource = null;
+  }
+
   say(line: string, text = "", speaker = ""): void {
     if (!this.ctx) return;
     const serial = ++this.voiceSerial;

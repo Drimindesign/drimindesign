@@ -4,7 +4,7 @@
  * touches the keyboard.
  */
 
-export type Action = "left" | "right" | "jump" | "interact" | "switch" | "planet" | "attack" | "weapon" | "skill" | "reset" | "pause";
+export type Action = "left" | "right" | "jump" | "interact" | "switch" | "planet" | "attack" | "weapon" | "skill" | "master" | "reset" | "pause";
 
 export interface InputSnapshot {
   move: number;
@@ -19,6 +19,8 @@ export interface InputSnapshot {
   attackPressed: boolean;
   weaponPressed: boolean;
   skillPressed: boolean;
+  /** The Master Stroke. */
+  masterPressed: boolean;
   /** Back to the last checkpoint. */
   resetPressed: boolean;
   pausePressed: boolean;
@@ -40,6 +42,8 @@ const KEYS: Record<string, Action> = {
   KeyX: "attack",
   KeyQ: "weapon",
   KeyV: "skill",
+  KeyM: "master",
+  ShiftLeft: "master",
   KeyR: "reset",
   Escape: "pause",
   KeyP: "pause",
@@ -48,7 +52,7 @@ const KEYS: Record<string, Action> = {
 /**
  * A gamepad (standard mapping: Xbox, PlayStation, most Bluetooth controllers): the stick or D-pad
  * moves; A jumps and fires the thrusters, X swings, B gets in and out, Y calls the truck, RB
- * switches weapon, LB lights the Fire Sword, Start pauses, Select goes back to the checkpoint.
+ * switches weapon, LB lights the Fire Sword, either trigger the Master Stroke, Start pauses, Select goes back to the checkpoint.
  */
 const PAD_BUTTONS: readonly (readonly [number, Action])[] = [
   [0, "jump"],
@@ -58,6 +62,8 @@ const PAD_BUTTONS: readonly (readonly [number, Action])[] = [
   [3, "switch"],
   [5, "weapon"],
   [4, "skill"],
+  [7, "master"],
+  [6, "master"],
   [9, "pause"],
   [8, "reset"],
   [14, "left"],
@@ -140,6 +146,7 @@ export class Input {
       attackPressed: this.pressed.has("attack"),
       weaponPressed: this.pressed.has("weapon"),
       skillPressed: this.pressed.has("skill"),
+      masterPressed: this.pressed.has("master"),
       resetPressed: this.pressed.has("reset"),
       pausePressed: this.pressed.has("pause"),
     };

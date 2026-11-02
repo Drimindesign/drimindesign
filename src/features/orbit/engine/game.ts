@@ -1,19 +1,19 @@
 import { MAX_HEARTS } from "../actors/explorer";
-import { MATE_HEARTS, Party } from "../actors/party";
+import { Party } from "../actors/party";
 import { Combo, POINTS, Score } from "../actors/score";
 import { Painter } from "../pixel/painter";
 import { Particles } from "../pixel/particles";
 import type { ExplorerId } from "../pixel/explorer-sprite";
 import { RoadStage } from "../stages/road";
-import type { FigureLayer } from "../pixel/fighters-3d";
-import { CITY_RUN, FOREST_RUN, JUNGLE_RUN, VILLAGE_RUN } from "../stages/routes";
-import { STAGE_ORDER, STAGE_TITLES, type Stage, type StageContext, type StageFx, type StageId } from "../stages/types";
+import { Fighters3D, type FigureLayer } from "../pixel/fighters-3d";
+import { level, type Level } from "../stages/levels";
+import type { Stage, StageContext, StageFx, StageId } from "../stages/types";
 import { GameAudio } from "./audio";
 import { ART, MAX_STEPS, SIM_HZ, VIEW_MIN } from "./config";
 import { Input, type InputSnapshot } from "./input";
 
 export type Phase = "title" | "intro" | "play" | "paused" | "complete" | "finished";
-export type Command = "start" | "continue" | "again" | "resume" | "restart-stage" | "quit";
+export type Command = "start" | "continue" | "again" | "resume" | "restart-stage" | "quit" | "continue-level" | "skip";
 
 /** DOM the game writes to directly (never React state per frame). */
 export interface Hud {
@@ -26,18 +26,20 @@ export interface Hud {
  * Camera zoom: how close it sits when slow, the speed (km/h) where it's fully opened out, the
  * spring (1/s) that carries it, how hard a punch of strength 1 kicks it, and the closest it gets.
  */
-const ZOOM = { close: 1.07, fullSpeed: 110, omega: 6, punch: 9, max: 1.85 } as const;
+const ZOOM = { close: 1.07, fullSpeed: 110, omega: 6, punch: 9, max: 1.5 } as const;
 const STEP = 1 / SIM_HZ;
 /** How long a stage card stays up before play starts on its own (s). */
 const INTRO_TIME = 2.6;
 /** Pause after reaching a goal before the screen dips to black (s): let the moment land. */
-const COMPLETE_DELAY = 0.9;
+const COMPLETE_DELAY = 0.4;
 /**
  * Between stages there's no stop: the screen dips to black over `out` (s), the next stage comes
  * up out of it over `in` (s) already moving, and the project it unlocked shows in a corner for
  * `reward` (s) while you play on.
  */
-const TRANSITION = { out: 0.55, in: 0.7, reward: 8 } as const;
+const TRANSITION = { out: 0.35, in: 0.45, reward: 8 } as const;
+/** The furthest level reached (to carry on from), kept on this device. */
+const LEVEL_KEY = "drimin:orbit-level";
 /** Finishing fast pays: points per second under PAR at the end of the run. */
 const PAR_SECONDS = 600;
 const TIME_BONUS_PER_SECOND = 5;
@@ -86,9 +88,13 @@ export class Game {
     return this.stage;
   }
   private stage: Stage;
-  private stageIndex = 0;
   /** Score when the current stage began (restarting the stage rolls back to it). */
   private stageStartScore = 0;
+  /** The level being played (1 and up: the journey never ends), and what it is. */
+  private levelNumber = 1;
+  private levelInfo: Level = level(1);
+  /** The 3D figures, made once for the run and handed from level to level. */
+  private readonly figures: Fighters3D | null;
   private look: ExplorerId = "female";
   private phase: Phase = "title";
   private phaseTime = 0;
@@ -110,6 +116,10 @@ export class Game {
   private frameZoom = 0;
   /** Film bars: seconds left. */
   private cinemaLeft = 0;
+  /** Camera shake (decaying amplitude, art px) and tilt (rad, sprung back to level). */
+  private shakeAmp = 0;
+  private tilt = 0;
+  private tiltVelocity = 0;
   /** The run's team and unlocks, carried from stage to stage. */
   private party = new Party();
   /* Effects the stages ask for at big moments; reduced motion turns them off. */
@@ -129,6 +139,12 @@ export class Game {
     },
     frame: (zoom) => {
       if (!this.still) this.frameZoom = zoom;
+    },
+    shake: (amount) => {
+      if (!this.still) this.shakeAmp = Math.max(this.shakeAmp, amount * 3);
+    },
+    roll: (angle) => {
+      if (!this.still) this.tiltVelocity += angle * 18 * (Math.random() < 0.5 ? -1 : 1);
     },
     slowmo: (seconds, scale = 0.35) => {
       if (this.still) return;
@@ -173,7 +189,8 @@ export class Game {
     // The 3D figures draw into a canvas of their own stacked on this one, at the screen's resolution.
     const host = canvas.parentElement;
     this.layer = host ? { host, size: () => this.css } : null;
-    this.stage = this.makeStage("village");
+    this.figures = this.layer ? new Fighters3D(this.layer, "village") : null;
+    this.stage = this.makeStage(1);
     this.writeBest();
   }
 
@@ -193,6 +210,7 @@ export class Game {
     document.removeEventListener("visibilitychange", this.onVisibility);
     window.removeEventListener("pointerdown", this.onTap);
     this.stage.dispose?.();
+    this.figures?.dispose();
     this.audio.dispose();
   }
 
@@ -214,6 +232,7 @@ export class Game {
     this.canvas.style.height = `${(pixelsH * scale) / dpr}px`;
     this.css = { width: (pixelsW * scale) / dpr, height: (pixelsH * scale) / dpr, dpr };
     this.ctx.imageSmoothingEnabled = false;
+    this.figures?.resize(this.width, this.height);
     this.stage.resize(this.width, this.height);
     this.draw(1);
   }
@@ -223,8 +242,17 @@ export class Game {
     this.audio.unlock();
     switch (command) {
       case "start":
-        if (this.phase === "title") this.beginStage(0);
+        if (this.phase === "title") this.beginStage(1);
         break;
+      case "skip":
+        this.stage.skipTalk?.();
+        break;
+      case "continue-level": {
+        // Carry on from the furthest level reached (a fresh team, the same road ahead).
+        const saved = readNumber(LEVEL_KEY) ?? 1;
+        if (this.phase === "title") this.beginStage(Math.max(1, Math.floor(saved)));
+        break;
+      }
       case "continue":
         if (this.phase === "complete") this.next();
         else if (this.phase === "intro") this.setPhase("play");
@@ -238,7 +266,7 @@ export class Game {
       case "restart-stage":
         if (this.phase === "paused") {
           this.score.total = this.stageStartScore;
-          this.stage = this.makeStage(this.stage.id);
+          this.stage = this.makeStage(this.levelNumber);
           this.setPhase("intro");
         }
         break;
@@ -248,7 +276,8 @@ export class Game {
         this.runTime = 0;
         this.score.total = 0;
         this.totals = { collected: 0, available: 0, landings: 0 };
-        this.stage = this.makeStage("village");
+        this.levelNumber = 1;
+        this.stage = this.makeStage(1);
         this.setPhase("title");
         break;
     }
@@ -269,7 +298,7 @@ export class Game {
     const accepted = this.onArena((won) => {
       this.holdForArena(false);
       done(won);
-    }, STAGE_ORDER[this.stageIndex]);
+    }, this.stage.id);
     if (accepted) this.holdForArena(true);
     return accepted;
   }
@@ -323,7 +352,7 @@ export class Game {
         this.score.update(STEP);
       }
       // Presses go to the first step only; held state applies to every step.
-      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, resetPressed: false, pausePressed: false };
+      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, masterPressed: false, resetPressed: false, pausePressed: false };
       this.accumulator -= STEP;
       steps++;
     }
@@ -342,13 +371,13 @@ export class Game {
 
   // ---- the journey ------------------------------------------------------------
 
-  private makeStage(id: StageId): Stage {
-    // The stage being replaced lets go of anything outside the canvas (the 3D stage's WebGL context).
+  private makeStage(n: number): Stage {
+    // The stage being replaced hands its figures back to the pool (or lets go of its own).
     (this.stage as Stage | undefined)?.dispose?.();
     this.combo.break();
-    const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo, fx: this.fx, arena: { request: (done) => this.requestArena(done) }, layer: this.layer, party: this.party };
-    const route = id === "village" ? VILLAGE_RUN : id === "jungle" ? JUNGLE_RUN : id === "city" ? CITY_RUN : FOREST_RUN;
-    const stage = new RoadStage(context, this.look, route);
+    this.levelInfo = level(n);
+    const context: StageContext = { audio: this.audio, particles: new Particles(), still: this.still, score: this.score, combo: this.combo, fx: this.fx, arena: { request: (done) => this.requestArena(done) }, layer: this.layer, party: this.party, figures: this.figures };
+    const stage = new RoadStage(context, this.look, this.levelInfo.config);
     stage.resize(this.width, this.height);
     return stage;
   }
@@ -359,10 +388,10 @@ export class Game {
     const root = this.hud.root;
     root.dataset.phase = phase;
     root.dataset.stage = this.stage.id;
-    const title = STAGE_TITLES[this.stage.id];
-    this.text("stage-number", title.number);
-    this.text("stage-title", title.title);
-    this.text("stage-goal", title.goal);
+    const info = this.levelInfo;
+    this.text("stage-number", String(info.number).padStart(2, "0"));
+    this.text("stage-title", info.title);
+    this.text("stage-goal", info.goal);
     if (phase === "intro") this.cinemaLeft = Math.max(this.cinemaLeft, INTRO_TIME);
     if (phase === "complete") {
       this.audio.sting("victory", 9);
@@ -373,12 +402,14 @@ export class Game {
     if (phase === "finished") this.finish();
   }
 
-  private beginStage(index: number): void {
-    this.stageIndex = index;
-    const id = STAGE_ORDER[index];
-    // The title screen already shows a fresh first stage: keep it rather than rebuild it.
-    if (this.stage.id !== id || this.stage.complete || index > 0) this.stage = this.makeStage(id);
+  private beginStage(n: number): void {
+    // The title screen already shows a fresh first level: keep it rather than rebuild it.
+    if (this.levelNumber !== n || this.stage.complete || n > 1) this.stage = this.makeStage(n);
+    this.levelNumber = n;
     this.stageStartScore = this.score.total;
+    // The furthest level reached is remembered, to carry on from next time.
+    if (n > (readNumber(LEVEL_KEY) ?? 0)) writeNumber(LEVEL_KEY, n);
+    this.writeBest();
     this.setPhase("intro");
   }
 
@@ -387,15 +418,11 @@ export class Game {
     this.totals.collected += stage.collected;
     this.totals.available += stage.available;
     this.totals.landings += stage.cleanLandings;
-    if (this.stageIndex + 1 >= STAGE_ORDER.length) {
-      this.setPhase("finished");
-      return;
-    }
-    // Straight on into the next stage, still moving, with the project this one unlocked in the corner.
+    // The journey never ends: straight on into the next level, still moving, with the project this one unlocked in the corner.
     const carry = (stage.hud().speed ?? 0) / 3.6;
     this.hud.root.dataset.reward = stage.id;
     this.rewardLeft = TRANSITION.reward;
-    this.beginStage(this.stageIndex + 1);
+    this.beginStage(this.levelNumber + 1);
     this.stage.rollIn?.(carry);
     this.fadeIn = 1;
   }
@@ -406,8 +433,9 @@ export class Game {
     this.totals = { collected: 0, available: 0, landings: 0 };
     this.runTime = 0;
     this.score.total = 0;
-    this.stage = this.makeStage("village");
-    this.beginStage(0);
+    this.levelNumber = 1;
+    this.stage = this.makeStage(1);
+    this.beginStage(1);
   }
 
   private dropReward(): void {
@@ -471,6 +499,9 @@ export class Game {
   }
 
   private writeBest(): void {
+    const furthest = readNumber(LEVEL_KEY);
+    this.text("saved-level", furthest === null ? "" : String(Math.floor(furthest)));
+    this.hud.root.dataset.saved = furthest !== null && furthest > 1 ? "true" : "false";
     const time = readNumber(BEST_TIME);
     const score = readNumber(BEST_SCORE);
     this.text("best", time === null ? "—" : formatTime(time));
@@ -497,11 +528,22 @@ export class Game {
     const cx = this.width / 2;
     const cy = this.height * 0.56;
     ctx.setTransform(ART * z, 0, 0, ART * z, ART * cx * (1 - z), ART * cy * (1 - z));
+    // Shake (decaying fast) and tilt (a stiff spring back to level), about the same pivot as the zoom.
+    this.shakeAmp *= Math.exp(-dt * 9);
+    this.tiltVelocity += (-160 * this.tilt - 2 * 12.6 * this.tiltVelocity) * dt;
+    this.tilt += this.tiltVelocity * dt;
+    const ox = this.shakeAmp > 0.05 ? (Math.random() - 0.5) * this.shakeAmp : 0;
+    const oy = this.shakeAmp > 0.05 ? (Math.random() - 0.5) * this.shakeAmp : 0;
+    if (this.tilt !== 0 || ox !== 0 || oy !== 0) {
+      ctx.translate(cx, cy);
+      ctx.rotate(this.tilt);
+      ctx.translate(-cx + ox, -cy + oy);
+    }
     ctx.imageSmoothingEnabled = false;
     // The dip to black between stages: down at the end of one, up out of it into the next.
     const out = this.phase === "complete" ? Math.min(1, Math.max(0, (this.phaseTime - COMPLETE_DELAY) / TRANSITION.out)) : 0;
     const veil = Math.max(out, this.fadeIn);
-    this.stage.draw({ ctx, painter: this.painter, width: this.width, height: this.height, time: this.time, frame: this.frame, dt: this.frameDt, zoom: z, pivot: { x: cx, y: cy }, fade: veil }, alpha);
+    this.stage.draw({ ctx, painter: this.painter, width: this.width, height: this.height, time: this.time, frame: this.frame, dt: this.frameDt, zoom: z, pivot: { x: cx, y: cy }, roll: this.tilt, ox, oy, fade: veil }, alpha);
     ctx.setTransform(ART, 0, 0, ART, 0, 0);
     const fade = Math.max(this.stage.fade, veil);
     if (fade > 0) {
@@ -542,6 +584,7 @@ export class Game {
     this.set("actions", hud.actions ? "true" : "false");
     this.set("foot", hud.foot ? "true" : "false");
     this.set("armed", hud.armed ? "true" : "false");
+    this.set("talk", hud.talking ? "on" : "off");
     this.set("cinema", this.cinemaLeft > 0 ? "on" : "off");
     // The weapon in hand and the Fire Sword's charge; the team's names and hearts.
     this.text("weapon", hud.weapon ?? "");
@@ -549,7 +592,10 @@ export class Game {
     root.style.setProperty("--fire", (hud.fireCharge ?? 0).toFixed(3));
     const team = hud.team ?? [];
     this.set("team", team.length > 0 ? "on" : "off");
-    this.text("team", team.map((m) => (m.alive ? `${m.name} ${"♥".repeat(m.hearts)}${"♡".repeat(MATE_HEARTS - m.hearts)}` : `${m.name} ✝`)).join("   "));
+    this.text("team", team.map((m) => (!m.alive ? `${m.name} ✝` : m.down ? `${m.name} ⚠ DOWN` : `${m.name} ${"▰".repeat(Math.ceil(m.health * 5))}${"▱".repeat(5 - Math.ceil(m.health * 5))}`)).join("   "));
+    // The Master Stroke's meter.
+    root.style.setProperty("--master", (hud.master ?? 0).toFixed(3));
+    this.set("master", hud.master === undefined ? "none" : hud.master >= 1 ? "ready" : "charging");
     root.style.setProperty("--hull", (1 - (hud.damage ?? 0)).toFixed(3));
     this.set("hull", (hud.damage ?? 0) > 0.6 ? "low" : "ok");
     // Booster charges as pips: filled for each in hand.

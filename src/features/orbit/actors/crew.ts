@@ -85,7 +85,8 @@ export class Crew {
         break;
       case "walkToDoor": {
         const dx = this.car.door.x - e.body.x;
-        e.step(dt, gravity, { move: Math.sign(dx) * 0.4, jumpPressed: false, jumpHeld: false });
+        // Briskly from further off, slowing for the last steps to the door.
+        e.step(dt, gravity, { move: Math.sign(dx) * (Math.abs(dx) > 2 ? 0.75 : 0.4), jumpPressed: false, jumpHeld: false });
         if (Math.abs(dx) < 0.1 || this.modeTime > WALK_TIMEOUT) {
           e.body.facing = 1;
           this.set("boarding");

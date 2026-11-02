@@ -2,7 +2,8 @@ import { Boar, type BeastKind } from "../actors/boar";
 import { Car, type CarEvent } from "../actors/car";
 import { Crew } from "../actors/crew";
 import { Explorer } from "../actors/explorer";
-import { MATES, Mate, type MateKind } from "../actors/party";
+import { MASTER } from "../actors/arsenal";
+import { MATES, Mate, Party, WOUND, type MateKind } from "../actors/party";
 import { POINTS, STUNTS } from "../actors/score";
 import { FollowCamera, projector, type Camera, type ToScreen } from "../engine/camera";
 import { CAR, CHARACTER, PLANETS, PPM } from "../engine/config";
@@ -15,11 +16,11 @@ import { Fighters3D, type FigureLight, type SceneLight } from "../pixel/fighters
 import { Village } from "../pixel/village";
 import type { ExplorerId } from "../pixel/explorer-sprite";
 import type { Painter } from "../pixel/painter";
-import { JUNGLE, NIGHT } from "../pixel/palette";
+import { CAVE, COAST, DAWN, JUNGLE, NIGHT, RIVER, SNOW, type Palette } from "../pixel/palette";
 import { blit, CELL, glow, LAUNCH_PAD, TRAFFIC, type Sprite } from "../pixel/props";
 import { World } from "../pixel/world";
 import { stepBeasts } from "./beasts";
-import { checkpointBefore, Pickups, type Mood, type Stage, type StageContext, type StageHud, type View } from "./types";
+import { checkpointBefore, Pickups, type Mood, type Stage, type StageContext, type StageHud, type StageId, type View } from "./types";
 
 interface TrafficSpec {
   x: number;
@@ -43,6 +44,13 @@ export interface StopSpec {
   dialogue?: readonly Line[];
 }
 
+/** A hillside boulders come rolling down: from above `x1` down past `x0`, one every `every` seconds while she's on it. */
+export interface BoulderZone {
+  x0: number;
+  x1: number;
+  every: number;
+}
+
 /** Out of the dark as you pass `x`: `count` of `kinds` (picked at random), from ahead or behind. */
 export interface AmbushSpec {
   x: number;
@@ -50,11 +58,26 @@ export interface AmbushSpec {
   kinds: readonly BeastKind[];
 }
 
+/** A log floating on a river: drifting back and forth over `span` (m) from `x`, at `speed` (m/s at its fastest). */
+export interface LogSpec {
+  x: number;
+  span: number;
+  speed: number;
+}
+
 export interface RoadConfig {
-  id: "village" | "jungle" | "city" | "forest";
-  scene: "village" | "jungle" | "city" | "forest";
+  id: StageId;
+  scene: FigureLight;
   /** Crossed on foot: no truck until the far side, where it waits at the finish. */
   onFoot?: boolean;
+  /** On foot with no truck at all: the level ends where she walks out of it. */
+  truck?: boolean;
+  /** Logs floating on the rivers. */
+  logs?: readonly LogSpec[];
+  /** Hillsides with boulders rolling down them. */
+  boulders?: readonly BoulderZone[];
+  /** What's said as the level opens (on foot), if anything. */
+  opening?: readonly Line[];
   /** Surface gravity (m/s²); Earth's when omitted. */
   gravity?: number;
   seed: number;
@@ -116,16 +139,63 @@ const ANSWERS: Record<MateKind, string> = {
   ranger: "Then keep them off my back.",
   rogue: "Sure you would. Come on.",
   dog: "Good dog. Let's go.",
+  giant: "Then carry me, big one. We've a long way to go.",
 };
 const LOST = "No... I'm sorry, little one. Rest now.";
+/** A villager freed (her team already has one of their kind): their thanks, and hers. */
+const VILLAGER = { thanks: "Thank you! I'll find my way home.", answer: "Run. Don't look back." } as const;
+/** Toys a villager can be (Gorr's cage, once he's with her, holds one of these). */
+const TOY_KINDS: readonly MateKind[] = ["knight", "barbarian", "mage", "ranger", "rogue"];
+/**
+ * Boulders: their radius (m), the speed they roll down at (m/s), how hard they hit (a heavy blow:
+ * she's knocked flat; three of a mate's health), and the points for smashing one with a blade.
+ */
+const BOULDER = { radius: 0.5, speed: 5.5, damage: 3, points: 60 } as const;
 /** A cage takes this many blows to break; freeing who's inside holds the camera on them this long (s). */
 const CAGE = { blows: 3, scene: 3.4 } as const;
 /** A torch's flame: its height on the pole (m), its colour, and how strongly it lights a figure. */
 const TORCH = { height: 1.7, color: 0xff8a3a, power: 7 } as const;
 /** Camera framing: hanging from a rope (wide, to see the far side), hauling up a ledge, and freeing a prisoner. */
-const ROPE_ZOOM = 1.12;
-const CLIMB_ZOOM = 1.55;
-const RESCUE_ZOOM = 1.75;
+const ROPE_ZOOM = 1.02;
+const CLIMB_ZOOM = 1.3;
+const RESCUE_ZOOM = 1.42;
+/**
+ * The camera, directed like a film. Lead room: it looks this far ahead of her (m) when she moves,
+ * less when she stands. In a fight it frames her and whoever she's fighting (zoom between `close`
+ * and `wide`), leaning toward them. Running it opens out a touch (speed); standing still a while
+ * it slowly pushes in. A kill that ends a fight cuts to the body in slow motion; a new place opens
+ * on a wide shot ahead of her before settling on her.
+ */
+const DIRECTOR = { lead: 2.2, leadIdle: 1, fightClose: 1.42, fightWide: 1.08, run: 0.08, pushIn: 1.06, idle: 2.5, kill: { zoom: 1.5, time: 1, slow: 0.2 }, open: { ahead: 10, zoom: 1, time: 2.3 } } as const;
+/** A rope is a chain of this many links (verlet), stepped this many times a step to hold its length. */
+const ROPE_LINKS = 12;
+const ROPE_ITERATIONS = 6;
+/** Riding Gorr: she sits this high (m) on his shoulders, and he runs and leaps this much further than she does. */
+const RIDE = { height: 2.05, stride: 1.25, spring: 1.4 } as const;
+/**
+ * A conversation, played like a film: the world holds still, the camera closes into a two-shot
+ * (between `close` and `wide`, leaning `lean` of the way toward whoever's speaking), the backdrop
+ * goes soft behind them; each line holds for its words (`base` s and `perChar` s a letter, at
+ * least `least`), and a press moves on.
+ */
+const TALK = { close: 1.5, wide: 1.2, lean: 0.25, base: 0.7, perChar: 0.055, least: 1.7 } as const;
+/**
+ * Bodies don't pass through each other: how wide each kind is (m, half its width at the hips),
+ * and how much of the push each takes (heavier ones barely move).
+ */
+const BODY: Partial<Record<string, { half: number; mass: number }>> = {
+  hero: { half: 0.32, mass: 60 },
+  raider: { half: 0.36, mass: 90 },
+  brute: { half: 0.48, mass: 125 },
+  chief: { half: 0.58, mass: 170 },
+  wolf: { half: 0.42, mass: 45 },
+  dog: { half: 0.32, mass: 25 },
+  bull: { half: 0.75, mass: 650 },
+  boar: { half: 0.4, mass: 90 },
+};
+
+/** Lines for the moments of the fight. */
+const CRY = { down: "Help! I'm down!", revive: "I've got you. Get up!", master: "Enough!", ride: "Up you go, small queen." } as const;
 
 /**
  * Breakables: mass (kg, for the momentum the car loses), the speed (m/s) below which the car just
@@ -150,9 +220,9 @@ const STOP_ZONE = 16;
  */
 const ARENA = { depth: 18, first: 1.6, gap: 0.8, spread: 2.2, overWall: 0.5, boardIn: 1.8 } as const;
 /** Camera zoom: out of the truck, in a fight on foot, and walking the jungle (which needs to see across a ravine). */
-const FOOT_ZOOM = 1.7;
-const FIGHT_ZOOM = 1.45;
-const JUNGLE_ZOOM = 1.3;
+const FOOT_ZOOM = 1.32;
+const FIGHT_ZOOM = 1.28;
+const JUNGLE_ZOOM = 1.15;
 /** Calling the truck: it comes down this far ahead of her (m), from this high (m), if it's further than this (m). */
 const CALL = { ahead: 4.5, height: 9, farther: 8 } as const;
 /** Brake assist before a barricade: how far out it starts (m), the speed allowed per metre left (1/s), its braking (m/s²), the crawl at the wall (m/s). */
@@ -162,7 +232,7 @@ const LIFTOFF_TIME = 3.2;
 /** A rope over a ravine: its branch this high above the ravine's lip (m), the rope this long. */
 const ROPE = { height: 8.2, length: 6.4 } as const;
 /** The lantern in the dark: full light within `inner` (m), darkness `dark` beyond `outer`. */
-const LANTERN = { inner: 2.2, outer: 9.5, dark: 0.93 } as const;
+const LANTERN = { inner: 3, outer: 13, dark: 0.82 } as const;
 const FIREFLIES = 26;
 
 interface Traffic extends TrafficSpec {
@@ -219,8 +289,14 @@ function pick<T>(items: readonly T[]): T {
  * The jungle is crossed on foot: ropes over the ravines, rock steps to climb, packs out of the dark,
  * and the truck waiting at the far side. Wrecks and falls go back to the last checkpoint.
  */
+/** Where each place's night falls dark around her lantern; and the river's surface below its banks (m). */
+const DARK: ReadonlySet<string> = new Set(["jungle", "caves", "ruins"]);
+const WATER_DEPTH = 1.1;
+/** Each place's painted backdrop. */
+const BACKDROP: Partial<Record<string, Palette>> = { forest: NIGHT, jungle: JUNGLE, river: RIVER, hills: DAWN, caves: CAVE, ruins: NIGHT, coast: COAST, snow: SNOW };
+
 export class RoadStage implements Stage {
-  readonly id: "village" | "jungle" | "city" | "forest";
+  readonly id: StageId;
   private readonly terrain: RoadTerrain;
   private readonly world: World | null;
   private readonly city: City | null;
@@ -234,7 +310,7 @@ export class RoadStage implements Stage {
   private readonly stops: Barricade[];
   private readonly encounters: Encounter[];
   private readonly ambushes: Ambush[];
-  private readonly ropes: { x: number; y: number; length: number }[];
+  private readonly ropes: { x: number; y: number; length: number; links: { x: number; y: number; px: number; py: number }[] }[];
   private readonly cages: Cage[];
   private readonly torches: number[];
   /** The team with her (freed here or brought from earlier stages). */
@@ -245,10 +321,37 @@ export class RoadStage implements Stage {
   private hold = 0;
   private holdZoom = 1;
   private wasOnRope = false;
+  /** Boulders rolling down the hills, and when the next one comes (s). */
+  private boulders: { x: number; y: number; vx: number; vy: number; spin: number; angle: number }[] = [];
+  private nextBoulder = 0;
+  /** A conversation under way: its lines, which is being said, how long it has left (s), and where the camera frames it. */
+  private talk: { lines: readonly Line[]; index: number; left: number; focus: { x: number; y: number }; zoom: number } | null = null;
+  /** Villagers freed and on their way home (drawn until they're gone). */
+  private readonly leaving: Mate[] = [];
+  /** The camera: a held shot (a kill, a new place) it frames instead of her, its lead room ahead of her, the fight's centre, how long she's stood still. */
+  private shot: { x: number; y: number; zoom: number; left: number } | null = null;
+  private lead = 0;
+  private fightAt: number | null = null;
+  private still = 0;
+  /** The last enemy to fall (for the kill shot), and the Master Stroke's shockwaves spreading (where, how old). */
+  private lastKill: Boar | null = null;
+  private waves: { x: number; y: number; t: number }[] = [];
+  /** Reviving a downed mate (seconds left), and Gorr carrying her. */
+  private channel: { mate: Mate; left: number } | null = null;
+  private mount: Mate | null = null;
+  /** E pressed this step (to help a downed friend up), and the stage's own clock (s, for the wind on the ropes). */
+  private reviveAsked = false;
+  private clock = 0;
   private readonly fighters: Fighters3D;
   private readonly debris = new Debris();
   private readonly props: { x: number; kind: PropKind; broken: boolean }[];
   private readonly onFoot: boolean;
+  private readonly truck: boolean;
+  private readonly ownsFigures: boolean;
+  /** Logs floating on the river (where each is now, and its drift). */
+  private readonly logs: { spec: LogSpec; x: number; px: number; phase: number; vx: number }[];
+  /** Falling snow (positions in the view, art px), on the snowy pass. */
+  private readonly flakes: { x: number; y: number; s: number }[] = [];
   /** The scene being spoken: its lines, how long since it began (s), and how many have played. */
   private scene: { lines: readonly Line[]; t: number; next: number } | null = null;
   private line: { who: string; text: string; left: number } | null = null;
@@ -273,19 +376,25 @@ export class RoadStage implements Stage {
     this.id = config.id;
     this.onFoot = config.onFoot === true;
     this.terrain = new RoadTerrain(config.seed, config.features, config.hills);
-    this.world = config.scene === "forest" ? new World(this.terrain, NIGHT) : config.scene === "jungle" ? new World(this.terrain, JUNGLE) : null;
+    const backdrop = BACKDROP[config.scene];
+    this.world = backdrop ? new World(this.terrain, backdrop) : null;
     this.city = config.scene === "city" ? new City(this.terrain) : null;
     this.village = config.scene === "village" ? new Village(this.terrain, config.features) : null;
-    this.fighters = new Fighters3D(context.layer, config.scene as FigureLight);
+    // The run's figures carry over from level to level; only without them (QA tools) does a level make its own.
+    this.fighters = context.figures ?? new Fighters3D(context.layer, config.scene);
+    this.fighters.setLight(config.scene);
+    this.ownsFigures = context.figures === null;
     this.gravity = config.gravity ?? PLANETS.earth.gravity;
     const explorer = new Explorer(4, this.terrain, look, context.audio, context.particles);
-    const car = new Car(this.onFoot ? config.finish : 6, this.terrain, context.audio, context.particles);
+    // No truck on this level: it waits far off where it's never seen.
+    this.truck = config.truck !== false;
+    const car = new Car(!this.truck ? -1000 : this.onFoot ? config.finish : 6, this.terrain, context.audio, context.particles);
     this.crew = new Crew(explorer, car, this.terrain, context.audio);
     explorer.body.platforms = () => this.platforms();
     if (this.onFoot) {
       // The truck waits at the far side; the crossing is made on foot, and there's nothing to call down.
       explorer.place(4);
-      this.scene = { lines: JUNGLE_LINES, t: 0, next: 0 };
+      this.converse(config.opening ?? JUNGLE_LINES);
     } else {
       this.crew.onCall = () => void this.callCar();
       this.crew.seat();
@@ -301,18 +410,31 @@ export class RoadStage implements Stage {
       // Hung from a branch above the ravine it crosses, measured from the higher of its two lips.
       const gap = config.features.find((f) => f.kind === "ravine" && x > f.x && x < f.x + f.size);
       const lip = gap ? Math.max(this.terrain.height(gap.x - 0.6), this.terrain.height(gap.x + gap.size + 0.6)) : this.terrain.height(x);
-      return { x, y: lip + ROPE.height, length: ROPE.length };
+      const y = lip + ROPE.height;
+      const links = Array.from({ length: ROPE_LINKS + 1 }, (_, i) => ({ x, y: y - (ROPE.length * i) / ROPE_LINKS, px: x, py: y - (ROPE.length * i) / ROPE_LINKS }));
+      return { x, y, length: ROPE.length, links };
     });
     this.props = (config.props ?? []).map(([x, kind]) => ({ x, kind, broken: false }));
+    this.logs = (config.logs ?? []).map((spec, i) => ({ spec, x: spec.x, px: spec.x, phase: i * 1.9, vx: 0 }));
+    if (config.scene === "snow") for (let i = 0; i < 70; i++) this.flakes.push({ x: Math.random() * 480, y: Math.random() * 270, s: 0.4 + Math.random() * 0.8 });
     // Her team so far comes with her; prisoners not yet freed wait in their cages.
     explorer.carried = context.party.carried;
     explorer.fireUnlocked = context.party.fire;
     for (const member of context.party.members) if (member.alive) this.mates.push(new Mate(member, explorer.body.x - 1.5, this.terrain, false));
-    this.cages = (config.cages ?? [])
-      .filter(([, kind]) => !context.party.has(kind))
-      .map(([x, kind]) => ({ x, blows: CAGE.blows, broken: false, shake: 0, mate: new Mate({ kind, hearts: 3, alive: true }, x, this.terrain, true) }));
+    // Each cage holds a prisoner who'll join her; if her team already has one of their kind, a villager who'll go home.
+    this.cages = (config.cages ?? []).map(([x, kind]) => {
+      const villager = context.party.has(kind);
+      const who = villager && kind === "giant" ? TOY_KINDS[Math.floor(x) % TOY_KINDS.length] : kind;
+      const mate = new Mate(Party.member(who), x, this.terrain, true);
+      mate.visitor = villager;
+      return { x, blows: CAGE.blows, broken: false, shake: 0, mate };
+    });
     this.torches = [...(config.torches ?? []), ...this.cages.map((c) => c.x - 1.6)];
     this.reached = config.checkpoints[0];
+    if (this.onFoot) {
+      const x = 4 + DIRECTOR.open.ahead;
+      this.shot = { x, y: Math.max(0, this.terrain.height(x)) + 1.5, zoom: DIRECTOR.open.zoom, left: DIRECTOR.open.time };
+    }
     this.camera.snap(this.onFoot ? 4 : 6, this.terrain.height(6), this.terrain.height(6));
   }
 
@@ -343,7 +465,9 @@ export class RoadStage implements Stage {
   }
 
   dispose(): void {
-    this.fighters.dispose();
+    // The run's figures go back to their pool for the next level; a level's own are let go.
+    if (this.ownsFigures) this.fighters.dispose();
+    else this.fighters.reset();
   }
 
   /* Carried over from the stage before: the truck comes in already rolling. */
@@ -370,20 +494,43 @@ export class RoadStage implements Stage {
   step(dt: number, input: InputSnapshot): void {
     this.fade = Math.max(0, this.fade - dt * 1.6);
     if (this.done) return;
+    if (this.talk) {
+      this.stepTalk(dt, input);
+      return;
+    }
     const car = this.crew.car;
     const v = car.vehicle;
     if (this.liftoff >= 0) {
       this.stepLiftoff(dt, input);
       return;
     }
+    // Reviving a downed mate: she kneels to it, still, until it's back up.
+    if (this.channel) {
+      input = { ...input, move: 0, jumpPressed: false, attackPressed: false, interactPressed: false };
+      this.channel.left -= dt;
+      if (this.channel.left <= 0) {
+        this.channel.mate.revive();
+        this.speak({ who: "Kachujin", clip: "", text: CRY.revive, at: 0 });
+        this.channel = null;
+      }
+    }
+    this.reviveAsked = input.interactPressed && !this.mount;
+    this.stepMount(input);
+    // The river's logs move first, so she rides each where it is this step (no lag, no judder).
+    this.stepLogs(dt);
     // Stopped anywhere, the truck can be left (to fight, or to walk); on foot you climb back in at the door.
     this.crew.step(dt, this.gravity, input, { board: true, alight: !this.onFoot });
+    if (this.crew.explorer.shockwave) this.masterStroke();
+    this.stepFire();
+    for (const w of this.waves) w.t += dt;
+    this.waves = this.waves.filter((w) => w.t < 0.8);
     this.context.particles.update(dt, this.terrain, this.gravity);
     this.context.combo.update(dt, v.grounded);
     this.stepStops(dt);
     this.stepEncounters(dt);
     this.stepAmbushes(dt);
-    this.stepRopes();
+    this.stepRopes(dt);
+    this.stepBoulders(dt);
     this.stepCages(dt);
     this.stepMates(dt);
     this.stepProps();
@@ -423,9 +570,22 @@ export class RoadStage implements Stage {
     this.stepRings();
     this.stepTraffic(dt);
     this.stepBoars(dt);
+    this.separate();
     if (this.onFoot) {
-      // Fell into a ravine: back to the last checkpoint. At the far side, into the truck and on.
+      // Fell into a ravine or the river: back to the last checkpoint. At the far side, into the truck and on (or just on).
       if (e.y < FALL_LIMIT && this.crew.mode === "foot") this.respawn();
+      if (this.crew.mode === "foot" && this.inWater(e.x, e.y)) {
+        this.context.particles.dust(e.x, e.y + 0.5, 0, 30, 1.6);
+        this.context.audio.land(0.8);
+        this.respawn();
+      }
+      if (!this.truck) {
+        if (e.x >= this.config.finish) {
+          this.context.audio.complete();
+          this.done = true;
+        }
+        return;
+      }
       if (this.crew.mode === "foot" && e.grounded && Math.abs(e.x - car.door.x) < CHARACTER.doorReach * 1.5) this.crew.board();
       if (this.crew.mode === "car") {
         this.context.audio.complete();
@@ -502,7 +662,23 @@ export class RoadStage implements Stage {
 
   private stepBoars(dt: number): void {
     // Out of hearts on foot: back on your feet (beside the truck, or at the last checkpoint in the jungle), hearts restored.
-    if (stepBeasts(this.boars, this.crew, this.context, dt, this.gravity, this.mates, (mate) => this.mourn(mate))) {
+    const events = {
+      down: (mate: Mate): void => {
+        // A friend down: a beat of slow motion and its cry; she has a few seconds to reach it.
+        this.speak({ who: mate.spec.name, clip: "", text: CRY.down, at: 0 });
+        this.context.fx.slowmo(0.35, 0.4);
+        this.context.fx.punch(0.06);
+      },
+      kill: (beast: Boar): void => {
+        this.lastKill = beast;
+      },
+      heavy: (): void => {
+        this.context.fx.shake(0.5);
+        this.context.fx.roll(0.012);
+      },
+    };
+    const killsBefore = this.lastKill;
+    if (stepBeasts(this.boars, this.crew, this.context, dt, this.gravity, this.mates, events)) {
       if (this.onFoot) {
         this.respawn();
       } else {
@@ -513,6 +689,19 @@ export class RoadStage implements Stage {
       }
     }
     const e = this.crew.explorer.body;
+    // The kill that ends a fight: the camera cuts to the body as it falls, in slow motion.
+    if (this.lastKill && this.lastKill !== killsBefore && !this.shot) {
+      const k = this.lastKill;
+      const left = this.boars.some((b) => b.active && b !== k && Math.abs(b.x - e.x) < 14);
+      if (!left) {
+        this.shot = { x: (k.x + e.x) / 2, y: k.y + 1, zoom: DIRECTOR.kill.zoom, left: DIRECTOR.kill.time };
+        this.context.fx.slowmo(DIRECTOR.kill.time, DIRECTOR.kill.slow);
+        this.context.fx.cinema(DIRECTOR.kill.time + 0.6);
+        this.context.fx.shake(0.8);
+      } else {
+        this.context.fx.punch(0.06);
+      }
+    }
     if (this.crew.mode === "car") return;
     const hero = this.crew.explorer;
     // The camera, like a film's: wide on a rope (to see the far side) with a beat of slow motion as
@@ -521,12 +710,207 @@ export class RoadStage implements Stage {
     const onRope = hero.ropeAnchor !== null;
     if (this.wasOnRope && !onRope && e.vy > 0) this.context.fx.slowmo(0.3, 0.5);
     this.wasOnRope = onRope;
-    const fighting = this.fight !== undefined || this.boars.some((b) => b.active && Math.abs(b.x - e.x) < 10);
-    if (this.hold > 0) this.context.fx.frame(this.holdZoom);
+    // A fight is framed to hold her and whoever she's fighting, leaning toward them.
+    const near = this.boars.filter((b) => b.active && Math.abs(b.x - e.x) < 10);
+    const fighting = this.fight !== undefined || near.length > 0;
+    this.fightAt = near.length > 0 ? near.reduce((sum, b) => sum + b.x, 0) / near.length : null;
+    const spread = near.reduce((most, b) => Math.max(most, Math.abs(b.x - e.x)), 0);
+    const viewWidth = this.width / PPM;
+    const fit = Math.max(DIRECTOR.fightWide, Math.min(DIRECTOR.fightClose, viewWidth / (2 * spread + 6)));
+    this.still = Math.abs(e.vx) < 0.2 && e.grounded ? this.still + 1 / 120 : 0;
+    const running = Math.min(1, Math.abs(e.vx) / 4.8);
+    const calm = (this.onFoot ? JUNGLE_ZOOM : FOOT_ZOOM) * (1 - DIRECTOR.run * running) * (this.still > DIRECTOR.idle ? DIRECTOR.pushIn : 1);
+    if (this.shot) this.context.fx.frame(this.shot.zoom);
+    else if (this.hold > 0) this.context.fx.frame(this.holdZoom);
     else if (onRope) this.context.fx.frame(ROPE_ZOOM);
     else if (e.climb >= 0) this.context.fx.frame(CLIMB_ZOOM);
-    else if (fighting) this.context.fx.focus(FIGHT_ZOOM);
-    else this.context.fx.focus(this.onFoot ? JUNGLE_ZOOM : FOOT_ZOOM);
+    else if (hero.stroke >= 0) this.context.fx.frame(1.2);
+    else if (fighting) this.context.fx.focus(near.length > 0 ? fit : FIGHT_ZOOM);
+    else if (this.mount) this.context.fx.focus(1.15);
+    else this.context.fx.focus(calm);
+  }
+
+  /* A scene of two or more lines is played as a conversation; a single line is just said over the play. */
+  private converse(lines: readonly Line[]): void {
+    if (lines.length < 2 || this.context.still) {
+      this.scene = { lines, t: 0, next: 0 };
+      return;
+    }
+    this.scene = null;
+    this.talk = { lines, index: -1, left: 0, focus: { x: this.crew.explorer.body.x, y: this.crew.explorer.body.y + 1.2 }, zoom: TALK.close };
+  }
+
+  /** Skip: the rest of the conversation goes unsaid and play carries on. */
+  skipTalk(): void {
+    if (!this.talk) return;
+    this.talk = null;
+    this.line = null;
+    this.context.audio.hush();
+  }
+
+  /* Where a speaker stands (her, one of the team or a prisoner, or the nearest of the gang), if near. */
+  private speakerAt(who: string): { x: number; y: number } | null {
+    const e = this.crew.explorer.body;
+    if (who === "Kachujin" || who === "Crew") return { x: e.x, y: e.y };
+    const mate = [...this.mates, ...this.cages.map((c) => c.mate), ...this.leaving].find((m) => m.spec.name === who && Math.abs(m.x - e.x) < 14);
+    if (mate) return { x: mate.x, y: mate.y };
+    let foe: Boar | null = null;
+    for (const b of this.boars) if (b.fighter && b.state !== "gone" && b.state !== "down" && (!foe || Math.abs(b.x - e.x) < Math.abs(foe.x - e.x))) foe = b;
+    if (foe && Math.abs(foe.x - e.x) < 14) return { x: foe.x, y: foe.y };
+    // The gang's voice from behind its wall, before any of them show.
+    const wall = this.stopAhead(e.x, STOP_ZONE);
+    return wall ? { x: wall.x, y: this.terrain.height(wall.x) } : null;
+  }
+
+  /*
+   * A conversation: nothing moves but the speakers' breathing. The camera holds a two-shot of her
+   * and whoever she's talking with, leaning toward the one speaking; each line holds for its
+   * words, a press moves on to the next, and Skip ends it.
+   */
+  private stepTalk(dt: number, input: InputSnapshot): void {
+    const t = this.talk;
+    if (!t) return;
+    this.context.particles.update(dt, this.terrain, this.gravity);
+    t.left -= dt;
+    if (t.index >= 0 && (input.jumpPressed || input.attackPressed || input.interactPressed)) t.left = 0;
+    if (t.left <= 0) {
+      t.index++;
+      const line = t.lines[t.index];
+      if (!line) {
+        this.talk = null;
+        this.line = null;
+        return;
+      }
+      this.speak(line);
+      t.left = Math.max(TALK.least, TALK.base + line.text.length * TALK.perChar);
+      if (this.line) this.line.left = t.left;
+      this.context.fx.cinema(t.left + 0.4);
+    }
+    const e = this.crew.explorer.body;
+    const line = t.lines[Math.max(0, t.index)];
+    const other = t.lines.map((l) => (l.who === "Kachujin" ? null : this.speakerAt(l.who))).find((p) => p !== null) ?? null;
+    const speaker = line ? this.speakerAt(line.who) : null;
+    const mid = other ? { x: (e.x + other.x) / 2, y: Math.max(e.y, other.y) } : { x: e.x, y: e.y };
+    const lean = speaker ? { x: (speaker.x - mid.x) * TALK.lean, y: 0 } : { x: 0, y: 0 };
+    t.focus = { x: mid.x + lean.x, y: mid.y + 1.3 };
+    const span = other ? Math.abs(other.x - e.x) : 0;
+    t.zoom = Math.max(TALK.wide, Math.min(TALK.close, this.width / PPM / (span + 7)));
+    this.context.fx.frame(t.zoom);
+  }
+
+  /*
+   * Bodies are solid: anyone standing overlapping someone else (her, the gang, the animals, her
+   * team) is pushed apart along the ground, the lighter one moved more, never through a wall.
+   */
+  private separate(): void {
+    type Solid = { x: number; y: number; half: number; mass: number; move: (dx: number) => void };
+    const solids: Solid[] = [];
+    const e = this.crew.explorer;
+    const ground = (x: number): number => this.terrain.height(x);
+    const fits = (from: number, to: number): boolean => Math.abs(ground(to) - ground(from)) < 0.45;
+    if (this.crew.mode === "foot" && !e.ragdoll && !e.ropeAnchor && !e.riding && e.body.climb < 0) {
+      const spec = BODY.hero ?? { half: 0.32, mass: 60 };
+      solids.push({ x: e.body.x, y: e.body.y, half: spec.half, mass: spec.mass, move: (dx) => {
+        if (fits(e.body.x, e.body.x + dx)) e.body.x += dx;
+      } });
+    }
+    for (const b of this.boars) {
+      if (!b.active && b.state !== "attack" && b.state !== "block") continue;
+      const spec = BODY[b.kind] ?? { half: 0.4, mass: b.mass };
+      solids.push({ x: b.x, y: b.y, half: spec.half, mass: spec.mass, move: (dx) => {
+        if (fits(b.x, b.x + dx)) b.x += dx;
+      } });
+    }
+    for (const m of this.mates) {
+      if (!m.active || m.carrier || m === this.mount || m.airborne) continue;
+      solids.push({ x: m.x, y: m.y, half: m.kind === "giant" ? 0.55 : m.kind === "dog" ? 0.3 : 0.24, mass: m.kind === "giant" ? 200 : 30, move: (dx) => {
+        if (fits(m.x, m.x + dx)) m.x += dx;
+      } });
+    }
+    for (let i = 0; i < solids.length; i++) {
+      for (let j = i + 1; j < solids.length; j++) {
+        const a = solids[i];
+        const c = solids[j];
+        const overlap = a.half + c.half - Math.abs(a.x - c.x);
+        // Only bodies side by side on the ground (one jumping over another passes over it).
+        if (overlap <= 0 || Math.abs(a.y - c.y) > 0.9) continue;
+        const dir = Math.sign(c.x - a.x) || (Math.random() < 0.5 ? 1 : -1);
+        const total = a.mass + c.mass;
+        const pa = overlap * (c.mass / total);
+        const pc = overlap * (a.mass / total);
+        a.move(-dir * pa);
+        c.move(dir * pc);
+        a.x -= dir * pa;
+        c.x += dir * pc;
+      }
+    }
+  }
+
+  /*
+   * Gorr carries her: E beside him (out of a fight) and she's up on his shoulders, where his legs
+   * do the running (faster), the jumping (further) and the stepping up (higher); E again, she's down.
+   */
+  private stepMount(input: InputSnapshot): void {
+    const e = this.crew.explorer;
+    const giant = this.mates.find((m) => m.kind === "giant" && m.alive);
+    if (this.mount && (!giant || giant.state === "wounded" || input.interactPressed || e.ragdoll)) {
+      this.mount = null;
+      e.riding = false;
+      e.body.stride = 1;
+      e.body.spring = 1;
+      if (giant) giant.place(e.body.x - e.body.facing * 1.2);
+      return;
+    }
+    if (!this.mount && giant?.active && this.crew.mode === "foot" && input.interactPressed && !this.mates.some((m) => m.state === "wounded") && Math.abs(giant.x - e.body.x) < 2 && !this.boars.some((b) => b.active && Math.abs(b.x - e.body.x) < 8)) {
+      this.mount = giant;
+      e.riding = true;
+      e.body.stride = RIDE.stride;
+      e.body.spring = RIDE.spring;
+      this.speak({ who: giant.spec.name, clip: "", text: CRY.ride, at: 0 });
+    }
+  }
+
+  /*
+   * The Master Stroke lands: a shockwave from her feet throws everyone near off theirs (a cost of
+   * blows each, double with a burning blade), in slow motion, the camera kicked and tilted.
+   */
+  private masterStroke(): void {
+    const e = this.crew.explorer;
+    const b = e.body;
+    const fire = e.burning > 0 ? 2 : 1;
+    this.waves.push({ x: b.x, y: b.y + 0.4, t: 0 });
+    for (const beast of this.boars) {
+      if (beast.state === "gone" || beast.state === "down" || Math.abs(beast.x - b.x) > MASTER.reach || Math.abs(beast.y - b.y) > 3) continue;
+      const dir = Math.sign(beast.x - b.x) || b.facing;
+      beast.topple(dir, MASTER.damage * fire);
+      if (beast.health <= 0) this.lastKill = beast;
+      this.context.particles.blood(beast.x, beast.y + 1.1, dir, 8, 1.4);
+      this.context.score.add(POINTS.swordHit * 2, "Master Stroke", beast.x, beast.y + 2);
+    }
+    this.context.particles.dust(b.x, b.y, 0, 50, 2.4);
+    this.context.particles.sparks(b.x, b.y + 1, 1, 14);
+    this.context.particles.sparks(b.x, b.y + 1, -1, 14);
+    this.context.audio.land(1);
+    this.context.audio.ignite();
+    this.context.fx.slowmo(0.9, 0.22);
+    this.context.fx.punch(0.16);
+    this.context.fx.shake(1.2);
+    this.context.fx.roll(0.03);
+    this.context.fx.cinema(1.6);
+    this.context.fx.buzz(90);
+    this.speak({ who: "Kachujin", clip: "", text: CRY.master, at: 0 });
+  }
+
+  /* Fire: embers stream off a burning blade, and anything alight smokes and sheds sparks. */
+  private stepFire(): void {
+    const p = this.context.particles;
+    const tip = this.fighters.tip;
+    if (tip && Math.random() < 0.35) p.sparks(tip.x, tip.y, -this.crew.explorer.body.facing, 1);
+    for (const b of this.boars) {
+      if (b.burning <= 0 || b.state === "gone") continue;
+      if (Math.random() < 0.3) p.sparks(b.x, b.y + 1.1, Math.random() < 0.5 ? 1 : -1, 1);
+      if (Math.random() < 0.08) p.dust(b.x, b.y + 1.4, 0, 2, 0.6);
+    }
   }
 
   /*
@@ -554,12 +938,23 @@ export class RoadStage implements Stage {
       this.context.audio.land(0.6);
       const mate = cage.mate;
       mate.free();
-      this.context.party.join(mate.member);
-      this.mates.push(mate);
-      e.carried = this.context.party.carried;
-      e.fireUnlocked = this.context.party.fire;
       const spec = MATES[mate.kind];
-      this.scene = { lines: [{ who: spec.name, clip: "", text: spec.freed, at: 1.2 }, { who: "Kachujin", clip: "", text: ANSWERS[mate.kind], at: 3.9 }], t: 0, next: 0 };
+      if (mate.visitor) {
+        // A villager: everyone's patched up, the Master Stroke charged, the fire ready again.
+        this.leaving.push(mate);
+        e.heal();
+        e.charge(0.5);
+        e.fireRecharge = 0;
+        for (const m of this.mates) if (m.active) m.member.hearts = Math.min(m.spec.health, m.member.hearts + Math.ceil(m.spec.health / 2));
+        this.converse([{ who: spec.name, clip: "", text: VILLAGER.thanks, at: 1.2 }, { who: "Kachujin", clip: "", text: VILLAGER.answer, at: 3.4 }]);
+        this.context.score.add(POINTS.stageClear, "Villager freed · team healed", cage.x, ground + 2.6);
+      } else {
+        this.context.party.join(mate.member);
+        this.mates.push(mate);
+        e.carried = this.context.party.carried;
+        e.fireUnlocked = this.context.party.fire;
+        this.converse([{ who: spec.name, clip: "", text: spec.freed, at: 1.2 }, { who: "Kachujin", clip: "", text: ANSWERS[mate.kind], at: 3.9 }]);
+      }
       this.hold = CAGE.scene;
       this.holdZoom = RESCUE_ZOOM;
       this.context.fx.cinema(CAGE.scene + 1.6);
@@ -582,10 +977,47 @@ export class RoadStage implements Stage {
     const v = this.crew.car.vehicle;
     const inTruck = this.crew.mode !== "foot";
     const foes = this.boars.filter((b) => b.active && b.kind !== "dog");
+    const danger = foes.some((b) => Math.abs(b.x - e.x) < 12);
+    // The dog takes the smallest toy on its back while the way is quiet; at a fight they both jump to it.
+    const dog = this.mates.find((m) => m.kind === "dog" && m.active);
+    for (const m of this.mates) {
+      if (m.carrier && (danger || !dog || m.carrier !== dog || !m.carrier.active)) {
+        m.carrier.rider = null;
+        m.carrier = null;
+        m.place(m.x);
+      }
+    }
+    if (dog && !danger && !dog.rider && !inTruck) {
+      const toy = this.mates.find((m) => m.active && m !== dog && m.kind !== "giant" && !m.carrier && Math.abs(m.x - dog.x) < 3);
+      if (toy) {
+        toy.carrier = dog;
+        dog.rider = toy;
+      }
+    }
+    // E beside a downed friend: she kneels and brings it round.
+    if (!this.channel && this.crew.mode === "foot" && this.reviveAsked) {
+      const down = this.mates.find((m) => m.state === "wounded" && Math.abs(m.x - e.x) < 1.8);
+      if (down) this.channel = { mate: down, left: WOUND.revive };
+    }
     let slot = 0;
     for (const mate of this.mates) {
       if (!mate.alive) {
         mate.update(dt, e, 0, null);
+        continue;
+      }
+      // Gorr under her: he goes where she goes.
+      if (mate === this.mount) {
+        mate.x = e.x;
+        mate.y = e.y;
+        mate.vx = e.vx;
+        mate.facing = e.facing;
+        continue;
+      }
+      if (mate.carrier) {
+        mate.x = mate.carrier.x - mate.carrier.facing * 0.1;
+        mate.y = mate.carrier.y + 0.48;
+        mate.facing = mate.carrier.facing;
+        mate.alpha = mate.carrier.alpha;
         continue;
       }
       if (inTruck && mate.state !== "caged") {
@@ -597,7 +1029,7 @@ export class RoadStage implements Stage {
       let foe: (typeof foes)[number] | null = null;
       for (const b of foes) if (!foe || Math.abs(b.x - mate.x) < Math.abs(foe.x - mate.x)) foe = b;
       if (foe && Math.abs(foe.x - mate.x) > 12) foe = null;
-      const struck = mate.update(dt, e, slot, foe);
+      const struck = mate.update(dt, e, slot, foe, () => this.mourn(mate));
       if (mate.state !== "caged") slot++;
       if (!struck) continue;
       const spec = mate.spec;
@@ -617,6 +1049,9 @@ export class RoadStage implements Stage {
       this.context.particles.blood(struck.x - dir * 0.1, struck.y + 1.1, dir, off ? 14 : 6, 1);
       this.context.score.add(off ? POINTS.swordHit : 0, off ? `${spec.name}!` : "", struck.x, struck.y + 1.8);
     }
+    // Villagers on their way home.
+    for (const v2 of this.leaving) v2.update(dt, e, 0, null);
+    for (let i = this.leaving.length - 1; i >= 0; i--) if (this.leaving[i].alpha <= 0) this.leaving.splice(i, 1);
     for (const shot of this.shots) shot.left -= dt;
     while (this.shots.length > 0 && this.shots[0].left <= 0) this.shots.shift();
   }
@@ -626,7 +1061,7 @@ export class RoadStage implements Stage {
     this.context.fx.slowmo(1.1, 0.3);
     this.context.fx.cinema(4);
     this.hold = 2.6;
-    this.holdZoom = 1.65;
+    this.holdZoom = 1.4;
     this.context.audio.sting("loss", 22);
     this.speak({ who: "Kachujin", clip: "", text: LOST, at: 0 });
     this.context.score.add(0, `${mate.spec.name} is lost`, mate.x, mate.y + 1.6);
@@ -647,7 +1082,7 @@ export class RoadStage implements Stage {
           fight.started = true;
           fight.next = ARENA.first;
           // The gang's taunt, played like a film: bars across the screen while it's said.
-          if (fight.spec.dialogue) this.scene = { lines: this.withTeam(fight.spec.dialogue), t: 0, next: 0 };
+          if (fight.spec.dialogue) this.converse(this.withTeam(fight.spec.dialogue));
           this.context.fx.cinema(4.2);
         }
         continue;
@@ -691,7 +1126,9 @@ export class RoadStage implements Stage {
 
   /* One of the gang comes on: leaping the barricade to land in front of it, or running in from behind her. */
   private bringOn(fight: Encounter): void {
-    const kind = pick(fight.spec.kinds);
+    // Grey's chief comes once, last of all: the gang first, then him.
+    const gang = fight.spec.kinds.filter((k) => k !== "chief");
+    const kind = fight.spec.kinds.includes("chief") && fight.left === 1 ? "chief" : pick(gang.length > 0 ? gang : fight.spec.kinds);
     const e = this.crew.explorer.body;
     let foe: Boar;
     if (kind !== "wolf" && Math.random() < ARENA.overWall) {
@@ -705,6 +1142,13 @@ export class RoadStage implements Stage {
       foe.enter(kind === "wolf" ? 7 : 3.5, 0);
     }
     this.context.audio.grunt();
+    // The chief's entrance: the camera goes to him as he comes over the wall, bars across, the ground shaking.
+    if (kind === "chief") {
+      this.shot = { x: foe.x - 1, y: this.terrain.height(foe.x) + 1.6, zoom: 1.35, left: 1.8 };
+      this.context.fx.cinema(2.6);
+      this.context.fx.shake(1);
+      this.speak({ who: "Grey's chief", clip: "", text: "Enough games. Come here.", at: 0 });
+    }
     fight.enemies.push(foe);
     this.boars.push(foe);
   }
@@ -734,11 +1178,64 @@ export class RoadStage implements Stage {
     }
   }
 
-  /* In the air near a rope: the hands catch it. */
-  private stepRopes(): void {
-    if (this.crew.mode !== "foot") return;
+  /*
+   * Ropes: each a chain of links (verlet: gravity, a breath of wind, then the links pulled back to
+   * their length a few times over), pinned at the branch. Held, the link at her hands is pinned
+   * to them (where the 3D model's hands really are) and the rest hangs below; caught, the rope jerks
+   * with her weight. In the air near one, her hands catch it.
+   */
+  private stepRopes(dt: number): void {
     const e = this.crew.explorer;
-    for (const rope of this.ropes) if (e.catchRope(rope.x, rope.y, rope.length)) break;
+    const held = e.ropeAnchor;
+    const hands = this.fighters.hands ?? e.hands;
+    for (const rope of this.ropes) {
+      const links = rope.links;
+      const gust = Math.sin(this.clock * 0.9 + rope.x) * 0.35;
+      for (const l of links) {
+        const vx = (l.x - l.px) * 0.985;
+        const vy = (l.y - l.py) * 0.985;
+        l.px = l.x;
+        l.py = l.y;
+        l.x += vx + gust * dt * dt;
+        l.y += vy - this.gravity * dt * dt;
+      }
+      const holding = held !== null && held.x === rope.x && held.y === rope.y;
+      const grip = holding ? Math.min(ROPE_LINKS, Math.max(1, Math.round((Math.hypot(hands.x - rope.x, hands.y - rope.y) / rope.length) * ROPE_LINKS))) : -1;
+      const step = rope.length / ROPE_LINKS;
+      for (let k = 0; k < ROPE_ITERATIONS; k++) {
+        links[0].x = rope.x;
+        links[0].y = rope.y;
+        if (grip > 0) {
+          links[grip].x = hands.x;
+          links[grip].y = hands.y;
+        }
+        for (let i = 1; i < links.length; i++) {
+          const a = links[i - 1];
+          const b = links[i];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d = Math.hypot(dx, dy) || 1e-6;
+          const pull = (d - step) / d;
+          const aFixed = i - 1 === 0 || i - 1 === grip;
+          const bFixed = i === grip;
+          const share = aFixed ? 1 : bFixed ? 0 : 0.5;
+          a.x += dx * pull * (1 - share);
+          a.y += dy * pull * (1 - share);
+          b.x -= dx * pull * share;
+          b.y -= dy * pull * share;
+        }
+      }
+    }
+    this.clock += dt;
+    if (this.crew.mode !== "foot" || e.riding) return;
+    for (const rope of this.ropes) {
+      if (!e.catchRope(rope.x, rope.y, rope.length)) continue;
+      // Her weight hits the rope: it jerks, and the branch creaks.
+      for (const l of rope.links) l.px -= e.body.vx * 0.012;
+      this.context.audio.land(0.25);
+      this.context.fx.punch(0.04);
+      break;
+    }
   }
 
   /*
@@ -852,7 +1349,88 @@ export class RoadStage implements Stage {
     }
     const v = this.crew.car.vehicle;
     if (!this.crew.car.occupied && v.grounded && v.upright) out.push({ x0: v.x - 2.1, x1: v.x + 2.1, top: v.y + 0.95, vx: v.vx });
+    for (const log of this.logs) out.push({ x0: log.x - 1.3, x1: log.x + 1.3, top: this.waterLevel(log.spec.x) + 0.25, vx: log.vx });
     return out;
+  }
+
+  /*
+   * Boulders: on a hillside, while she's on it, one breaks loose above her every few seconds and
+   * rolls down (gathering speed, flying off ledges, bouncing). It flattens her if it reaches her
+   * (jump it, or smash it with the blade) and hurts a mate in its way.
+   */
+  private stepBoulders(dt: number): void {
+    const e = this.crew.explorer;
+    const b = e.body;
+    const zone = (this.config.boulders ?? []).find((z) => b.x > z.x0 - 4 && b.x < z.x1);
+    this.nextBoulder -= dt;
+    if (zone && this.crew.mode === "foot" && this.nextBoulder <= 0) {
+      this.nextBoulder = zone.every * (0.7 + Math.random() * 0.6);
+      const x = Math.min(zone.x1 + 6, b.x + 16);
+      this.boulders.push({ x, y: this.terrain.height(x) + BOULDER.radius + 0.5, vx: -1, vy: 0, spin: 0, angle: 0 });
+      this.context.audio.land(0.3);
+    }
+    for (const rock of this.boulders) {
+      const ground = this.terrain.height(rock.x) + BOULDER.radius;
+      if (rock.y > ground + 0.05) {
+        rock.vy -= this.gravity * dt;
+      } else {
+        // On the ground: rolling downhill, gathering speed; a hard landing bounces.
+        if (rock.vy < -4) {
+          rock.vy = -rock.vy * 0.3;
+          this.context.particles.dust(rock.x, rock.y - BOULDER.radius, rock.vx, 8, 0.8);
+          this.context.audio.land(0.5);
+          this.context.fx.shake(0.25);
+        } else {
+          rock.vy = 0;
+          rock.y = ground;
+        }
+        rock.vx = Math.max(-BOULDER.speed, rock.vx - 6 * dt);
+      }
+      rock.x += rock.vx * dt;
+      rock.y += rock.vy * dt;
+      rock.angle += (rock.vx / BOULDER.radius) * dt;
+      // The blade smashes it.
+      const box = e.hitbox;
+      if (e.striking && box.x1 > rock.x - BOULDER.radius && box.x0 < rock.x + BOULDER.radius && rock.y - BOULDER.radius < box.y1) {
+        this.debris.burst(rock.x, rock.y, -rock.vx * 0.3, 3, 14, 3, ["#6a625a", "#4a4440", "#8a8278"], 0.3);
+        this.context.particles.dust(rock.x, rock.y, 0, 20, 1.2);
+        this.context.audio.crack();
+        e.recoil();
+        this.context.score.add(BOULDER.points, "Boulder smashed", rock.x, rock.y + 1);
+        rock.y = -100;
+        continue;
+      }
+      // Rolling into her, or into one of the team.
+      if (Math.abs(rock.x - b.x) < BOULDER.radius + 0.3 && b.y < rock.y + BOULDER.radius - 0.15 && b.y > rock.y - BOULDER.radius - 1.6 && e.hurt(rock.x, true)) {
+        this.context.fx.shake(0.8);
+        this.context.fx.buzz(60);
+      }
+      for (const m of this.mates) if (m.open && Math.abs(rock.x - m.x) < BOULDER.radius + 0.25 && Math.abs(rock.y - BOULDER.radius - m.y) < 0.8 && m.hurt(rock.x, BOULDER.damage)) this.speak({ who: m.spec.name, clip: "", text: CRY.down, at: 0 });
+    }
+    this.boulders = this.boulders.filter((r) => r.y > -20 && r.x > (zone?.x0 ?? b.x) - 40);
+  }
+
+  /* The river's surface where a log floats (its banks' height less the drop to the water). */
+  private waterLevel(x: number): number {
+    const river = this.config.features.find((f) => f.kind === "water" && x >= f.x - 2 && x <= f.x + f.size + 2);
+    return river ? Math.min(this.terrain.height(river.x - 0.6), this.terrain.height(river.x + river.size + 0.6)) - WATER_DEPTH : 0;
+  }
+
+  /* In the river: over one, and down below its surface. */
+  private inWater(x: number, y: number): boolean {
+    const river = this.config.features.find((f) => f.kind === "water" && x > f.x + 0.3 && x < f.x + f.size - 0.3);
+    return river !== undefined && y < this.waterLevel(river.x) - 0.35;
+  }
+
+  /* Logs drift back and forth on the current, bobbing (a smooth to-and-fro over their span). */
+  private stepLogs(dt: number): void {
+    for (const log of this.logs) {
+      log.px = log.x;
+      log.phase += (dt * log.spec.speed) / Math.max(0.5, log.spec.span);
+      const x = log.spec.x + log.spec.span * (0.5 - 0.5 * Math.cos(log.phase));
+      log.vx = (x - log.x) / dt;
+      log.x = x;
+    }
   }
 
   /* C: the truck, left somewhere behind, comes down out of the sky beside her. */
@@ -932,7 +1510,8 @@ export class RoadStage implements Stage {
       e.place(at);
       e.heal();
       // The dark clears around her; packs ahead of the checkpoint will come again.
-      for (const b of this.boars) if (b.state !== "gone") b.state = "gone";
+      for (const b of this.boars) if (b.state !== "gone" && b.state !== "wait") b.state = "gone";
+      this.boulders = [];
       for (const m of this.mates) if (m.alive && m.state !== "caged") m.x = at - 1.5;
       for (const a of this.ambushes) {
         if (a.spec.x <= at) continue;
@@ -962,26 +1541,49 @@ export class RoadStage implements Stage {
     // Follow the car where it's drawn (between physics steps), or it shudders against the scene.
     const foot = this.crew.mode !== "car";
     const target = foot ? this.crew.explorer.body : v;
-    const fx = target.px + (target.x - target.px) * alpha;
-    const fy = target.py + (target.y - target.py) * alpha;
-    this.camera.follow(fx, fy, target.vx, Math.max(-2, this.terrain.height(fx)), Math.min(dt, 1 / 20));
+    let fx = target.px + (target.x - target.px) * alpha;
+    let fy = target.py + (target.y - target.py) * alpha;
+    // Lead room: the frame looks ahead of her, the way she's going; in a fight it leans toward the enemy.
+    const body = this.crew.explorer.body;
+    const wantLead = foot ? body.facing * (Math.abs(body.vx) > 0.5 ? DIRECTOR.lead : DIRECTOR.leadIdle) : 0;
+    this.lead += (wantLead - this.lead) * Math.min(1, dt * 1.6);
+    fx += this.fightAt !== null && foot ? (this.fightAt - fx) * 0.3 : this.lead;
+    // A conversation frames its two speakers; a held shot (a kill, a new place) frames its own point.
+    if (this.talk) {
+      fx = this.talk.focus.x;
+      fy = this.talk.focus.y;
+    } else if (this.shot) {
+      this.shot.left -= dt;
+      fx = this.shot.x;
+      fy = this.shot.y;
+      if (this.shot.left <= 0) this.shot = null;
+    }
+    this.camera.follow(fx, fy, foot ? body.vx * 0.5 : target.vx, Math.max(-2, this.terrain.height(fx)), Math.min(dt, 1 / 20));
     const snapped = this.camera.snapped();
     // Shake from ignitions, boosts and crashes (decays in the car).
     const shake = car.shake / PPM;
     const camera = { x: snapped.x + (Math.random() - 0.5) * shake, y: snapped.y + (Math.random() - 0.5) * shake };
     const toScreen = projector(camera, this.width, this.height);
 
+    // The painted backdrop, softened when the camera's in close (a film's shallow focus), never blown up into blocks.
+    ctx.imageSmoothingEnabled = view.zoom > 1.02;
+    ctx.imageSmoothingQuality = "high";
     if (this.world) {
       this.world.drawBack(ctx, camera, time);
+      ctx.imageSmoothingEnabled = false;
       this.world.drawGround(ctx, camera, time);
     }
     if (this.city) {
+      ctx.imageSmoothingEnabled = view.zoom > 1.02;
       this.city.drawBack(ctx, camera);
+      ctx.imageSmoothingEnabled = false;
       this.city.drawGround(ctx, camera);
       this.city.drawLamps(ctx, toScreen, camera, 0);
     }
     if (this.village) {
+      ctx.imageSmoothingEnabled = view.zoom > 1.02;
       this.village.drawBack(ctx, camera);
+      ctx.imageSmoothingEnabled = false;
       this.village.drawGround(ctx, camera);
       this.village.drawLanterns(ctx, toScreen, camera, time);
     }
@@ -1007,34 +1609,39 @@ export class RoadStage implements Stage {
     this.drawBarricades(painter, toScreen);
     this.drawProps(painter, toScreen, time);
     this.drawRopes(ctx, toScreen, time);
+    this.drawLogs(painter, toScreen, alpha);
+    this.drawBoulders(ctx, toScreen);
     this.drawTorches(ctx, painter, toScreen, time);
     this.debris.draw(ctx, toScreen, this.width);
     for (const boar of this.boars) if (!(boar.fighter || boar.animal3D) || !this.fighters.ready) boar.draw(ctx, toScreen, time);
     this.context.particles.draw(painter, toScreen, view.frame);
-    car.draw(ctx, painter, toScreen, alpha, true);
+    this.drawWaves(ctx, toScreen);
+    this.drawBars(ctx, painter, toScreen, time);
+    if (this.truck) car.draw(ctx, painter, toScreen, alpha, true);
     // The people, in 3D, over the scene: the hero when out of the truck, the gangs and the animals.
     // Until the models have loaded, the 2D explorer.
     const hero = foot ? this.crew.explorer : null;
     if (this.fighters.ready) this.drawShadows(ctx, toScreen, hero);
     const nose = car.vehicle.toWorld(2.3, 0.1);
     const lamps = car.wrecked === 0 ? { x: nose.x, y: nose.y, dir: Math.cos(car.vehicle.angle) >= 0 ? 1 : -1 } : null;
-    const dark = this.config.scene === "jungle";
+    const dark = DARK.has(this.config.scene);
     if (dark) this.drawDark(ctx, toScreen, camera, time);
-    const framing = { zoom: view.zoom, pivotX: view.pivot.x, pivotY: view.pivot.y };
+    const framing = { zoom: view.zoom, pivotX: view.pivot.x, pivotY: view.pivot.y, roll: view.roll, ox: view.ox, oy: view.oy };
     const torch = dark && hero ? { x: hero.body.x, y: hero.body.y } : null;
     this.drawShots(ctx, toScreen);
     const lights: SceneLight[] = this.torches.map((x) => ({ x, y: this.terrain.height(x) + TORCH.height, color: TORCH.color, power: TORCH.power }));
     const cages = this.cages.map((c) => ({ x: c.x + (c.shake > 0 ? Math.sin(time * 70) * 0.03 : 0), y: this.terrain.height(c.x), broken: c.broken }));
-    if (!this.fighters.draw(camera, framing, dt, alpha, hero, this.boars, lamps, 1 - Math.max(this.fade, view.fade), torch, this.mates, lights, cages) && hero) hero.draw(ctx, painter, toScreen, alpha, dt, this.gravity);
+    if (!this.fighters.draw(camera, framing, dt, alpha, hero, this.boars, lamps, 1 - Math.max(this.fade, view.fade), torch, [...this.cages.filter((c) => !c.broken).map((c) => c.mate), ...this.mates, ...this.leaving], lights, cages) && hero) hero.draw(ctx, painter, toScreen, alpha, dt, this.gravity);
     this.drawRings(ctx, toScreen, time, true);
     if (this.world) this.world.drawFront(ctx, camera, time, this.context.still);
     this.village?.drawRain(ctx, time, this.context.still);
+    this.drawSnow(ctx, view.dt);
     this.context.score.draw(ctx, toScreen);
   }
 
   /* Ropes over the ravines: a branch overhead, and the rope hanging from it (swaying), or taut to her hands. */
   private drawRopes(ctx: CanvasRenderingContext2D, toScreen: ToScreen, time: number): void {
-    const held = this.crew.explorer.ropeAnchor;
+    void time;
     for (const rope of this.ropes) {
       const [ax, ay] = toScreen(rope.x, rope.y);
       if (ax < -60 || ax > this.width + 60) continue;
@@ -1046,21 +1653,23 @@ export class RoadStage implements Stage {
       ctx.moveTo(ax - 40, ay - 26);
       ctx.quadraticCurveTo(ax - 8, ay - 2, ax + 26, ay - 6);
       ctx.stroke();
-      const holding = held !== null && held.x === rope.x && held.y === rope.y;
-      const hands = this.crew.explorer.hands;
-      const sway = Math.sin(time * 1.3 + rope.x) * 0.25;
-      const [ex, ey] = holding ? toScreen(hands.x, hands.y) : toScreen(rope.x + sway, rope.y - rope.length);
+      // The rope itself: a smooth line through its links, a frayed knot at the end.
+      const points = rope.links.map((l) => toScreen(l.x, l.y));
       ctx.strokeStyle = "#8a6a44";
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.1;
+      ctx.lineJoin = "round";
       ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      // A free rope hangs in a slight curve; held, it's pulled straight.
-      ctx.quadraticCurveTo(holding ? (ax + ex) / 2 : ax + (ex - ax) * 0.2, (ay + ey) / 2, ex, ey);
-      ctx.stroke();
-      if (!holding) {
-        ctx.fillStyle = "#6e5236";
-        ctx.fillRect(ex - 1, ey - 1, 2, 2);
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length - 1; i++) {
+        const mx = (points[i][0] + points[i + 1][0]) / 2;
+        const my = (points[i][1] + points[i + 1][1]) / 2;
+        ctx.quadraticCurveTo(points[i][0], points[i][1], mx, my);
       }
+      const end = points[points.length - 1];
+      ctx.lineTo(end[0], end[1]);
+      ctx.stroke();
+      ctx.fillStyle = "#6e5236";
+      ctx.fillRect(end[0] - 1, end[1] - 1, 2, 2);
       ctx.restore();
     }
   }
@@ -1077,6 +1686,113 @@ export class RoadStage implements Stage {
       painter.disc(sx + 0.3, top - 3 + flicker * 0.3, 2.2, "#ff8a2a");
       painter.disc(sx + 0.3 + flicker * 0.3, top - 4.5 + flicker * 0.4, 1.2, "#ffd28a");
       glow(ctx, sx, top - 3, 22, "255, 140, 60", 0.16 + flicker * 0.02);
+    }
+  }
+
+  /* Boulders: grey rock, lit from above, with a crack that turns as it rolls. */
+  private drawBoulders(ctx: CanvasRenderingContext2D, toScreen: ToScreen): void {
+    for (const rock of this.boulders) {
+      const [x, y] = toScreen(rock.x, rock.y);
+      if (x < -20 || x > this.width + 20) continue;
+      const r = BOULDER.radius * PPM;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rock.angle);
+      ctx.fillStyle = "#4e4842";
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#6e6760";
+      ctx.beginPath();
+      ctx.arc(-r * 0.25, -r * 0.3, r * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#2e2a26";
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.6, 0);
+      ctx.lineTo(r * 0.5, r * 0.2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  /* Logs on the river: round-ended trunks, bark-dark with a pale cut end, bobbing on the water. */
+  private drawLogs(painter: Painter, toScreen: ToScreen, alpha: number): void {
+    for (const log of this.logs) {
+      const [x, y] = toScreen(log.px + (log.x - log.px) * alpha, this.waterLevel(log.spec.x) + 0.1);
+      if (x < -40 || x > this.width + 40) continue;
+      painter.rect(x - 20, y - 4, 40, 5, "#3a2a1c");
+      painter.rect(x - 20, y - 4, 40, 1, "#5a4232");
+      painter.disc(x - 20, y - 1.5, 2.5, "#3a2a1c");
+      painter.disc(x + 20, y - 1.5, 2.5, "#8a6a44");
+    }
+  }
+
+  /* Snow falling on the pass: slow flakes drifting across the view (no gradients; a handful of pixels). */
+  private drawSnow(ctx: CanvasRenderingContext2D, dt: number): void {
+    if (this.flakes.length === 0) return;
+    ctx.fillStyle = "rgba(240, 246, 255, 0.85)";
+    for (const f of this.flakes) {
+      f.y += dt * 18 * f.s;
+      f.x += dt * (6 + Math.sin(f.y * 0.05) * 6) * f.s;
+      if (f.y > this.height) f.y -= this.height;
+      if (f.x > this.width) f.x -= this.width;
+      ctx.fillRect(f.x, f.y, f.s, f.s);
+    }
+  }
+
+  /* The Master Stroke's shockwave: a ring of dust and light racing out along the ground. */
+  private drawWaves(ctx: CanvasRenderingContext2D, toScreen: ToScreen): void {
+    for (const w of this.waves) {
+      const k = w.t / 0.8;
+      const [x, y] = toScreen(w.x, w.y);
+      const r = MASTER.reach * PPM * Math.sqrt(k);
+      ctx.save();
+      ctx.globalAlpha = (1 - k) * 0.8;
+      ctx.strokeStyle = "#ffd9a0";
+      ctx.lineWidth = 2 * (1 - k) + 0.5;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 0.22, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      glow(ctx, x, y - 8, r * 0.8, "255, 200, 140", 0.35 * (1 - k));
+    }
+  }
+
+  /*
+   * Health over heads: the team in the brand's orange (and, when one is down, a blinking call for
+   * help with its time running out), the big enemies (and any hurt one) in red.
+   */
+  private drawBars(ctx: CanvasRenderingContext2D, painter: Painter, toScreen: ToScreen, time: number): void {
+    const bar = (x: number, y: number, share: number, color: string): void => {
+      const [sx, sy] = toScreen(x, y);
+      if (sx < -20 || sx > this.width + 20) return;
+      painter.rect(sx - 8, sy, 16, 2, "rgba(10, 8, 14, 0.7)");
+      painter.rect(sx - 8, sy, 16 * Math.max(0, Math.min(1, share)), 2, color);
+    };
+    const tall: Partial<Record<string, number>> = { raider: 1.95, brute: 2.35, chief: 2.85, bull: 1.75, wolf: 1.05, dog: 0.8 };
+    for (const b of this.boars) {
+      if (!b.active || b.health <= 0 || (!b.big && b.health >= b.maxHealth)) continue;
+      bar(b.x, b.y + (tall[b.kind] ?? 1.5) + 0.35, b.health / b.maxHealth, "#e2382a");
+    }
+    for (const m of this.mates) {
+      if (m.state === "caged" || m.state === "dead" || m.carrier || m === this.mount || m.alpha < 0.5) continue;
+      const top = m.y + m.spec.height + 0.3;
+      if (m.state === "wounded") {
+        // Down: a blinking "!" and its time running out.
+        const [sx, sy] = toScreen(m.x, top + 0.3);
+        if (Math.floor(time * 4) % 2 === 0) {
+          ctx.save();
+          ctx.font = "700 9px system-ui, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#ff7a1a";
+          ctx.fillText("!", sx, sy);
+          ctx.restore();
+        }
+        bar(m.x, top, m.bleeding / WOUND.wait, "#ffb347");
+        continue;
+      }
+      bar(m.x, top, m.health, "#fa6a1a");
     }
   }
 
@@ -1106,8 +1822,8 @@ export class RoadStage implements Stage {
     const e = this.crew.explorer.body;
     const [hx, hy] = toScreen(e.x, e.y + 1.2);
     const shade = ctx.createRadialGradient(hx, hy, LANTERN.inner * PPM, hx, hy, LANTERN.outer * PPM);
-    shade.addColorStop(0, "rgba(2, 4, 8, 0.25)");
-    shade.addColorStop(0.5, `rgba(2, 4, 8, ${LANTERN.dark * 0.7})`);
+    shade.addColorStop(0, "rgba(2, 4, 8, 0.08)");
+    shade.addColorStop(0.5, `rgba(2, 4, 8, ${LANTERN.dark * 0.6})`);
     shade.addColorStop(1, `rgba(2, 4, 8, ${LANTERN.dark})`);
     ctx.fillStyle = shade;
     ctx.fillRect(0, 0, this.width, this.height);
@@ -1154,7 +1870,7 @@ export class RoadStage implements Stage {
     const x0 = this.config.finish;
     const [x, y] = toScreen(x0, this.terrain.height(x0));
     if (x < -120 || x > this.width + 120) return;
-    // The jungle's far side: the truck itself is the finish.
+    // On foot: the truck itself is the finish, or there's no line at all (the way just goes on).
     if (this.onFoot) return;
     if (this.config.scene === "forest") {
       blit(ctx, this.sprites.pad, x, y + 1);
@@ -1260,6 +1976,13 @@ export class RoadStage implements Stage {
         const [x, y] = toScreen(end, this.terrain.height(end - 0.05));
         painter.rect(x - 2, y, 2, f.size * 0.22 * PPM, "#2a2d33");
         for (let i = 0; i < 4; i++) painter.rect(x - 1, y + i * 4, 1, 2, "#ffd27a");
+      } else if (f.kind === "water") {
+        // The river: dark water from its surface down, a pale line of light along the top.
+        const surface = this.waterLevel(f.x);
+        const [x0, y0] = toScreen(f.x - 0.3, surface);
+        const [x1] = toScreen(f.x + f.size + 0.3, 0);
+        painter.rect(x0, y0, x1 - x0, Math.max(0, this.height - y0), this.config.scene === "coast" ? "#0e1c30" : "#10221e");
+        for (let i = 0; i < (x1 - x0) / 6; i++) painter.rect(x0 + i * 6 + Math.sin(this.clock * 2 + i) * 1.5, y0, 3, 0.5, "rgba(200, 220, 230, 0.45)");
       } else if (f.kind === "ravine") {
         // The ravine is a dark chasm from its lips down: without this the sky glow behind the scene shows through the pit.
         {
@@ -1288,10 +2011,12 @@ export class RoadStage implements Stage {
     const foot = this.crew.mode !== "car";
     const stop = this.stopAhead(foot ? e.body.x : v.x, STOP_ZONE);
     const fight = this.fight;
+    const urgent = foot ? this.urgentPrompt() : "";
     if (this.onFoot) prompt = this.footPrompt();
+    else if (urgent) prompt = urgent;
     else if (this.liftoff >= 0) prompt = "Lift-off";
-    else if (foot && this.cages.some((c) => !c.broken && Math.abs(c.x - e.body.x) < 8)) prompt = "F · Break the cage: free the prisoner";
     else if (fight) prompt = `Copycats left: ${fight.left + fight.enemies.filter((b) => b.state !== "down" && b.state !== "gone").length}    F · Sword    Space · Jump`;
+    else if (foot && this.cages.some((c) => !c.broken && Math.abs(c.x - e.body.x) < 8)) prompt = "F · Break the cage: free the prisoner";
     else if (this.boardIn > 0 || this.crew.mode === "walkToDoor") prompt = "Back to the truck";
     else if (foot && this.crew.nearDoor && !stop) prompt = "E · Back in the truck";
     else if (foot && stop) prompt = "F · Sword: beat the gang that holds the barricade    Space · Jump";
@@ -1310,12 +2035,15 @@ export class RoadStage implements Stage {
     const near = (b: Boar): boolean => b.active && Math.abs(b.x - (foot ? e.body.x : v.x)) < 14;
     const mood: Mood = driving ? "drive" : this.boars.some((b) => near(b) && b.kind === "brute") ? "boss" : this.boars.some((b) => near(b) && (b.fighter || b.kind === "wolf" || b.kind === "bull")) ? "fight" : "explore";
     return {
+      talking: this.talk !== null,
       mood,
       armed: foot && this.crew.mode === "foot",
       weapon: e.arm.name,
       fire: !e.fireUnlocked ? "locked" : e.burning > 0 ? "burning" : e.fireRecharge > 0 ? "charging" : "ready",
       fireCharge: e.fireCharge,
-      team: this.mates.filter((m) => m.state !== "caged").map((m) => ({ name: m.spec.name, hearts: m.member.hearts, alive: m.alive })),
+      master: e.master,
+      stroke: e.stroke >= 0,
+      team: this.mates.filter((m) => m.state !== "caged").map((m) => ({ name: m.spec.name, health: m.health, alive: m.alive, down: m.state === "wounded" })),
       prompt,
       speed: driving ? v.speed * 3.6 : null,
       tank: driving ? v.tank / CAR.thrustTank : null,
@@ -1333,11 +2061,28 @@ export class RoadStage implements Stage {
     };
   }
 
+  /* What matters most right now, if anything: a friend down, being swarmed, a ride on offer. */
+  private urgentPrompt(): string {
+    const e = this.crew.explorer;
+    const x = e.body.x;
+    if (this.channel) return `Helping the ${this.channel.mate.spec.name} up…`;
+    const down = this.mates.find((m) => m.state === "wounded");
+    if (down) return Math.abs(down.x - x) < 1.8 ? `E · Help the ${down.spec.name} up` : `The ${down.spec.name} is down! Get to them (${Math.ceil(down.bleeding)}s)`;
+    const close = this.boars.filter((b) => b.active && Math.abs(b.x - x) < 2.6).length;
+    if (e.master >= 1 && close >= 2) return "Surrounded! M · Master Stroke";
+    if (this.mount) return "Riding Gorr    E · Climb down";
+    const giant = this.mates.find((m) => m.kind === "giant" && m.active);
+    if (giant && Math.abs(giant.x - x) < 2 && !this.boars.some((b) => b.active && Math.abs(b.x - x) < 8)) return "E · Ride on Gorr's shoulders";
+    return "";
+  }
+
   /* What to do next in the jungle, from what's just ahead of her. */
   private footPrompt(): string {
     const e = this.crew.explorer;
     const x = e.body.x;
     if (e.ropeAnchor) return "← → Swing    Space · Let go";
+    const urgent = this.urgentPrompt();
+    if (urgent) return urgent;
     const cage = this.cages.find((c) => !c.broken && Math.abs(c.x - x) < 8);
     if (cage) return `F · Break the cage: free the ${cage.mate.spec.name}`;
     if (Math.abs(this.crew.car.vehicle.x - x) < 14) return "The truck! Walk to its door";

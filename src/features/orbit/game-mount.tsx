@@ -31,6 +31,7 @@ const PADS: readonly { action: Action; label: string; glyph: string; caption: st
   { action: "switch", label: "Call the truck down to you", glyph: "C", caption: "Truck" },
   { action: "weapon", label: "Switch weapon", glyph: "⇄", caption: "Weapon" },
   { action: "skill", label: "Light the Fire Sword", glyph: "✹", caption: "Fire" },
+  { action: "master", label: "Master Stroke: throw everyone around you off their feet", glyph: "✦", caption: "Master" },
   { action: "jump", label: "Thrusters: tap to hop, tap again in the air to boost, hold to hover; on foot, jump (twice for a double jump)", glyph: "▲", caption: "" },
 ];
 
@@ -205,6 +206,9 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
           </span>
           <span className={styles.hearts} data-hud="hearts" />
           <span className={styles.arm}>
+            <span className={styles.master} title="Master Stroke: M">
+              <span className={styles.masterFill} />
+            </span>
             <span data-hud="weapon" />
             <span className={styles.fire} title="Fire Sword: V">
               <span className={styles.fireFill} />
@@ -227,6 +231,10 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       </div>
 
       <p data-hud="team" className={styles.team} aria-label="Your team" />
+      {/* A conversation: tap anywhere (or press Space) for the next line, or skip it all. */}
+      <button type="button" data-command="skip" className={styles.skip} onClick={command}>
+        Skip ▸▸
+      </button>
       <p data-hud="prompt" className={styles.prompt} aria-live="polite" />
       <p className={styles.subtitle} aria-live="polite">
         <span data-hud="line-who" className={styles.speaker} /> <span data-hud="line-text" />
@@ -260,10 +268,13 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       <section className={`${styles.card} ${styles.titleCard}`} aria-label="Idea to Orbit">
         <p className={styles.kicker}>A Drimindesign game</p>
         <p className={styles.logo}>Idea to Orbit</p>
-        <p className={styles.lede}>Carry the Spark, a big idea, to the launch pad. Mr. Grey&apos;s Copycats want it: fight them off, cross the night jungle, take it to orbit.</p>
+        <p className={styles.lede}>Carry the Spark, a big idea, through jungles, rivers, hills and caves. Mr. Grey&apos;s Copycats want it. Free the prisoners, build your team, and see how far you get: the road never ends.</p>
         <div className={styles.actions}>
           <button type="button" data-command="start" className={styles.primary} onClick={command}>
             Press Space to start
+          </button>
+          <button type="button" data-command="continue-level" className={`${styles.secondary} ${styles.continue}`} onClick={command}>
+            Continue · Level <span data-hud="saved-level" />
           </button>
           <button type="button" className={`${styles.secondary} ${styles.touchOnly}`} onClick={() => void playFullscreen()}>
             Full screen

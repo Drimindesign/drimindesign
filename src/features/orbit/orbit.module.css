@@ -257,16 +257,7 @@
   }
 
   .prompt {
-    position: absolute;
-    left: 50%;
-    bottom: clamp(5.5rem, 26svh, 9rem);
-    translate: -50% 0;
-    white-space: pre;
-    font-size: var(--text-body-sm);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-shadow: 0 1px 0 rgb(20 15 20 / 0.9);
-    pointer-events: none;
+    display: none;
   }
 
   /* Dialogue: a GTA-style subtitle, the speaker in the brand violet, centred low over the scene. */
@@ -399,21 +390,17 @@
     transition: transform 60ms linear;
   }
 
-  .hints {
-    position: absolute;
-    right: var(--gutter);
-    bottom: var(--gutter);
-    max-width: 60%;
-    text-align: right;
+  .hints,
+  .controlsPrompt {
     font-size: var(--text-label);
-    font-weight: 500;
-    opacity: 0.75;
-    text-shadow: 0 1px 0 rgb(20 15 20 / 0.9);
-    pointer-events: none;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
   }
 
-  .root:not([data-phase="play"]) .hints {
-    visibility: hidden;
+  .pauseCard {
+    max-height: calc(100svh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .failed {
@@ -696,9 +683,6 @@
       display: inline-flex;
     }
 
-    .hints {
-      display: none;
-    }
 
     .prompt {
       bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 7.75rem);

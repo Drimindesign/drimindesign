@@ -484,3 +484,6 @@ Rules: no outlines around shapes; volume through two-tone fills; asymmetric stru
 - [x] Logo package (`assets/brand/RGB`): the mark alone (EM in the D outline, `BrandMark`) sits top-left in the surface's display colour (white on orange), icon → `app/icon.svg`, `apple-icon.png`, `favicon.ico`, PWA icons. Note: the logo files use `#FF5500` while the site brand is `#FA2E00`; confirm which orange is canonical
 - [ ] Tree style reference image
 - [ ] Confirm About/Team and Inquiry surfaces (proposed: light, orange)
+
+
+Game controls: keyboard instructions and contextual action hints live inside the pause (II) menu on desktop and mobile, keeping the gameplay view clear. Touch action pads remain available during play; the pause panel scrolls on short screens.

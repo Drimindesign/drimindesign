@@ -197,7 +197,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         <button type="button" className={styles.mute} onClick={toggleMute} aria-pressed={muted}>
           {muted ? "Sound off" : "Sound on"}
         </button>
-        <button type="button" className={styles.mute} onClick={() => gameRef.current?.input.press("pause")} aria-label="Pause">
+        <button type="button" className={styles.mute} onClick={() => gameRef.current?.input.press("pause")} aria-label="Pause and controls" title="Pause and controls">
           Ⅱ
         </button>
       </div>
@@ -230,7 +230,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         </span>
       </div>
 
-      <p className={styles.hints}>→ drive · Space hop · Space in air boost · hold hover · tap ← → in air flip · E get out · F sword · on foot: Space twice double-jump, catch ropes in the air, hold → at a rock face to climb, Q switch weapon, V Fire Sword, C call the truck · R checkpoint · Esc pause</p>
+
 
       {/* ---- Cards between stages ---- */}
       <section className={`${styles.card} ${styles.titleCard}`} aria-label="Idea to Orbit">
@@ -264,7 +264,9 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
             Quit to title
           </button>
         </div>
-        <p className={styles.small}>R in play: back to the last checkpoint</p>
+        <p className={styles.small}>Controls · use the on-screen buttons on mobile</p>
+        <p className={styles.hints}>→ drive · Space hop · Space in air boost · hold hover · tap ← → in air flip · E get out · F sword · on foot: Space twice double-jump, catch ropes in the air, hold → at a rock face to climb, Q switch weapon, V Fire Sword, C call the truck · R checkpoint · Esc pause</p>
+        <p data-hud="prompt" className={styles.controlsPrompt} />
       </section>
 
       <section className={`${styles.card} ${styles.introCard}`} aria-live="polite">

@@ -197,7 +197,10 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         <button type="button" className={styles.mute} onClick={toggleMute} aria-pressed={muted}>
           {muted ? "Sound off" : "Sound on"}
         </button>
-        <button type="button" className={styles.mute} onClick={() => gameRef.current?.input.press("pause")} aria-label="Pause and controls" title="Pause and controls">
+        <button type="button" className={styles.mute} onClick={() => {
+          gameRef.current?.input.press("pause");
+          gameRef.current?.input.release("pause");
+        }} aria-label="Pause and controls" title="Pause and controls">
           Ⅱ
         </button>
       </div>

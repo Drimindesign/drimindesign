@@ -1,4 +1,5 @@
 import type * as Three from "three";
+import { disposeScene } from "./dispose-scene";
 import { WEAPONS as ARSENAL, type WeaponId } from "../actors/arsenal";
 import { GETUP_TIME, type Boar } from "../actors/boar";
 import type { Explorer } from "../actors/explorer";
@@ -225,6 +226,7 @@ export class Fighters3D {
     makeAnimal: (kind: AnimalKind) => Actor;
     headlight: Three.PointLight;
     torch: Three.PointLight;
+    firelight: Three.PointLight;
     cages: Three.Group[];
     hero: Actor;
     arms: Map<WeaponId, Carried>;
@@ -241,6 +243,7 @@ export class Fighters3D {
   private shown = false;
   private opacity = -1;
   private disposed = false;
+  private release: (() => void) | null = null;
 
   constructor(
     private readonly layer: FigureLayer | null,
@@ -288,6 +291,10 @@ export class Fighters3D {
     }
     t.headlight.intensity = headlight ? HEADLIGHT.intensity : 0;
     if (headlight) t.headlight.position.set(headlight.x + headlight.dir * HEADLIGHT.ahead, headlight.y + 0.7, 1.2);
+    // Keep the light in the scene even when off: toggling fire must not change shader light counts.
+    const burning = hero !== null && hero.alpha > 0.05 && hero.burning > 0 && !hero.sheathed && hero.weapon === "blade";
+    t.firelight.intensity = burning ? 2.2 : 0;
+    if (hero && burning) t.firelight.position.set(hero.body.x + hero.body.facing * 0.6, hero.body.y + 1, 0.4);
     const lantern = LIGHTS[this.light].torch;
     t.torch.intensity = torch && lantern > 0 ? lantern * (1 - TORCH.flicker * (0.5 + 0.5 * Math.sin(performance.now() / 47) * Math.sin(performance.now() / 131))) : 0;
     if (torch) t.torch.position.set(torch.x + (hero?.body.facing ?? 1) * 0.35, torch.y + 1.1, 0.9);
@@ -406,11 +413,11 @@ export class Fighters3D {
   }
 
   dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
     this.canvas?.remove();
-    if (!this.three) return;
-    this.three.renderer.dispose();
-    this.three.renderer.forceContextLoss();
+    this.release?.();
+    this.release = null;
     this.three = null;
   }
 
@@ -517,8 +524,10 @@ export class Fighters3D {
         if (burning) {
           const k = performance.now() / 1000;
           arm.flame.children.forEach((c, i) => {
-            c.scale.setScalar(0.85 + 0.3 * Math.abs(Math.sin(k * (9 + i * 2.3) + i)));
-            (c as Three.Sprite).material.rotation = Math.sin(k * 3 + i) * 0.3;
+            const sprite = c as Three.Sprite;
+            if (!sprite.isSprite) return;
+            sprite.scale.setScalar(0.85 + 0.3 * Math.abs(Math.sin(k * (9 + i * 2.3) + i)));
+            sprite.material.rotation = Math.sin(k * 3 + i) * 0.3;
           });
         }
       }
@@ -713,7 +722,7 @@ export class Fighters3D {
       if (this.disposed || !t) return;
       const sources = new Map(bodies);
       const held = new Map(props);
-      t.makeMate = (kind) => {
+      const makeMate = (kind: MateKind): Actor => {
         if (kind === "dog") return makeAnimal("dog");
         const source = sources.get(kind);
         if (!source) throw new Error(`Missing toy ${kind}`);
@@ -764,6 +773,32 @@ export class Fighters3D {
         play(actor, "Idle_A");
         return actor;
       };
+      // Prepare each companion outside draw(): first appearance must not compile its shaders mid-fight.
+      const prepared = new Map<MateKind, Actor>();
+      for (const kind of kinds) {
+        if (this.disposed) return;
+        const actor = makeMate(kind);
+        actor.root.visible = false;
+        for (const material of actor.materials) material.transparent = true;
+        await t.renderer.compileAsync(actor.root, t.camera, scene);
+        if (this.disposed) return;
+        for (const material of actor.materials) material.transparent = false;
+        await t.renderer.compileAsync(actor.root, t.camera, scene);
+        if (this.disposed) return;
+        actor.root.traverse((node) => {
+          const map = ((node as Three.Mesh).material as Three.MeshStandardMaterial | undefined)?.map;
+          if (map) t.renderer.initTexture(map);
+        });
+        prepared.set(kind, actor);
+        // Yield between figures so decoding and setup cannot monopolise the input thread.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      }
+      if (this.disposed) return;
+      t.makeMate = (kind) => {
+        const actor = prepared.get(kind);
+        if (actor) { prepared.delete(kind); return actor; }
+        return makeMate(kind);
+      };
     } catch {
       // No toys: the team just isn't drawn.
     }
@@ -804,10 +839,18 @@ export class Fighters3D {
       renderer.toneMappingExposure = 1.25;
       this.fit(renderer);
       const scene = new THREE.Scene();
+      let environment: Three.WebGLRenderTarget | null = null;
+      this.release = () => {
+        disposeScene(scene);
+        environment?.dispose();
+        renderer.dispose();
+        renderer.forceContextLoss();
+      };
       // Soft reflections from a neutral room, so skin, cloth and steel read as different surfaces.
       const pmrem = new THREE.PMREMGenerator(renderer);
       const room = new RoomEnvironment();
-      scene.environment = pmrem.fromScene(room, 0.04).texture;
+      environment = pmrem.fromScene(room, 0.04);
+      scene.environment = environment.texture;
       room.dispose();
       pmrem.dispose();
       const look = LIGHTS[this.light];
@@ -822,7 +865,8 @@ export class Fighters3D {
       const torch = new THREE.PointLight(0xffa25a, 0, TORCH.reach, 1.6);
       // Torches and fires in the scene: a few lights, moved to whichever are nearest each frame.
       const lamps = Array.from({ length: SCENE_LIGHTS }, () => new THREE.PointLight(0xff9a4a, 0, 7, 1.7));
-      scene.add(headlight, torch, ...lamps);
+      const firelight = new THREE.PointLight(0xff6a1a, 0, 3.5, 1.8);
+      scene.add(headlight, torch, firelight, ...lamps);
       const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
 
       const heights = new Map<Kind, { height: number; floor: number }>();
@@ -949,9 +993,13 @@ export class Fighters3D {
       const fading = (on: boolean): void => {
         for (const [, actor] of [["hero", hero] as const, ...warm]) for (const m of actor.materials) m.transparent = on;
       };
+      // Include the hidden blade and flame shader in warm-up, before fire can be unlocked.
+      for (const arm of arms.values()) { arm.object.visible = true; if (arm.flame) arm.flame.visible = true; }
       await renderer.compileAsync(scene, camera);
+      if (this.disposed) return;
       fading(true);
       await renderer.compileAsync(scene, camera);
+      if (this.disposed) return;
       fading(false);
       scene.traverse((node) => {
         const map = ((node as Three.Mesh).material as Three.MeshStandardMaterial | undefined)?.map;
@@ -960,6 +1008,7 @@ export class Fighters3D {
       // One hidden render uploads every mesh and skeleton to the GPU now rather than mid-fight.
       renderer.render(scene, camera);
       renderer.clear();
+      for (const arm of arms.values()) { arm.object.visible = false; if (arm.flame) arm.flame.visible = false; }
       for (const [key, actor] of warm) {
         actor.root.visible = false;
         spare.set(key, [...(spare.get(key) ?? []), actor]);
@@ -977,6 +1026,7 @@ export class Fighters3D {
         makeAnimal: (kind) => spare.get(kind)?.pop() ?? makeAnimal(kind),
         headlight,
         torch,
+        firelight,
         cages: [],
         hero,
         arms,
@@ -989,6 +1039,8 @@ export class Fighters3D {
       // The toys come after the fighters (they're only needed once one is found).
       void this.loadToys(THREE, loader, clone, scene, makeAnimal);
     } catch {
+      this.release?.();
+      this.release = null;
       // No WebGL or the models didn't load: the 2D explorer stays.
     }
   }
@@ -1110,9 +1162,6 @@ function flames(THREE: ThreeModule, sword: Three.Object3D): Three.Object3D {
     sprite.scale.setScalar(0.16 - i * 0.012);
     group.add(sprite);
   }
-  const glow = new THREE.PointLight(0xff6a1a, 2.2, 3.5, 1.8);
-  glow.position.y = LONGSWORD.blade * 0.55;
-  group.add(glow);
   group.visible = false;
   sword.add(group);
   return group;

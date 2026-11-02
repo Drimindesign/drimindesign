@@ -491,3 +491,5 @@ Game controls: keyboard instructions and contextual action hints live inside the
 Game audio: pause menu includes touch-friendly Music, Sound effects & animals, and Dialogue sliders (defaults 80%, 80%, 100%). Preferences persist locally. Music ducks under spoken dialogue; prerecorded speech and animal clips load on demand. Device media volume controls the final output.
 
 Animal companions speak their written dialogue in a distinct character voice, just like the toy companions. Barks and growls are additional action effects, not replacements for conversation.
+
+Fire rendering: flame sprites animate independently of a persistent scene light so activation does not change shader light counts. Companions prepare solid/fading shaders before first appearance. Stage teardown releases shared geometry, materials, textures, skeletons, and environment render targets.

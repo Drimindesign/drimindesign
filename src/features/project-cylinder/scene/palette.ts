@@ -16,7 +16,7 @@ export interface StagePalette {
 function readPalette(): StagePalette {
   const styles = typeof document === "undefined" ? null : getComputedStyle(document.documentElement);
   // The scene is client-only; the base colour also provides a safe value before CSS is available.
-  const fallback = "#4c1d95";
+  const fallback = "#fa2e00";
   const colour = (token: string): string => styles?.getPropertyValue(token).trim() || fallback;
   return {
     zenith: colour("--stage-zenith"),
@@ -26,7 +26,7 @@ function readPalette(): StagePalette {
     floorLit: colour("--stage-floor-lit"),
     floorMid: colour("--stage-floor-mid"),
     floorDark: colour("--stage-floor-dark"),
-    figure: styles?.getPropertyValue("--stage-figure").trim() || "#06020f",
+    figure: styles?.getPropertyValue("--stage-figure").trim() || "#140402",
   };
 }
 

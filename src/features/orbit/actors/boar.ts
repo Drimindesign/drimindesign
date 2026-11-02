@@ -4,13 +4,10 @@ import { Ragdoll, type Joint } from "../engine/ragdoll";
 import type { Terrain } from "../engine/terrain";
 import { BOAR, type Sprite } from "../pixel/props";
 
-export type BoarState = "wait" | "charge" | "circle" | "attack" | "block" | "stagger" | "knocked" | "getup" | "flee" | "down" | "blasted" | "gone" | "eat";
-
-/** Taming a bull: feeds it takes, and how long it stops to eat each one (s). */
-export const TAME = { feeds: 3, eat: 2.6 } as const;
+export type BoarState = "wait" | "charge" | "circle" | "attack" | "block" | "stagger" | "knocked" | "getup" | "flee" | "down" | "blasted" | "gone";
 
 /** The creatures on the roads: animals, raiders and brutes. */
-export type BeastKind = "boar" | "wolf" | "dog" | "raider" | "brute" | "bull" | "chief";
+export type BeastKind = "boar" | "wolf" | "dog" | "raider" | "brute" | "chief";
 
 interface BeastSpec {
   /** Top charging speed (m/s) and how hard it accelerates into it (m/s²). */
@@ -38,11 +35,9 @@ const SPECS: Record<BeastKind, BeastSpec> = {
   dog: { speed: 8.5, accel: 14, notice: 22, leapRange: 0, leap: 0, health: 1, mass: 25, scale: 0.62, filter: "sepia(1) saturate(1.4) brightness(0.8)" },
   // Fighters on foot (drawn as 3D models): they walk up, wind up and strike; they don't run off.
   raider: { speed: 2.8, accel: 10, notice: 16, leapRange: 0, leap: 0, health: 3, mass: 90, scale: 1, filter: "none" },
-  brute: { speed: 2.1, accel: 7, notice: 16, leapRange: 0, leap: 0, health: 5, mass: 125, scale: 1, filter: "none" },
-  // A bull (a wild gaur in the jungle): charges whatever moves; massive, it takes a lot of beating before it falls.
-  bull: { speed: 7.5, accel: 9, notice: 24, leapRange: 0, leap: 0, health: 8, mass: 650, scale: 1, filter: "none" },
+  brute: { speed: 2.1, accel: 7, notice: 16, leapRange: 0, leap: 0, health: 4, mass: 125, scale: 1, filter: "none" },
   // Grey's chief: a brute bigger than the rest, the boss of a level; slow, and every blow of his floors you.
-  chief: { speed: 2.2, accel: 7, notice: 18, leapRange: 0, leap: 0, health: 16, mass: 170, scale: 1, filter: "none" },
+  chief: { speed: 2.2, accel: 7, notice: 18, leapRange: 0, leap: 0, health: 8, mass: 170, scale: 1, filter: "none" },
 };
 /**
  * A fighter's swing (s): wind up, the strike window (the only time it hurts), recover. It swings
@@ -110,9 +105,6 @@ export class Boar {
   /** Blows taken so far, and the last one (where it landed, how hard, which way it travelled): the 3D body's reflex reads them. */
   hitSerial = 0;
   lastBlow: { joint: Joint; power: number; dir: number } = { joint: "chest", power: 0, dir: 1 };
-  /** Times it's been fed (a bull: enough and it's tamed), and tamed (it joins her). */
-  fed = 0;
-  tamed = false;
   /** On fire (s left): a burning blade sets it alight; it smokes, glows, and the fire hurts it once more as it goes out. */
   burning = 0;
   /** Tumbling after a car hit or a blast: angle (rad) and spin (rad/s). */
@@ -134,7 +126,7 @@ export class Boar {
   }
 
   get active(): boolean {
-    return this.state !== "wait" && this.state !== "eat" && this.state !== "gone" && this.state !== "blasted" && this.state !== "down" && this.state !== "knocked" && this.state !== "getup";
+    return this.state !== "wait" && this.state !== "gone" && this.state !== "blasted" && this.state !== "down" && this.state !== "knocked" && this.state !== "getup";
   }
 
   /** Limp (a ragdoll): knocked down or fallen for good. */
@@ -223,12 +215,12 @@ export class Boar {
     this.state = "stagger";
   }
 
-  /** Drawn as a 3D animal (the wolf, the dogs, the bull) rather than a 2D sprite. */
+  /** Drawn as a 3D animal (wolves and dogs) rather than a 2D sprite. */
   get animal3D(): boolean {
-    return this.kind === "wolf" || this.kind === "dog" || this.kind === "bull";
+    return this.kind === "wolf" || this.kind === "dog";
   }
 
-  /** Never killed outright (none now: even the bull falls in the end). */
+  /** Never killed outright (all enemies can be defeated). */
   get unkillable(): boolean {
     return false;
   }
@@ -238,23 +230,9 @@ export class Boar {
     return this.spec.health;
   }
 
-  /** Big enough to carry a health bar: the bull, brutes and the chief. */
+  /** Big enough to carry a health bar: brutes and the chief. */
   get big(): boolean {
-    return this.kind === "bull" || this.kind === "brute" || this.kind === "chief";
-  }
-
-  /** Can be tamed with food (a bull, not yet tamed or beaten). */
-  get tameable(): boolean {
-    return this.kind === "bull" && !this.tamed && this.health > 0 && this.state !== "gone" && this.state !== "down";
-  }
-
-  /** Food thrown to it: it skids to a stop and eats; fed enough, it's tamed. */
-  feed(): void {
-    if (!this.tameable) return;
-    this.fed++;
-    this.state = "eat";
-    this.timer = TAME.eat;
-    this.vx *= 0.3;
+    return this.kind === "brute" || this.kind === "chief";
   }
 
   /** Set alight by a burning blade. */
@@ -337,14 +315,6 @@ export class Boar {
       if (this.burning === 0 && this.health > 0 && this.active) this.health--;
     }
     switch (this.state) {
-      case "eat":
-        // Eating: still, calm; after the last feed it's hers, otherwise it goes back to being wild.
-        if (this.grounded) this.vx = approach(this.vx, 0, 14 * dt);
-        if (this.timer === 0) {
-          if (this.fed >= TAME.feeds) this.tamed = true;
-          else this.state = "charge";
-        }
-        break;
       case "wait":
         if (Math.abs(this.x - targetX) < spec.notice) {
           this.state = "charge";
@@ -426,8 +396,8 @@ export class Boar {
         return started;
       case "stagger":
         if (this.grounded) this.vx = approach(this.vx, 0, 14 * dt);
-        if (this.timer === 0) this.state = this.health > 0 ? "charge" : this.kind === "wolf" || this.kind === "bull" ? "down" : "flee";
-        // A wolf (or the bull) that's taken its last blow drops and lies still before fading.
+        if (this.timer === 0) this.state = this.health > 0 ? "charge" : this.kind === "wolf" ? "down" : "flee";
+        // A wolf that's taken its last blow drops and lies still before fading.
         if (this.state === "down") this.timer = DOWN_TIME;
         break;
       case "flee": {
@@ -484,8 +454,6 @@ export class Boar {
    */
   hit(dir: number, power: number, joint: Joint = "chest", heavy = false, damage = 1): boolean {
     this.health = Math.max(0, this.health - damage);
-    // Struck while being tamed: the trust is gone.
-    this.fed = 0;
     this.struck(joint, power, dir);
     const share = 90 / this.spec.mass;
     this.vx = dir * power * share;
@@ -534,7 +502,7 @@ export class Boar {
   /** Caught under the thruster jet: flung up and away, spinning, and gone. */
   blast(dir: number): void {
     if (this.unkillable) {
-      // The jet only rocks a bull back on its heels.
+      // An exceptionally heavy enemy only rocks back on its heels.
       this.vx = dir * 3;
       this.vy = 2;
       this.flash = 0.2;

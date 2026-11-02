@@ -17,7 +17,7 @@
     left: 0;
     right: 0;
     height: clamp(56px, 10svh, 120px);
-    background: linear-gradient(180deg, rgb(12 3 25 / 0.32) 0%, rgb(12 3 25 / 0.1) 45%, transparent 100%);
+    background: linear-gradient(180deg, rgb(60 12 0 / 0.26) 0%, rgb(60 12 0 / 0.08) 45%, transparent 100%);
     pointer-events: none;
   }
 
@@ -75,7 +75,11 @@
 
     .copy {
       width: min(25vw, 26rem);
-      padding-top: var(--control-height);
+      /* The rotating band can cross this column; a solid surface keeps copy and Play legible. */
+      padding: clamp(1rem, 1.8vw, 1.5rem);
+      border-radius: var(--radius-md);
+      background: var(--color-brand-500);
+      border: 1px solid var(--surface-border);
     }
   }
 

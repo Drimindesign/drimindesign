@@ -20,7 +20,7 @@ export const site = {
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   description:
     "Drimindesign turns vision and creativity into reality: a brand, web and motion studio designing identities and websites that move with intent and get remembered.",
-  themeColor: "#4C1D95",
+  themeColor: "#FA2E00",
 } as const;
 
 export const navItems: readonly NavItem[] = [

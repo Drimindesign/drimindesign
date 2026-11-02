@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import {
@@ -78,6 +79,7 @@ function panelOutline(panel: Object3D, camera: Camera, rect: DOMRect, radius: nu
  * Scrolling turns the ring so the next project slides in from the right.
  */
 export function Ring({ projects, dimensions, tier, store }: RingProps): React.ReactElement {
+  const router = useRouter();
   const groupRef = useRef<Group>(null);
   const turn = useRef<SpringState | null>(null);
   const panelRefs = useRef<(Mesh | null)[]>([]);
@@ -168,6 +170,10 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
       if (!panel) return;
       const { camera, rect } = view();
       const project = projects[index % projects.length];
+      if (project.playHref) {
+        router.push(project.playHref);
+        return;
+      }
       openProject({
         slug: project.slug,
         image: projectImageUrl(project, imageWidth),
@@ -195,7 +201,7 @@ export function Ring({ projects, dimensions, tier, store }: RingProps): React.Re
       },
     });
     return () => store.setPanels(null);
-  }, [store, get, projects, imageWidth, radius]);
+  }, [store, get, projects, imageWidth, radius, router]);
 
   const open = (index: number) => (event: ThreeEvent<MouseEvent>): void => {
     if (store.enter < CLICKABLE_FROM || event.delta > CLICK_SLOP) return;

@@ -271,7 +271,7 @@
     translate: -50% 0;
   }
 
-  /* What Revive would do right now, over the prompt; food and Spark Hearts carried, beside the team. */
+  /* What Revive would do right now, over the prompt; Spark Hearts carried, beside the team. */
   .reviveHint {
     position: absolute;
     left: 50%;
@@ -300,20 +300,16 @@
     pointer-events: none;
   }
 
-  .foodCount,
   .heartCount {
     display: none;
   }
 
-  .foodCount {
-    color: #e8c23a;
-  }
+
 
   .heartCount {
     color: #ff6a7a;
   }
 
-  .root[data-food="on"][data-phase="play"] .foodCount,
   .root[data-hearts-carried="on"][data-phase="play"] .heartCount {
     display: inline;
   }
@@ -993,9 +989,8 @@
       opacity: 0.55;
     }
 
-    /* Revive and Feed: big, glowing, in the middle of the screen's bottom edge, shown only when they'd do something. */
-    .pad[data-action="revive"],
-    .pad[data-action="feed"] {
+    /* Revive: big, glowing, in the middle of the screen's bottom edge, shown only when they'd do something. */
+    .pad[data-action="revive"] {
       width: 4rem;
       height: 4rem;
       bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 2rem);
@@ -1008,11 +1003,7 @@
       box-shadow: 0 0 18px rgb(255 160 60 / 0.6);
     }
 
-    .pad[data-action="feed"] {
-      left: calc(50% + 0.4rem);
-      border: 2px solid rgb(232 194 58 / 0.85);
-      box-shadow: 0 0 18px rgb(232 194 58 / 0.55);
-    }
+
 
     @keyframes offer {
       to {
@@ -1020,8 +1011,7 @@
       }
     }
 
-    .root:not([data-revive="on"]) .pad[data-action="revive"],
-    .root:not([data-feed="on"]) .pad[data-action="feed"] {
+    .root:not([data-revive="on"]) .pad[data-action="revive"] {
       display: none;
     }
 

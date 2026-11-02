@@ -15,9 +15,9 @@ const CHAIN: readonly Biome[] = ["jungle", "river", "hills", "hills", "caves", "
 
 /** Each place's name for the title card, a line on what's ahead, and what lives there. */
 const PLACES: Record<Biome, { names: readonly string[]; goal: string; animals: readonly BeastKind[]; gang: readonly BeastKind[] }> = {
-  jungle: { names: ["Deep Jungle", "The Night Jungle", "Wolf Country"], goal: "Ropes over the ravines, wolves in the dark. Keep moving.", animals: ["wolf", "wolf", "wolf", "bull"], gang: ["raider", "raider", "brute"] },
+  jungle: { names: ["Deep Jungle", "The Night Jungle", "Wolf Country"], goal: "Ropes over the ravines, wolves in the dark. Keep moving.", animals: ["wolf", "wolf", "wolf"], gang: ["raider", "raider", "brute"] },
   river: { names: ["The River Crossing", "Black Water", "The Ferry Logs"], goal: "Ride the floating logs across. The water won't wait for you.", animals: ["wolf", "wolf"], gang: ["raider", "raider", "brute"] },
-  hills: { names: ["The High Hills", "Gorr's Hill", "The Cliff Road"], goal: "Climb. Rock face after rock face, to the top.", animals: ["wolf", "bull"], gang: ["raider", "brute", "brute"] },
+  hills: { names: ["The High Hills", "Gorr's Hill", "The Cliff Road"], goal: "Climb. Rock face after rock face, to the top.", animals: ["wolf"], gang: ["raider", "brute", "brute"] },
   caves: { names: ["The Echo Caves", "The Deep Dark", "The Torch Halls"], goal: "Underground. Only the torches and your lantern.", animals: ["wolf"], gang: ["raider", "raider", "brute"] },
   ruins: { names: ["The Old Ruins", "Grey's Outpost", "The Broken Temple"], goal: "Grey's men hold the ruins. Take them back.", animals: ["wolf"], gang: ["raider", "brute", "raider", "brute"] },
   coast: { names: ["The Moon Coast", "Shipwreck Shore", "The Sea Cliffs"], goal: "Along the sea under the moon. Smugglers on the shore.", animals: ["wolf", "dog"], gang: ["raider", "raider", "brute"] },
@@ -94,7 +94,6 @@ export function level(n: number): Level {
   const guards: [number, BeastKind][] = [];
   const boulders: BoulderZone[] = [];
   const walks: Walk[] = [];
-  const food: [number, number][] = [];
   const sparks: [number, number][] = [];
   let x = 22;
   const together = Math.min(4, 2 + Math.floor(n / 7));
@@ -102,9 +101,9 @@ export function level(n: number): Level {
 
   // What each place is made of (the first three sections are its signature, then any of them).
   const flavour: Record<Biome, readonly string[]> = {
-    jungle: ["ravine", "canopy", "graze", "patrol", "steps", "ravine", "drop"],
-    river: ["water", "graze", "patrol", "canopy", "ambush", "ravine", "steps"],
-    hills: ["hill", "graze", "patrol", "hill", "ambush", "steps"],
+    jungle: ["ravine", "canopy", "patrol", "steps", "ravine", "drop"],
+    river: ["water", "patrol", "canopy", "ambush", "ravine", "steps"],
+    hills: ["hill", "patrol", "hill", "ambush", "steps"],
     caves: ["drop", "patrol", "steps", "ravine", "ambush"],
     ruins: ["patrol", "steps", "ravine", "drop", "patrol"],
     coast: ["water", "patrol", "canopy", "steps", "ravine"],
@@ -217,14 +216,6 @@ export function level(n: number): Level {
         x += length + 10;
         break;
       }
-      case "graze": {
-        // A wild bull grazing on the path, food lying before it: feed it three times and it's hers.
-        x += 8;
-        food.push([x, 0.6], [x + 3, 0.6], [x + 6, 0.6]);
-        guards.push([x + 16, "bull"]);
-        x += 26;
-        break;
-      }
       case "patrol": {
         // Grey's men on watch along the way: they see her coming and come at her.
         const count2 = Math.min(4, 2 + Math.floor(n / 8));
@@ -273,7 +264,6 @@ export function level(n: number): Level {
     beasts: guards,
     boulders,
     walks,
-    food,
     sparks,
     ambushes,
     opening: [{ who: "Kachujin", clip: "", text: OPENING[biome], at: 1.4 }],

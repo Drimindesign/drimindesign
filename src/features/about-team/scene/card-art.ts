@@ -12,8 +12,8 @@ import { initialsOf, type TeamMember } from "@/content/team";
 const W = 640;
 /** Texture pixels per design unit (1024 px wide cards). */
 const H = Math.round(W * 1.586);
-const BRAND = "#4c1d95";
-const BRAND_LIGHT = "#7a45d1";
+const BRAND = "#fa2e00";
+const BRAND_LIGHT = "#ff6a3d";
 const INK = "#0a0a0a";
 const MUTED = "#3d3d3d";
 const PAPER = "#ffffff";
@@ -240,7 +240,7 @@ function drawBack(member: TeamMember, fonts: Fonts, resolution: number): HTMLCan
 }
 
 /*
- * Woven strap: brand purple with a darker woven border down each edge and the wordmark
+ * Woven strap: brand orange with a darker woven border down each edge and the wordmark
  * once per repeat, large (half the strap's width) and letter-spaced so it reads at a glance.
  * U runs across, V along; one repeat is 8 strap widths.
  */
@@ -248,7 +248,7 @@ function drawStrap(fonts: Fonts, resolution: number): HTMLCanvasElement {
   const [element, ctx] = canvas(64, 512, resolution);
   ctx.fillStyle = BRAND;
   ctx.fillRect(0, 0, 64, 512);
-  ctx.fillStyle = "rgb(20 6 50 / 0.35)";
+  ctx.fillStyle = "rgb(120 20 0 / 0.3)";
   ctx.fillRect(0, 0, 2.5, 512);
   ctx.fillRect(61.5, 0, 2.5, 512);
   ctx.fillStyle = "rgb(255 255 255 / 0.16)";

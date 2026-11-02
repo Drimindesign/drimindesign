@@ -1,3 +1,4 @@
+import { separateBodies, type SolidBody } from "../engine/body-separation";
 import { Boar, type BeastKind } from "../actors/boar";
 import { Car, type CarEvent } from "../actors/car";
 import { Crew } from "../actors/crew";
@@ -79,8 +80,7 @@ export interface RoadConfig {
    * ground under them, running to `x1`; a way above the danger on the path below.
    */
   walks?: readonly { x0: number; x1: number; above: number }[];
-  /** Food to pick up (for taming bulls) and Spark Hearts (each brings a taken teammate back): x, height above the ground (m). */
-  food?: readonly (readonly [number, number])[];
+  /** Spark Hearts bring a taken teammate back: x and height above ground (m). */
   sparks?: readonly (readonly [number, number])[];
   /** Hillsides with boulders rolling down them. */
   boulders?: readonly BoulderZone[];
@@ -148,7 +148,6 @@ const ANSWERS: Record<MateKind, string> = {
   rogue: "Sure you would. Come on.",
   dog: "Good dog. Let's go.",
   giant: "Then carry me, big one. We've a long way to go.",
-  bull: "Easy... easy. You're one of us now.",
 };
 /** A teammate dragged off by Grey's men (they turn up caged later), and one rescued back. */
 const TAKEN = (name: string): string => `They took the ${name}! I'll come back for you!`;
@@ -156,10 +155,8 @@ const RETURNED = { thanks: "You came back for me!", answer: "Always." } as const
 /** The Mage's revive (from afar, every `recharge` s) and a Spark Heart's: their words. */
 const MAGE_REVIVE = { recharge: 60, reach: 15, line: "Get up! The light is with you." } as const;
 const HEART_LINE = "I'm back! Let's go.";
-/** Throwing food: it reaches a bull this far away (m); she carries at most this much. */
-const FEED = { reach: 7, carry: 10 } as const;
 /** What she rides: how high she sits (m), his stride and spring (as multiples of hers). */
-const MOUNTS: Partial<Record<MateKind, { height: number; stride: number; spring: number }>> = { giant: { height: 2.05, stride: 1.25, spring: 1.4 }, bull: { height: 1.35, stride: 1.45, spring: 1.15 } };
+const MOUNTS: Partial<Record<MateKind, { height: number; stride: number; spring: number }>> = { giant: { height: 2.05, stride: 1.25, spring: 1.4 } };
 /** A villager freed (her team already has one of their kind): their thanks, and hers. */
 const VILLAGER = { thanks: "Thank you! I'll find my way home.", answer: "Run. Don't look back." } as const;
 /** Toys a villager can be (Gorr's cage, once he's with her, holds one of these). */
@@ -208,7 +205,6 @@ const BODY: Partial<Record<string, { half: number; mass: number }>> = {
   chief: { half: 0.58, mass: 170 },
   wolf: { half: 0.42, mass: 45 },
   dog: { half: 0.32, mass: 25 },
-  bull: { half: 0.75, mass: 650 },
   boar: { half: 0.4, mass: 90 },
 };
 
@@ -330,6 +326,8 @@ export class RoadStage implements Stage {
   private readonly ambushes: Ambush[];
   private readonly ropes: { x: number; y: number; length: number; links: { x: number; y: number; px: number; py: number }[] }[];
   private readonly cages: Cage[];
+  /** Travel direction changes between encounters, so a combat turn never flips the whole squad. */
+  private marchFacing = 1;
   private readonly torches: number[];
   /** The team with her (freed here or brought from earlier stages). */
   private readonly mates: Mate[] = [];
@@ -341,10 +339,8 @@ export class RoadStage implements Stage {
   private wasOnRope = false;
   /** The walkways (where their planks lie) and the vines up to them. */
   private readonly walks: { x0: number; x1: number; y: number }[];
-  /** Food and Spark Hearts lying about; food thrown in flight (from, to, s left). */
-  private readonly food: Pickups;
+  /** Spark Hearts lying along the route. */
   private readonly sparks: Pickups;
-  private readonly throws: { x0: number; y0: number; x1: number; y1: number; t: number }[] = [];
   /** Boulders rolling down the hills, and when the next one comes (s). */
   private boulders: { x: number; y: number; vx: number; vy: number; spin: number; angle: number }[] = [];
   private nextBoulder = 0;
@@ -443,7 +439,6 @@ export class RoadStage implements Stage {
       return { x, y, length: ROPE.length, links };
     });
     this.props = (config.props ?? []).map(([x, kind]) => ({ x, kind, broken: false }));
-    this.food = new Pickups((config.food ?? []).map(([x, h]) => [x, Math.max(0, this.terrain.height(x)) + h] as const));
     this.sparks = new Pickups((config.sparks ?? []).map(([x, h]) => [x, Math.max(0, this.terrain.height(x)) + h] as const));
     this.walks = (config.walks ?? []).map((w) => {
       let top = -Infinity;
@@ -455,13 +450,13 @@ export class RoadStage implements Stage {
     // Her team so far comes with her; prisoners not yet freed wait in their cages.
     explorer.carried = context.party.carried;
     explorer.fireUnlocked = context.party.fire;
-    for (const member of context.party.members) if (member.alive) this.mates.push(new Mate(member, explorer.body.x - 1.5, this.terrain, false));
+    for (const member of context.party.members) if (member.alive) this.mates.push(new Mate(member, explorer.body.x - 2 - this.mates.length * 1.6, this.terrain, false));
     // Each cage holds a prisoner who'll join her; if her team already has one of their kind, a villager who'll go home.
     const taken = [...context.party.taken];
     this.cages = (config.cages ?? []).map(([x, kind]) => {
       const held = taken.shift();
       if (held) return { x, blows: CAGE.blows, broken: false, shake: 0, mate: new Mate(held, x, this.terrain, true) };
-      const villager = context.party.has(kind);
+      const villager = kind === "giant" ? context.party.has(kind) : context.party.members.filter((m) => m.alive).length >= 10;
       const who = villager && kind === "giant" ? TOY_KINDS[Math.floor(x) % TOY_KINDS.length] : kind;
       const mate = new Mate(Party.member(who), x, this.terrain, true);
       mate.visitor = villager;
@@ -564,8 +559,7 @@ export class RoadStage implements Stage {
     const party = this.context.party;
     party.reviveRecharge = Math.max(0, party.reviveRecharge - dt);
     if (input.revivePressed) this.revive();
-    if (input.feedPressed) this.throwFood();
-    this.stepTaming(dt);
+    this.stepRescuePickups();
     this.jumpAsked = input.jumpPressed;
     this.stepMount(input);
     // The river's logs move first, so she rides each where it is this step (no lag, no judder).
@@ -855,53 +849,38 @@ export class RoadStage implements Stage {
    * team) is pushed apart along the ground, the lighter one moved more, never through a wall.
    */
   private separate(): void {
-    type Solid = { x: number; y: number; half: number; mass: number; friend: boolean; move: (dx: number) => void };
-    const solids: Solid[] = [];
+    const solids: SolidBody[] = [];
     const e = this.crew.explorer;
     const ground = (x: number): number => this.terrain.height(x);
     const fits = (from: number, to: number): boolean => Math.abs(ground(to) - ground(from)) < 0.45;
     const heroIn = this.crew.mode === "foot" && !e.ragdoll && !e.ropeAnchor && !e.riding && e.body.climb < 0;
     if (heroIn) {
       const spec = BODY.hero ?? { half: 0.32, mass: 60 };
-      solids.push({ x: e.body.x, y: e.body.y, half: spec.half, mass: spec.mass, friend: true, move: (dx) => {
-        if (fits(e.body.x, e.body.x + dx)) e.body.x += dx;
+      solids.push({ x: e.body.x, y: e.body.y, half: spec.half, mass: spec.mass, friend: true, hero: true, move: (dx) => {
+        if (!fits(e.body.x, e.body.x + dx)) return 0;
+        e.body.x += dx;
+        return dx;
       } });
     }
     for (const b of this.boars) {
       if (!b.active && b.state !== "attack" && b.state !== "block") continue;
       const spec = BODY[b.kind] ?? { half: 0.4, mass: b.mass };
       solids.push({ x: b.x, y: b.y, half: spec.half, mass: spec.mass, friend: false, move: (dx) => {
-        if (fits(b.x, b.x + dx)) b.x += dx;
+        if (!fits(b.x, b.x + dx)) return 0;
+        b.x += dx;
+        return dx;
       } });
     }
     for (const m of this.mates) {
       if (!m.active || m.carrier || m === this.mount || m.airborne) continue;
-      solids.push({ x: m.x, y: m.y, half: m.kind === "giant" ? 0.55 : m.kind === "dog" ? 0.3 : 0.24, mass: m.kind === "giant" ? 200 : 30, friend: true, move: (dx) => {
-        if (fits(m.x, m.x + dx)) m.x += dx;
+      solids.push({ x: m.x, y: m.y, half: m.kind === "giant" ? 0.85 : m.kind === "dog" ? 0.3 : 0.32, mass: m.kind === "giant" ? 200 : 30, friend: true, move: (dx) => {
+        if (!fits(m.x, m.x + dx)) return 0;
+        m.x += dx;
+        m.y = ground(m.x);
+        return dx;
       } });
     }
-    for (let i = 0; i < solids.length; i++) {
-      for (let j = i + 1; j < solids.length; j++) {
-        const a = solids[i];
-        const c = solids[j];
-        // Friends walk through her (she's never pushed or dragged by her own team); between
-        // themselves they just keep a little room, so they spread out instead of bunching up.
-        if (a.friend && c.friend) continue;
-        const overlap = a.half + c.half - Math.abs(a.x - c.x);
-        // Only bodies side by side on the ground (one jumping over another passes over it).
-        if (overlap <= 0 || Math.abs(a.y - c.y) > 0.9) continue;
-        const dir = Math.sign(c.x - a.x) || (Math.random() < 0.5 ? 1 : -1);
-        // Against her, an enemy gives way more (she holds her ground; she isn't shoved along).
-        const ma = a === solids[0] && a.friend && !c.friend ? a.mass * 2 : a.mass;
-        const total = ma + c.mass;
-        const pa = overlap * (c.mass / total);
-        const pc = overlap * (ma / total);
-        a.move(-dir * pa);
-        c.move(dir * pc);
-        a.x -= dir * pa;
-        c.x += dir * pc;
-      }
-    }
+    separateBodies(solids);
   }
 
   /*
@@ -919,7 +898,7 @@ export class RoadStage implements Stage {
       ride.place(e.body.x - e.body.facing * 1.2);
       return;
     }
-    // Something to ride beside her (Gorr, or the tamed bull), out of a fight.
+    // Gorr beside her to ride, out of a fight.
     const steed = this.mates.find((m) => MOUNTS[m.kind] !== undefined && m.active && Math.abs(m.x - e.body.x) < 2);
     if (!this.mount && steed && this.crew.mode === "foot" && input.interactPressed && !this.mates.some((m) => m.state === "wounded") && !this.boars.some((b) => b.active && Math.abs(b.x - e.body.x) < 8)) {
       const seat = MOUNTS[steed.kind] ?? { height: RIDE.height, stride: RIDE.stride, spring: RIDE.spring };
@@ -1045,6 +1024,9 @@ export class RoadStage implements Stage {
     const inTruck = this.crew.mode !== "foot";
     const foes = this.boars.filter((b) => b.active && b.kind !== "dog");
     const danger = foes.some((b) => Math.abs(b.x - e.x) < 12);
+    if (!danger && Math.abs(e.vx) > 1) this.marchFacing = Math.sign(e.vx);
+    const formationHero = { x: e.x, facing: this.marchFacing, viewHalf: this.reachOfView };
+    const assigned = new Map<Boar, number>();
     // The dog takes the smallest toy on its back while the way is quiet; at a fight they both jump to it.
     const dog = this.mates.find((m) => m.kind === "dog" && m.active);
     for (const m of this.mates) {
@@ -1055,7 +1037,7 @@ export class RoadStage implements Stage {
       }
     }
     if (dog && !danger && !dog.rider && !inTruck) {
-      const toy = this.mates.find((m) => m.active && m !== dog && m.kind !== "giant" && !m.carrier && Math.abs(m.x - dog.x) < 3);
+      const toy = this.mates.find((m) => m.active && TOY_KINDS.includes(m.kind) && m !== dog && m.kind !== "giant" && !m.carrier && Math.abs(m.x - dog.x) < 3);
       if (toy) {
         toy.carrier = dog;
         dog.rider = toy;
@@ -1075,23 +1057,12 @@ export class RoadStage implements Stage {
         mate.update(dt, e, 0, null);
         continue;
       }
-      // What she rides goes where she goes; at a gallop the bull bowls over anything in front.
+      // Gorr stays directly under his rider.
       if (mate === this.mount) {
         mate.x = e.x;
         mate.y = e.y;
         mate.vx = e.vx;
         mate.facing = e.facing;
-        if (mate.kind === "bull" && Math.abs(e.vx) > 3) {
-          for (const b of foes) {
-            const ahead = (b.x - e.x) * Math.sign(e.vx);
-            if (ahead > 0 && ahead < 1.9 && Math.abs(b.y - e.y) < 1.2) {
-              b.topple(Math.sign(e.vx), 2);
-              this.context.audio.thwack();
-              this.context.fx.shake(0.6);
-              this.context.particles.dust(b.x, b.y, e.vx, 14, 1.2);
-            }
-          }
-        }
         continue;
       }
       if (mate.carrier) {
@@ -1108,9 +1079,13 @@ export class RoadStage implements Stage {
         continue;
       }
       let foe: (typeof foes)[number] | null = null;
-      for (const b of foes) if (!foe || Math.abs(b.x - mate.x) < Math.abs(foe.x - mate.x)) foe = b;
+      for (const b of foes) {
+        if ((assigned.get(b) ?? 0) >= 2 || Math.abs(b.x - e.x) > 16) continue;
+        if (!foe || Math.abs(b.x - mate.x) < Math.abs(foe.x - mate.x)) foe = b;
+      }
+      if (foe) assigned.set(foe, (assigned.get(foe) ?? 0) + 1);
       if (foe && Math.abs(foe.x - mate.x) > 12) foe = null;
-      const struck = mate.update(dt, e, slot, foe, () => this.mourn(mate));
+      const struck = mate.update(dt, formationHero, slot, foe, () => this.mourn(mate));
       if (!struck) continue;
       const spec = mate.spec;
       const dir = Math.sign(struck.x - mate.x) || 1;
@@ -1125,15 +1100,7 @@ export class RoadStage implements Stage {
       } else {
         this.context.audio.thwack();
       }
-      if (mate.kind === "bull") {
-        struck.topple(dir, struck.kind === "bull" ? 3 : 2);
-        this.context.audio.land(0.8);
-        this.context.fx.shake(0.5);
-        this.context.particles.dust(struck.x, struck.y, dir * 4, 18, 1.4);
-        this.context.score.add(POINTS.swordHit, "Gaur charge!", struck.x, struck.y + 1.8);
-        continue;
-      }
-      const off = struck.hit(dir, mate.power, "chest", mate.power > 2, mate.power > 3 ? 2 : 1);
+      const off = struck.hit(dir, mate.power, "chest", mate.power > 2, mate.power);
       this.context.particles.blood(struck.x - dir * 0.1, struck.y + 1.1, dir, off ? 14 : 6, 1);
       this.context.score.add(off ? POINTS.swordHit : 0, off ? `${spec.name}!` : "", struck.x, struck.y + 1.8);
     }
@@ -1216,62 +1183,13 @@ export class RoadStage implements Stage {
     return null;
   }
 
-  /* Feed (its own button): food thrown to the nearest wild bull in reach; it stops and eats. */
-  private throwFood(): void {
-    const party = this.context.party;
-    const e = this.crew.explorer.body;
-    const bull = this.feedTarget();
-    if (!bull || party.food <= 0) return;
-    party.food--;
-    bull.feed();
-    this.throws.push({ x0: e.x, y0: e.y + 1.3, x1: bull.x, y1: bull.y + 0.9, t: 0 });
-    this.context.audio.swing(false, 0.9);
-    this.context.score.add(0, `Fed ${bull.fed}/3`, bull.x, bull.y + 2.2);
-  }
-
-  private feedTarget(): Boar | null {
-    const e = this.crew.explorer.body;
-    let best: Boar | null = null;
-    for (const b of this.boars) if (b.tameable && Math.abs(b.x - e.x) < FEED.reach && (!best || Math.abs(b.x - e.x) < Math.abs(best.x - e.x))) best = b;
-    return best;
-  }
-
-  /*
-   * Pickups (food, Spark Hearts), the food in flight, and a bull fed enough becoming one of hers:
-   * it lowers its head, she speaks to it, and it joins the team.
-   */
-  private stepTaming(dt: number): void {
-    const party = this.context.party;
+  /** Spark Hearts reward exploration and let the player recover fallen soldiers. */
+  private stepRescuePickups(): void {
     const c = this.crew.explorer.centre;
-    if (this.crew.mode === "foot") {
-      const got = Math.min(this.food.collect(c.x, c.y, 1.2), FEED.carry - party.food);
-      if (got > 0) {
-        party.food += got;
-        this.context.audio.pickup();
-        this.context.score.add(0, `Food ${party.food}`, c.x, c.y + 1.4);
-      }
-      if (this.sparks.collect(c.x, c.y, 1.2) > 0) {
-        party.hearts++;
-        this.context.audio.complete();
-        this.context.score.add(POINTS.cell * 3, "Spark Heart!", c.x, c.y + 1.4);
-      }
-    }
-    for (const t of this.throws) t.t += dt;
-    for (let i = this.throws.length - 1; i >= 0; i--) if (this.throws[i].t > 0.45) this.throws.splice(i, 1);
-    for (const b of this.boars) {
-      if (!b.tamed || b.state === "gone") continue;
-      b.state = "gone";
-      const member = Party.member("bull");
-      party.join(member);
-      const bull = new Mate(member, b.x, this.terrain, false);
-      bull.facing = b.facing;
-      this.mates.push(bull);
-      this.context.particles.dust(b.x, b.y, 0, 20, 1);
-      this.context.score.add(POINTS.stageClear, "Gaur tamed!", b.x, b.y + 2.4);
-      this.speak({ who: "Kachujin", clip: "", text: ANSWERS.bull, at: 0 });
-      this.context.fx.cinema(2.4);
-      this.hold = 1.6;
-      this.holdZoom = 1.35;
+    if (this.crew.mode === "foot" && this.sparks.collect(c.x, c.y, 1.2) > 0) {
+      this.context.party.hearts++;
+      this.context.audio.complete();
+      this.context.score.add(POINTS.cell * 3, "Spark Heart!", c.x, c.y + 1.4);
     }
   }
 
@@ -1379,7 +1297,7 @@ export class RoadStage implements Stage {
         if (q.in > 0) continue;
         const ahead = Math.random() < 0.6 ? 1 : -1;
         const foe = new Boar(e.x + ahead * (this.reachOfView + 2.5), this.terrain, q.kind);
-        foe.enter(-ahead * (q.kind === "wolf" ? 7 : q.kind === "bull" ? 6 : 3.5), 0);
+        foe.enter(-ahead * (q.kind === "wolf" ? 7 : 3.5), 0);
         this.boars.push(foe);
         this.context.audio.grunt();
       }
@@ -1728,9 +1646,11 @@ export class RoadStage implements Stage {
       e.place(at);
       e.heal();
       // The dark clears around her; packs ahead of the checkpoint will come again.
-      for (const b of this.boars) if (b.state !== "gone" && b.state !== "wait") b.state = "gone";
+      for (const b of this.boars) {
+        if (b.state !== "gone" && b.state !== "wait") b.state = "gone";
+      }
       this.boulders = [];
-      for (const m of this.mates) if (m.alive && m.state !== "caged") m.x = at - 1.5;
+      for (const [i, m] of this.mates.entries()) if (m.alive && m.state !== "caged") m.place(at - 2 - i * 1.7);
       for (const a of this.ambushes) {
         if (a.spec.x <= at) continue;
         a.sprung = false;
@@ -1824,14 +1744,6 @@ export class RoadStage implements Stage {
     }
     this.drawRings(ctx, toScreen, time, false);
     // Food (a bunch of bananas, a hay bundle) and Spark Hearts (a red heart glowing).
-    for (const f of this.food.items) {
-      if (f.taken) continue;
-      const [x, y] = toScreen(f.x, f.y + Math.sin(time * 2 + f.phase) * 0.06);
-      if (x < -20 || x > this.width + 20) continue;
-      painter.disc(x - 1.5, y, 2.2, "#e8c23a");
-      painter.disc(x + 1.5, y + 0.5, 2.2, "#d9a91c");
-      painter.rect(x - 0.4, y - 4, 0.8, 2.5, "#4a6e32");
-    }
     for (const h of this.sparks.items) {
       if (h.taken) continue;
       const [x, y] = toScreen(h.x, h.y + Math.sin(time * 2.4 + h.phase) * 0.1);
@@ -1840,11 +1752,6 @@ export class RoadStage implements Stage {
       painter.disc(x - 1.6, y - 1, 2.2, "#ff4a5a");
       painter.disc(x + 1.6, y - 1, 2.2, "#ff4a5a");
       painter.poly([[x - 3.6, y - 0.4], [x + 3.6, y - 0.4], [x, y + 3.6]], "#ff4a5a");
-    }
-    for (const t of this.throws) {
-      const k = t.t / 0.45;
-      const [x, y] = toScreen(t.x0 + (t.x1 - t.x0) * k, t.y0 + (t.y1 - t.y0) * k + Math.sin(k * Math.PI) * 1.2);
-      painter.disc(x, y, 1.8, "#e8c23a");
     }
     for (const cell of this.cells.items) {
       if (cell.taken) continue;
@@ -2059,7 +1966,7 @@ export class RoadStage implements Stage {
       painter.rect(sx - 8, sy, 16, 2, "rgba(10, 8, 14, 0.7)");
       painter.rect(sx - 8, sy, 16 * Math.max(0, Math.min(1, share)), 2, color);
     };
-    const tall: Partial<Record<string, number>> = { raider: 1.95, brute: 2.35, chief: 2.85, bull: 1.75, wolf: 1.05, dog: 0.8 };
+    const tall: Partial<Record<string, number>> = { raider: 1.95, brute: 2.35, chief: 2.85, wolf: 1.05, dog: 0.8 };
     for (const b of this.boars) {
       if (!b.active || b.health <= 0 || (!b.big && b.health >= b.maxHealth)) continue;
       bar(b.x, b.y + (tall[b.kind] ?? 1.5) + 0.35, b.health / b.maxHealth, "#e2382a");
@@ -2239,7 +2146,7 @@ export class RoadStage implements Stage {
     };
     for (const b of this.boars) {
       if (!(b.fighter || b.animal3D) || b.state === "gone" || (b.state === "wait" && Math.abs(b.x - this.camera.x) > 20)) continue;
-      const width = b.limp ? 1.7 : b.kind === "bull" ? 2.2 : b.animal3D ? 1.2 : 0.9;
+      const width = b.limp ? 1.7 : b.animal3D ? 1.2 : 0.9;
       oval(b.ragdoll?.points.pelvis.x ?? b.x, b.ragdoll?.points.pelvis.y ?? b.y, width, 1.5);
     }
     if (hero) oval(hero.ragdoll?.points.pelvis.x ?? hero.body.x, hero.body.y, hero.ragdoll ? 1.7 : 0.8, 1.5);
@@ -2337,12 +2244,11 @@ export class RoadStage implements Stage {
     else if (this.crew.canAlight) prompt = "Stopped: E · Get out on foot";
     const driving = this.crew.mode === "car";
     const near = (b: Boar): boolean => b.active && Math.abs(b.x - (foot ? e.body.x : v.x)) < 14;
-    const mood: Mood = driving ? "drive" : this.boars.some((b) => near(b) && b.kind === "brute") ? "boss" : this.boars.some((b) => near(b) && (b.fighter || b.kind === "wolf" || b.kind === "bull")) ? "fight" : "explore";
+    const mood: Mood = driving ? "drive" : this.boars.some((b) => near(b) && b.kind === "brute") ? "boss" : this.boars.some((b) => near(b) && (b.fighter || b.kind === "wolf")) ? "fight" : "explore";
     const party = this.context.party;
     return {
       revive: foot ? this.reviveOffer() : null,
-      feed: foot && party.food > 0 && this.feedTarget() !== null,
-      food: party.food,
+
       sparkHearts: party.hearts,
       talking: this.talk !== null,
       mood,
@@ -2364,7 +2270,7 @@ export class RoadStage implements Stage {
       foot: foot && !this.onFoot,
       line: this.line,
       // A fight is on while anything hostile is up and close, to the hero on foot or the truck.
-      combat: this.boars.some((b) => b.active && (b.fighter || b.kind === "wolf" || b.kind === "bull") && Math.abs(b.x - (foot ? e.body.x : v.x)) < 14),
+      combat: this.boars.some((b) => b.active && (b.fighter || b.kind === "wolf") && Math.abs(b.x - (foot ? e.body.x : v.x)) < 14),
       damage: car.damage,
       boosters: driving ? { have: v.boosters, max: CAR.boosters } : undefined,
     };
@@ -2391,9 +2297,6 @@ export class RoadStage implements Stage {
     const x = e.body.x;
     if (e.ropeAnchor) return "← → Swing    Space · Let go";
     if (e.onVine) return "Climbing…    ← or → with Space · Jump off";
-    const target = this.feedTarget();
-    if (target && this.context.party.food > 0) return `A wild bull: T · Feed it (${target.fed}/3) and it's yours`;
-    if (target) return "A wild bull: find food to tame it, or fight it";
     const vine = this.walks.find((w) => w.x0 - x > -1 && w.x0 - x < 6 && e.body.y < w.y - 1);
     if (vine) return "A vine up the tree: jump at it to climb to the walkway";
     const urgent = this.urgentPrompt();

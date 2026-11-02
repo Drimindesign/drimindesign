@@ -16,7 +16,7 @@ const JET_HALF_WIDTH = 2.4;
 /** Where a blow lands, as a share of the body's height: the wound the blood comes from. */
 const WOUND = { head: 0.9, chest: 0.7, pelvis: 0.5 } as const;
 /** Standing heights (m) of what bleeds. */
-const STATURE: Partial<Record<string, number>> = { raider: 1.9, brute: 2.3, wolf: 0.75, dog: 0.6, bull: 1.5 };
+const STATURE: Partial<Record<string, number>> = { raider: 1.9, brute: 2.3, wolf: 0.75, dog: 0.6 };
 /** Hit-stop: every blow that lands freezes the world this long (s, at this share of speed); the last one longer. */
 const HIT_STOP = { time: 0.06, scale: 0.06 } as const;
 const KILL_STOP = { time: 0.32, scale: 0.22 } as const;
@@ -50,7 +50,11 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
   // On foot, each goes for whoever is nearest: her, or one of her team (if clearly closer).
   const prey = (beast: Boar): { x: number; mate: Mate | null } => {
     let target: { x: number; mate: Mate | null } = { x: e.body.x, mate: null };
-    for (const m of mates) if (m.active && Math.abs(m.x - beast.x) + 0.8 < Math.abs(target.x - beast.x)) target = { x: m.x, mate: m };
+    for (const m of mates) {
+      if (!m.active) continue;
+      const distance = Math.abs(m.x - beast.x);
+      if (distance + 0.8 < Math.abs(target.x - beast.x)) target = { x: m.x, mate: m };
+    }
     return target;
   };
   for (const beast of beasts) {
@@ -178,8 +182,8 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
     // A blow meant for one of the team lands on it.
     const mate = target.mate;
     if (mate?.open && beast.dangerous && Math.abs(beast.x - mate.x) < reach && (!beast.fighter || Math.sign(mate.x - beast.x) === beast.facing)) {
-      // A brute's axe, the chief's or a bull's horns cost three times a wolf's bite.
-      const killed = mate.hurt(beast.x, beast.kind === "brute" || beast.kind === "chief" || beast.kind === "bull" ? 3 : 1);
+      // Soldiers take two points from ordinary strikes, four from skilled heavy opponents.
+      const killed = mate.hurt(beast.x, beast.kind === "brute" || beast.kind === "chief" ? 4 : 2);
       particles.blood(mate.x, mate.y + mate.spec.height * 0.6, Math.sign(mate.x - beast.x) || 1, killed ? 16 : 8, 1);
       audio.thwack();
       if (!beast.fighter) beast.rebound(Math.sign(beast.x - mate.x) || 1);
@@ -187,8 +191,8 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
       continue;
     }
     const facing = !beast.fighter || Math.sign(b.x - beast.x) === beast.facing;
-    // A brute's blow (and the chief's, and a bull's horns) takes the hero off their feet.
-    if (beast.dangerous && facing && Math.abs(beast.x - b.x) < reach && b.y < beast.y + 1.4 && b.y > beast.y - 0.5 && e.hurt(beast.x, beast.kind === "brute" || beast.kind === "bull" || beast.kind === "chief")) {
+    // A brute’s or chief’s blow takes the hero off their feet.
+    if (beast.dangerous && facing && Math.abs(beast.x - b.x) < reach && b.y < beast.y + 1.4 && b.y > beast.y - 0.5 && e.hurt(beast.x, beast.kind === "brute" || beast.kind === "chief")) {
       context.fx.buzz(beast.kind === "brute" ? 70 : 35);
       context.fx.punch(beast.kind === "brute" ? 0.09 : 0.05);
       context.fx.slowmo(HIT_STOP.time * 1.5, HIT_STOP.scale);

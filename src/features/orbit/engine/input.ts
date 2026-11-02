@@ -4,7 +4,7 @@
  * touches the keyboard.
  */
 
-export type Action = "left" | "right" | "jump" | "interact" | "switch" | "planet" | "attack" | "weapon" | "skill" | "master" | "revive" | "feed" | "reset" | "pause";
+export type Action = "left" | "right" | "jump" | "interact" | "switch" | "planet" | "attack" | "weapon" | "skill" | "master" | "revive" | "reset" | "pause";
 
 export interface InputSnapshot {
   move: number;
@@ -21,9 +21,8 @@ export interface InputSnapshot {
   skillPressed: boolean;
   /** The Master Stroke. */
   masterPressed: boolean;
-  /** Bring a teammate back; throw a bull some food. */
+  /** Bring a teammate back. */
   revivePressed: boolean;
-  feedPressed: boolean;
   /** Back to the last checkpoint. */
   resetPressed: boolean;
   pausePressed: boolean;
@@ -47,7 +46,6 @@ const KEYS: Record<string, Action> = {
   KeyV: "skill",
   KeyM: "master",
   KeyH: "revive",
-  KeyT: "feed",
   ShiftLeft: "master",
   KeyR: "reset",
   Escape: "pause",
@@ -153,7 +151,6 @@ export class Input {
       skillPressed: this.pressed.has("skill"),
       masterPressed: this.pressed.has("master"),
       revivePressed: this.pressed.has("revive"),
-      feedPressed: this.pressed.has("feed"),
       resetPressed: this.pressed.has("reset"),
       pausePressed: this.pressed.has("pause"),
     };

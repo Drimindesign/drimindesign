@@ -10,17 +10,17 @@
   --color-white: #ffffff;
   --color-black: #000000;
 
-  --color-brand-50: #f5f0ff;
-  --color-brand-100: #e9ddfc;
-  --color-brand-200: #d3bcf6;
-  --color-brand-300: #b48eec;
-  --color-brand-400: #9160dc;
-  --color-brand-500: #4c1d95;
-  --color-brand-600: #3d1678;
-  --color-brand-700: #2f105d;
-  --color-brand-800: #230b45;
-  --color-brand-900: #17072d;
-  --color-brand-950: #0c0319;
+  --color-brand-50: #fff2ee;
+  --color-brand-100: #ffe0d6;
+  --color-brand-200: #ffbfaa;
+  --color-brand-300: #ff9473;
+  --color-brand-400: #ff6038;
+  --color-brand-500: #fa2e00;
+  --color-brand-600: #d62700;
+  --color-brand-700: #ad1f00;
+  --color-brand-800: #851800;
+  --color-brand-900: #5c1100;
+  --color-brand-950: #330900;
 
   --color-ink-50: #f7f7f7;
   --color-ink-100: #efefef;
@@ -111,20 +111,20 @@
   /* Depth: inner shadows only, never drop shadows on UI. */
   --inset-raise: inset 0 1px 0 0 rgb(255 255 255 / 0.35), inset 0 -3px 0 0 rgb(0 0 0 / 0.22);
   --inset-raise-dark: inset 0 1px 0 0 rgb(255 255 255 / 0.12), inset 0 -3px 0 0 rgb(0 0 0 / 0.5);
-  --inset-raise-light: inset 0 1px 0 0 rgb(255 255 255 / 0.9), inset 0 -3px 0 0 rgb(76 29 149 / 0.22);
+  --inset-raise-light: inset 0 1px 0 0 rgb(255 255 255 / 0.9), inset 0 -3px 0 0 rgb(214 39 0 / 0.22);
   --inset-pressed: inset 0 2px 6px 0 rgb(0 0 0 / 0.3);
 
-  --gradient-primary: linear-gradient(180deg, #6b38c6 0%, #4c1d95 52%, #3a1478 100%);
+  --gradient-primary: linear-gradient(180deg, #ff6038 0%, #fa2e00 52%, #d62700 100%);
   --gradient-ink: linear-gradient(180deg, #2a2a2a 0%, #121212 55%, #0a0a0a 100%);
 
   /* Shared by the ring's CSS loading background and its WebGL room. */
-  --stage-zenith: #3f1680;
-  --stage-glow: #7b46d6;
-  --stage-shade: #36126f;
-  --stage-floor-lit: #5a26a8;
-  --stage-floor-mid: #4a1c91;
-  --stage-floor-dark: #3a1578;
-  --stage-figure: #06020f;
+  --stage-zenith: #e22900;
+  --stage-glow: #ff5b28;
+  --stage-shade: #d42600;
+  --stage-floor-lit: #f22d00;
+  --stage-floor-mid: #df2900;
+  --stage-floor-dark: #c92400;
+  --stage-figure: #140402;
 }
 
 /*
@@ -135,23 +135,23 @@
 [data-surface="brand"],
 body:has(main > [data-surface="brand"]:first-child, main[data-surface="brand"]) > header:not([data-surface]) {
   --surface-bg: var(--color-brand-500);
-  --surface-fg: var(--color-white);
+  --surface-fg: var(--color-ink-950);
   --surface-fg-display: var(--color-white);
-  --surface-fg-muted: rgb(255 255 255 / 0.82);
-  --surface-accent: var(--color-white);
-  --surface-border: rgb(255 255 255 / 0.24);
-  --surface-focus: var(--color-white);
-  --btn-primary-bg: var(--color-white);
-  --btn-primary-fg: var(--color-brand-700);
-  --btn-primary-inset: var(--inset-raise-light);
-  /* Glass over the deep purple reads as a lighter, frosted purple with white labels. */
-  --glass-tint: rgb(255 255 255 / 0.1);
-  --glass-backdrop: blur(5px) saturate(150%) brightness(1.05);
-  --glass-solid: #5f2fb3;
-  --glass-fg: var(--color-white);
-  --glass-fg-muted: rgb(255 255 255 / 0.85);
-  --glass-active-bg: var(--color-white);
-  --glass-active-fg: var(--color-brand-700);
+  --surface-fg-muted: rgb(10 10 10 / 0.72);
+  --surface-accent: var(--color-ink-950);
+  --surface-border: rgb(10 10 10 / 0.16);
+  --surface-focus: var(--color-ink-950);
+  --btn-primary-bg: var(--gradient-ink);
+  --btn-primary-fg: var(--color-white);
+  --btn-primary-inset: var(--inset-raise-dark);
+  /* Regular liquid glass over a bright, saturated surface reads light with dark labels. */
+  --glass-tint: rgb(255 255 255 / 0.14);
+  --glass-backdrop: blur(5px) saturate(165%) brightness(1.1);
+  --glass-solid: #ff7a52;
+  --glass-fg: var(--color-ink-950);
+  --glass-fg-muted: rgb(10 10 10 / 0.8);
+  --glass-active-bg: var(--color-ink-950);
+  --glass-active-fg: var(--color-white);
 }
 
 [data-surface="dark"],
@@ -160,9 +160,9 @@ body:has(main > [data-surface="dark"]:first-child, main[data-surface="dark"]) > 
   --surface-fg: var(--color-white);
   --surface-fg-display: var(--color-white);
   --surface-fg-muted: var(--color-ink-400);
-  --surface-accent: var(--color-brand-300);
+  --surface-accent: var(--color-brand-500);
   --surface-border: var(--color-ink-700);
-  --surface-focus: var(--color-brand-300);
+  --surface-focus: var(--color-brand-400);
   --btn-primary-bg: var(--gradient-primary);
   --btn-primary-fg: var(--color-white);
   --btn-primary-inset: var(--inset-raise);

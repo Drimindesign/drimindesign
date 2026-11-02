@@ -9,12 +9,12 @@ interface LogoProps {
   style?: CSSProperties;
 }
 
-/* Home link with the brand mark, in the surface's display colour (white on the brand purple and on dark). */
+/* Home link with the brand mark, in brand orange on neutral surfaces, ink on orange. */
 export function Logo({ name, className, style }: LogoProps): React.ReactElement {
   return (
     <Link
       href="/"
-      className={cn("flex h-[var(--control-height)] items-center text-fg-display", className)}
+      className={cn("flex h-[var(--control-height)] items-center text-accent", className)}
       style={style}
     >
       <span className="sr-only">{name} home</span>

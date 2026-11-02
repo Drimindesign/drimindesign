@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { projectImageUrl, type Project } from "@/content/projects";
+import { projectHref, projectImageUrl, type Project } from "@/content/projects";
 import { useDeviceTier } from "@/lib/device/use-device-tier";
 import { useWebgl } from "@/lib/device/use-webgl";
 import { easeOutQuart, onLenis } from "@/lib/motion/smooth-scroll";
@@ -51,7 +51,7 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
     const front = store.panels?.front();
     const arrow = arrowRef.current;
     const plain = event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
-    if (!front || !arrow || plain || store.reducedMotion) return;
+    if (project.playHref || !front || !arrow || plain || store.reducedMotion) return;
     if (projects[front.index % projects.length].slug !== project.slug) return;
     event.preventDefault();
     if (flying.current) return;
@@ -64,8 +64,9 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
   // Project pages are prefetched (static shells) once the intro is over, so a click on a
   // panel can navigate the moment the tissue pull covers the screen.
   useEffect(() => {
-    warmUp(async () => projects.forEach((item) => router.prefetch(`/projects/${item.slug}`)));
-  }, [projects, router]);
+    if (!near) return;
+    warmUp(async () => projects.forEach((item) => router.prefetch(projectHref(item))));
+  }, [near, projects, router]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -92,14 +93,13 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
       if (!frame) frame = requestAnimationFrame(update);
     };
 
-    // The ring is the next section after the hero: fetch its code as soon as the intro is
-    // over, and mount the scene two screens early so its first frame is ready on arrival.
-    warmUp(loadScene);
+    // Defer the scene and route-prefetch work until this section enters view. Eager setup
+    // competes with hero hydration on slower devices; the descent gives the scene time to load.
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) setNear(true);
+        if (entry.isIntersecting && entry.intersectionRatio > 0) setNear(true);
       },
-      { rootMargin: "200% 0px" },
+      { rootMargin: "0px", threshold: 0.001 },
     );
     observer.observe(section);
 
@@ -161,7 +161,7 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
 
       {renderer === "fallback" && (
         // Opens the project like a ring panel; keyboard and screen readers use the section's real links.
-        <Link key={project.slug} href={`/projects/${project.slug}`} tabIndex={-1} className={`${styles.fallbackImage} ${styles.caption}`}>
+        <Link key={project.slug} href={projectHref(project)} tabIndex={-1} className={`${styles.fallbackImage} ${styles.caption}`}>
           <Image src={projectImageUrl(project, 1400)} alt={project.alt} fill sizes="(min-width: 64rem) 64rem, 78vw" />
         </Link>
       )}
@@ -180,16 +180,17 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
             <p className="mt-3 text-body-sm font-medium text-fg">
               {project.category}
             </p>
+            {project.description && <p className="mt-3 max-w-[38ch] text-body-sm text-fg">{project.description}</p>}
             {/* Pointer shortcut; keyboard and screen readers use the section's real links. */}
             <Link
-              href={`/projects/${project.slug}`}
+              href={projectHref(project)}
               tabIndex={-1}
               onClick={viewProject}
               className={`${styles.view} mt-6 text-body-sm font-semibold text-fg`}
             >
-              View project{" "}
+              {project.playHref ? "Play game" : "View project"}{" "}
               <span ref={arrowRef} aria-hidden="true" className={styles.arrow}>
-                →
+                {project.playHref ? "▶" : "→"}
               </span>
             </Link>
           </div>

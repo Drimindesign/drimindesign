@@ -360,7 +360,7 @@ export class Game {
         this.score.update(STEP);
       }
       // Presses go to the first step only; held state applies to every step.
-      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, masterPressed: false, revivePressed: false, feedPressed: false, resetPressed: false, pausePressed: false };
+      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, masterPressed: false, revivePressed: false, resetPressed: false, pausePressed: false };
       this.accumulator -= STEP;
       steps++;
     }
@@ -634,13 +634,10 @@ export class Game {
     this.set("foot", hud.foot ? "true" : "false");
     this.set("armed", hud.armed ? "true" : "false");
     this.set("talk", hud.talking ? "on" : "off");
-    // The level's notice; the Revive and Feed buttons (only when they'd do something); food and Spark Hearts carried.
+    // The level's notice; the Revive button (only when they'd do something); Spark Hearts carried.
     this.set("notice", this.notice > 0 ? "on" : "off");
     this.set("revive", hud.revive ? "on" : "off");
     this.text("revive-label", hud.revive ? (this.touch ? hud.revive : `H · ${hud.revive}`) : "");
-    this.set("feed", hud.feed ? "on" : "off");
-    this.text("food", String(hud.food ?? 0));
-    this.set("food", (hud.food ?? 0) > 0 ? "on" : "off");
     this.text("spark-hearts", String(hud.sparkHearts ?? 0));
     this.set("heartsCarried", (hud.sparkHearts ?? 0) > 0 ? "on" : "off");
     this.set("cinema", this.cinemaLeft > 0 ? "on" : "off");

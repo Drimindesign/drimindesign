@@ -114,16 +114,16 @@ const DRIVES: readonly { bone: string; from: Joint; to: Joint; toward: string }[
 /** Mixamo bones load as "mixamorig" + name (the loader drops the colon). */
 const bone = (name: string): string => `mixamorig${name}`;
 /** The animals (Quaternius Ultimate Animated Animals, CC0), each with its own clips, and their standing heights (m). */
-type AnimalKind = "wolf" | "dog" | "bull";
-const ANIMALS: Record<AnimalKind, string> = { wolf: "/game/animals/wolf.glb", dog: "/game/animals/husky.glb", bull: "/game/animals/bull.glb" };
-const ANIMAL_HEIGHT: Record<AnimalKind, number> = { wolf: 0.95, dog: 0.7, bull: 1.65 };
+type AnimalKind = "wolf" | "dog";
+const ANIMALS = { wolf: "/game/animals/wolf.glb", dog: "/game/animals/husky.glb" } as const;
+const ANIMAL_HEIGHT: Record<AnimalKind, number> = { wolf: 0.95, dog: 0.7 };
 /** Turned this far from side-on toward the camera (rad): a three-quarter view reads better than a profile. */
 const THREE_QUARTER = 0.4;
 /**
  * The toys (KayKit Adventurers, CC0): each body, what it holds in which hand slot, and the clips
  * they share (one file). The dog is the husky from the animals.
  */
-const TOYS: Record<Exclude<MateKind, "dog" | "giant" | "bull">, { model: string; right?: string; left?: string }> = {
+const TOYS: Record<Exclude<MateKind, "dog" | "giant">, { model: string; right?: string; left?: string }> = {
   knight: { model: "knight.glb", right: "sword_1handed.gltf", left: "shield_round_color.gltf" },
   barbarian: { model: "barbarian.glb", right: "axe_2handed.gltf" },
   mage: { model: "mage.glb", right: "staff.gltf" },
@@ -132,7 +132,7 @@ const TOYS: Record<Exclude<MateKind, "dog" | "giant" | "bull">, { model: string;
 };
 const TOY_CLIPS = "/game/toys/toy_clips.glb";
 /** Each mate's standing height (m). */
-const MATE_HEIGHT: Record<Exclude<MateKind, "dog" | "giant" | "bull">, number> = { knight: 0.95, barbarian: 1, mage: 0.95, ranger: 0.95, rogue: 0.9 };
+const MATE_HEIGHT: Record<Exclude<MateKind, "dog" | "giant">, number> = { knight: 0.95, barbarian: 1, mage: 0.95, ranger: 0.95, rogue: 0.9 };
 /** The hero's longsword, built in code: slim and long (m), its steel bright and hard. */
 const LONGSWORD = { blade: 1.02, width: 0.034, thick: 0.006, guard: 0.17, grip: 0.21 } as const;
 /** Scene lights (torches, fires) that fall on the figures at once: the nearest few. */
@@ -699,7 +699,7 @@ export class Fighters3D {
       return false;
     }
     if (!actor) {
-      actor = t.makeAnimal(beast.kind === "bull" ? "bull" : beast.kind === "dog" ? "dog" : "wolf");
+      actor = t.makeAnimal(beast.kind === "dog" ? "dog" : "wolf");
       t.enemies.set(beast, actor);
     }
     actor.root.visible = true;
@@ -726,12 +726,11 @@ export class Fighters3D {
         play(actor, "Idle_HitReact1");
         break;
       case "wait":
-      case "eat":
         play(actor, beast.kind === "wolf" && beast.state === "wait" ? "Idle" : "Eating");
         break;
       default:
         if (!beast.grounded) play(actor, "Gallop_Jump");
-        else if (beast.dangerous && speed < 1) play(actor, beast.kind === "bull" ? "Attack_Headbutt" : "Attack");
+        else if (beast.dangerous && speed < 1) play(actor, "Attack");
         else if (speed > 3) play(actor, "Gallop", speed / 6);
         else if (speed > 0.3) play(actor, "Walk", speed / 1.6);
         else play(actor, "Idle");
@@ -870,7 +869,6 @@ export class Fighters3D {
       const held = new Map(props);
       const makeMate = (kind: MateKind): Actor => {
         if (kind === "dog") return makeAnimal("dog");
-        if (kind === "bull") return makeAnimal("bull");
         if (kind === "giant") return t.make("giant");
         const source = sources.get(kind);
         if (!source) throw new Error(`Missing toy ${kind}`);
@@ -946,7 +944,6 @@ export class Fighters3D {
         const reused = t.spare.get(kind)?.pop();
         if (reused) return reused;
         if (kind === "giant") return t.make("giant");
-        if (kind === "bull") return t.makeAnimal("bull");
         const actor = prepared.get(kind);
         if (actor) { prepared.delete(kind); return actor; }
         return makeMate(kind);
@@ -970,7 +967,7 @@ export class Fighters3D {
       loader.setMeshoptDecoder(MeshoptDecoder);
       const kinds = Object.keys(MODELS) as Kind[];
       const bodies = [...new Set(kinds.map((kind) => BODY[kind]))];
-      const animalKinds = Object.keys(ANIMALS) as AnimalKind[];
+      const animalKinds: AnimalKind[] = ["wolf", "dog"];
       const heroProps = Object.values(ARSENAL).flatMap((w) => (w.look.kind === "prop" ? [w.look.file] : []));
       const props = [...new Set([...kinds.flatMap((kind) => WEAPONS[kind].map((w) => w.file)), ...heroProps])];
       const [models, clips, held, animalModels] = await Promise.all([

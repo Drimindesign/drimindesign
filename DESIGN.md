@@ -15,7 +15,7 @@ Rules for using this system in code are in [AGENTS.md](AGENTS.md). Product behav
 
 1. **Physical, not decorative.** Every motion has weight: gravity, spring, cloth, growth. Nothing floats in from nowhere.
 2. **Loud type, quiet UI.** The display type is huge and bold; everything around it (nav, labels, buttons) is small, precise, and calm.
-3. **Three surfaces, one story.** Orange (energy) → Dark (focus on work) → White (growth, story). Each surface has its own token set, so every component works on all three.
+3. **Three surfaces, one story.** White (introduction) → Orange (selected work) → White (growth, story). Each surface has its own token set, so every component works on all three.
 4. **Tactile depth, no drop shadows.** Depth comes from inner shadows, gradients, glass and light, as if the UI were pressed into the surface rather than hovering over it.
 5. **Same experience on every screen.** Fluid tokens scale the composition; quality tiers scale the cost.
 
@@ -36,7 +36,7 @@ Rules for using this system in code are in [AGENTS.md](AGENTS.md). Product behav
 | `orange-200` | `#FFBFAA` | Illustration highlights |
 | `orange-300` | `#FF9473` | Blossoms (tree), soft accents |
 | `orange-400` | `#FF6038` | Button gradient top, hover glow |
-| **`orange-500`** | **`#FA2E00`** | **Brand. Hero surface, primary buttons, accents** |
+| **`orange-500`** | **`#FA2E00`** | **Brand. Ring surface, small buttons and accents** |
 | `orange-600` | `#D62700` | Orange **text/links on white** (5.1:1), button gradient bottom |
 | `orange-700` | `#AD1F00` | Pressed states, deep gradient end |
 | `orange-800` | `#851800` | Illustration shadow |
@@ -76,7 +76,7 @@ Every section declares its surface with `data-surface="orange" | "dark" | "light
 | `--focus-ring` | `ink-950` | `orange-400` | `orange-600` |
 | `--selection-bg` | `ink-950` | `orange-500` | `orange-100` |
 
-**Home page surface map:** Hero = `orange` · Ring = `orange` (lit studio cove) · Roots → Tree = `light` · About/Team = `light` · Inquiry = `orange` · Footer = `dark`.
+**Home page surface map:** Hero = `light` · Ring = `orange` (lit studio cove) · Roots → Tree = `light` · About/Team = `light` · Inquiry = `light` · Footer = `dark`.
 
 ### 2.4 Contrast rules (WCAG 2.2 AA)
 
@@ -493,3 +493,11 @@ Game audio: pause menu includes touch-friendly Music, Sound effects & animals, a
 Animal companions speak their written dialogue in a distinct character voice, just like the toy companions. Barks and growls are additional action effects, not replacements for conversation.
 
 Fire rendering: flame sprites animate independently of a persistent scene light so activation does not change shader light counts. Companions prepare solid/fading shaders before first appearance. Stage teardown releases shared geometry, materials, textures, skeletons, and environment render targets.
+
+### Home showcase and accent balance
+
+The hero remains white. The selected-work ring is the only full orange home section; elsewhere orange is a restrained accent (roughly 10% of the composition), including the brand mark and favicon. Contact stays white and the footer stays dark. Brand orange is `#FA2E00` on every device.
+
+The ring includes Idea to Orbit with a static, tier-sized WebP banner, studio development credit and a Play game link to `/play`. Clicking that panel opens the game directly; other panels retain their tissue transitions. No game engine or live demo runs in the home ring.
+
+On landscape screens, the caption uses a solid orange panel with the existing medium radius and surface border. This keeps the title, description and Play link readable as the band turns behind the column, without changing the camera framing.

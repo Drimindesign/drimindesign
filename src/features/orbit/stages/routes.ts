@@ -123,7 +123,6 @@ export const FOREST_RUN: RoadConfig = {
     [370, "wolf"], [374, "wolf"],
     [470, "wolf"], [474, "wolf"], [478, "wolf"],
     [520, "wolf"], [524, "wolf"], [528, "wolf"],
-    [692, "bull"],
     [740, "wolf"], [744, "wolf"], [748, "wolf"],
     [860, "wolf"], [864, "wolf"], [868, "wolf"], [872, "wolf"],
     [950, "wolf"], [954, "wolf"],
@@ -133,7 +132,7 @@ export const FOREST_RUN: RoadConfig = {
 /**
  * Stage 1: out of a village in the monsoon, at night. Mud stretches that steal two-thirds of the
  * grip (brake early, don't spin the wheels), broken bridges over flooded ravines, auto-rickshaws
- * and painted lorries, a bull that charges the truck, and village dogs that chase it.
+ * and painted lorries, village dogs that chase it.
  */
 export const VILLAGE_RUN: RoadConfig = {
   id: "village",
@@ -188,15 +187,15 @@ export const VILLAGE_RUN: RoadConfig = {
   // The first barricade's gang has a Knight in a cage by the wall.
   cages: [[85, "knight"]],
   beasts: [
-    [395, "dog"], [399, "dog"], [655, "bull"],
-    [840, "dog"], [844, "dog"], [848, "dog"], [1020, "bull"],
+    [395, "dog"], [399, "dog"],
+    [840, "dog"], [844, "dog"], [848, "dog"],
   ],
 };
 
 /**
  * The night jungle, on foot: no road and no truck until the far side. Ravines too wide to jump
  * are crossed on ropes hanging from the branches; rock steps are climbed (or dropped off); wolf
- * packs and a wild gaur come out of the dark around the lantern light. The truck waits at the end.
+ * wolf packs come out of the dark around the lantern light. The truck waits at the end.
  */
 export const JUNGLE_RUN: RoadConfig = {
   id: "jungle",
@@ -232,7 +231,7 @@ export const JUNGLE_RUN: RoadConfig = {
   ambushes: [
     { x: 90, count: 2, kinds: ["wolf"] },
     { x: 205, count: 3, kinds: ["wolf"] },
-    { x: 330, count: 3, kinds: ["wolf", "wolf", "bull"] },
+    { x: 330, count: 3, kinds: ["wolf", "wolf"] },
     { x: 440, count: 4, kinds: ["wolf"] },
     { x: 505, count: 2, kinds: ["raider"] },
   ],

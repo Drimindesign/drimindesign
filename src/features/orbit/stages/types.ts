@@ -81,10 +81,8 @@ export interface StageHud {
   prompt: string;
   /** A conversation is being played (the world holds still; the Skip button shows). */
   talking?: boolean;
-  /** What the Revive button would do now (its label), and whether the Feed button can throw food; food and Spark Hearts carried. */
+  /** What the Revive button would do now (its label), and Spark Hearts carried. */
   revive?: string | null;
-  feed?: boolean;
-  food?: number;
   sparkHearts?: number;
   /** The music's mood. */
   mood?: Mood;

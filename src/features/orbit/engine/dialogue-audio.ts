@@ -67,7 +67,6 @@ export const DIALOGUE_AUDIO: Readonly<Record<string, string>> = {
   "Kachujin:They took the Rogue! I'll come back for you!": "voice-65",
   "Kachujin:They took the Dog! I'll come back for you!": "voice-66",
   "Kachujin:They took the Gorr! I'll come back for you!": "voice-67",
-  "Kachujin:They took the Gaur! I'll come back for you!": "voice-68",
   "Knight:You came back for me!": "voice-69",
   "Barbarian:You came back for me!": "voice-70",
   "Mage:You came back for me!": "voice-71",

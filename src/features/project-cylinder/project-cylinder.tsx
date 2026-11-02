@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { projects } from "@/content/projects";
+import { showcaseProjects as projects, projectHref } from "@/content/projects";
 import { sectionHeightVh, snapOffsetsVh } from "./choreography";
 import { CylinderStage } from "./cylinder-stage";
 import styles from "./project-cylinder.module.css";
@@ -33,10 +33,10 @@ export function ProjectCylinder(): React.ReactElement {
         <ol>
           {projects.map((project) => (
             <li key={project.slug}>
-              <Link href={`/projects/${project.slug}`}>
-                {project.title}: {project.category}
+              <Link href={projectHref(project)}>
+                {project.playHref ? "Play " : ""}{project.title}: {project.category}
               </Link>
-              . {project.alt}.
+              . {project.description ?? project.alt}.
             </li>
           ))}
         </ol>

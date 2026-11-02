@@ -24,6 +24,9 @@ export interface Project {
   /** Short description for alt text and the screen-reader list. */
   alt: string;
   disciplines: readonly Discipline[];
+  /** Playable studio work opens directly, without a case-study transition. */
+  playHref?: string;
+  description?: string;
 }
 
 export const projects: readonly Project[] = [
@@ -91,6 +94,24 @@ export const projects: readonly Project[] = [
     disciplines: ["Web"],
   },
 ];
+
+/** The home ring also showcases our playable studio experiment. */
+export const showcaseProjects: readonly Project[] = [
+  ...projects,
+  {
+    slug: "idea-to-orbit",
+    title: "Idea to Orbit",
+    category: "Game design · Development",
+    description: "A browser adventure designed and developed by Drimindesign. Carry the Spark from a monsoon village to orbit.",
+    alt: "Idea to Orbit: a silver vehicle on a rain-lit village road beneath a moonlit sky",
+    disciplines: ["Web"],
+    playHref: "/play",
+  },
+];
+
+export function projectHref(project: Project): string {
+  return project.playHref ?? `/projects/${project.slug}`;
+}
 
 export function projectBySlug(slug: string): Project | undefined {
   return projects.find((project) => project.slug === slug);

@@ -505,3 +505,5 @@ On landscape screens, the caption uses a solid orange panel with the existing me
 ### Orbit progress strip
 
 A short, borderless progress line sits at the top center of the game. A white queen dot and small mint soldier dots show world positions automatically; amber indicates combat and red indicates wounded soldiers. A small metre counter sits below the line. The strip has no controls, background panel, expansion, motion effects or pause behavior. Character rendering, materials and lighting match commit 8a92b1d.
+
+Orbit objectives appear as a small, centered two-line subtitle below the progress strip. The first line states the next action; the second gives the mission Knight's state, health and direction/distance. Captured soldiers show checkpoint recovery instructions. Dialogue subtitles and character lighting remain unchanged.

@@ -1056,6 +1056,36 @@ export class RoadStage implements Stage {
     mate.order = { kind: order.kind, x: order.kind === "hold" ? mate.x : Math.max(0, Math.min(this.config.finish, order.x ?? mate.x)) };
   }
 
+  /** Small, live instructions use the actual actor, including a soldier outside the camera view. */
+  private missionGuidance(): string {
+    const queenX = this.crew.mode === "car" ? this.crew.car.vehicle.x : this.crew.explorer.body.x;
+    const point = (x: number): string => `${x < queenX ? "←" : "→"} ${Math.round(Math.abs(x - queenX))} m`;
+    if (!this.mission) {
+      const gate = this.stops.find((s) => !s.broken && s.x >= queenX - 2);
+      return gate ? `Clear the guards to open the gate · ${point(gate.x)}` : `Reach the exit · ${point(this.config.finish)}`;
+    }
+    const state = this.mission.snapshot();
+    if (!state.cageOpen) {
+      const cage = `Knight: imprisoned · ${point(state.cageX)}`;
+      if (state.keyHeld) return `Key collected · Go to the cage and press E to unlock\n${cage}`;
+      if (state.keyAvailable) return `Collect the dropped key with E · ${point(state.keyX)}\n${cage} · F can also break the cage`;
+      if (state.phase === "transporting" || state.phase === "intercept") return `Intercept the prison cart · E with key, or F to break the cage\n${cage}`;
+      return `Free the Knight · Get the guard's key, or break the cage with F\n${cage} · Transfer in ${Math.ceil(state.secondsRemaining)}s`;
+    }
+    const member = this.cages[0]?.mate.member;
+    const knight = this.mates.find((m) => m.member === member);
+    if (!member?.alive || !knight || knight.state === "dead") {
+      return "Knight: captured · Cannot extract alone\nPress R to recover from the checkpoint";
+    }
+    if (knight.state === "wounded") return `Knight: down · ${point(knight.x)}\nStand beside him and press E to revive before he is captured`;
+    const status = knight.alpha === 0 && this.crew.mode === "car"
+      ? "Knight: alive · aboard your truck"
+      : `Knight: alive · ${Math.ceil(knight.health * 100)}% health · ${point(knight.x)}`;
+    const atExit = Math.abs(queenX - this.config.finish) <= 5;
+    if (atExit && Math.abs(knight.x - this.config.finish) > 5) return `Wait here for the Knight, or go back to help him\n${status}`;
+    return `Escort the Knight to the exit · ${point(this.config.finish)}${queenX > this.config.finish + 5 ? " · Turn back" : ""}\n${status}`;
+  }
+
   private routeMap(): RouteMapSnapshot {
     const e = this.crew.explorer.body;
     const queenX = this.crew.mode === "car" ? this.crew.car.vehicle.x : e.x;
@@ -1141,7 +1171,8 @@ export class RoadStage implements Stage {
     const foes = this.boars.filter((b) => b.active && b.kind !== "dog");
     const danger = foes.some((b) => Math.abs(b.x - e.x) < 12);
     if (!danger && Math.abs(e.vx) > 1) this.marchFacing = Math.sign(e.vx);
-    const formationHero = { x: e.x, facing: this.marchFacing, viewHalf: this.reachOfView };
+    // Boarding must change the rendezvous to the live truck, not the queen's parked foot body.
+    const formationHero = { x: inTruck ? v.x : e.x, facing: this.marchFacing, viewHalf: this.reachOfView };
     this.navigator.setBlockedRopes(this.crew.explorer.ropeAnchor ? [this.crew.explorer.ropeAnchor.x] : []);
     const assigned = new Map<Boar, number>();
     // The dog takes the smallest toy on its back while the way is quiet; at a fight they both jump to it.
@@ -2387,7 +2418,7 @@ export class RoadStage implements Stage {
       master: e.master,
       stroke: e.stroke >= 0,
       routeMap: this.routeMap(),
-      objective: this.mission ? `${this.mission.snapshot().objective}${this.mission.snapshot().phase === "key-or-breach" ? ` · Transfer in ${Math.ceil(this.mission.snapshot().secondsRemaining)}s` : ""}` : undefined,
+      objective: this.missionGuidance(),
       team: this.mates.filter((m) => m.state !== "caged").map((m) => ({ name: m.spec.name, distance: Math.round(m.x - e.body.x), fighting: m.state === "attack", health: m.health, alive: m.alive, down: m.state === "wounded" })),
       prompt,
       speed: driving ? v.speed * 3.6 : null,

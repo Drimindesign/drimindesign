@@ -203,3 +203,42 @@ test("prison transport stops at solid scenery and resumes only when cleared", ()
   stage.stepMission(1 / 120, { interactPressed: false });
   assert.ok(stage.mission.snapshot().cageX > 85);
 });
+
+test("guidance tracks the key, moving prison, wounded Knight and capture after removal", () => {
+  const stage = makeStage();
+  stage.mission.update(0, 85);
+  stage.mission.markKeyCarrierDefeated(55);
+  stage.crew.explorer.body.x = 55;
+  assert.match(stage.missionGuidance(), /Collect the dropped key/);
+  stage.mission.pickupKey(55);
+  assert.match(stage.missionGuidance(), /Key collected.*press E/);
+  stage.crew.explorer.body.x = 85;
+  breach(stage);
+  const knight = stage.cages[0].mate;
+  knight.health = 0.5;
+  knight.x = 150;
+  stage.crew.mode = "car";
+  stage.mates = [knight];
+  assert.match(stage.missionGuidance(), /Wait here/);
+  assert.match(stage.missionGuidance(), /alive.*50%.*← 180 m/);
+  knight.state = "wounded";
+  assert.match(stage.missionGuidance(), /Knight: down.*← 180 m/);
+  knight.member.alive = false;
+  stage.mates = [];
+  assert.match(stage.missionGuidance(), /captured.*\nPress R/);
+  assert.equal(stage.rescueComplete(), false);
+});
+
+test("soldiers approach the current truck rather than the abandoned foot position", () => {
+  const stage = makeStage();
+  stage.boars = []; stage.shots = []; stage.marchFacing = 1;
+  stage.navigator = { setBlockedRopes() {} };
+  stage.crew.mode = "car";
+  let destination;
+  stage.mates = [{ x: 100, y: 0, alive: true, active: true, alpha: 1, member: { alive: true },
+    state: "follow", kind: "knight", power: 1,
+    update(_dt, hero) { destination = hero.x; return null; } }];
+  stage.stepMates(1 / 120);
+  assert.equal(destination, 330);
+  assert.equal(stage.mates[0].x, 100, "boarding cannot teleport the soldier");
+});

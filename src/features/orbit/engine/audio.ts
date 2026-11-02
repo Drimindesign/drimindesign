@@ -1,5 +1,5 @@
 /*
- * Every sound in the game, generated live with Web Audio: no sound files. The context is
+ * Web Audio effects, streamed music, and prerecorded dialogue and animal sounds. The context is
  * created on the first pointer or key press (browsers block audio before a gesture).
  *
  * The mix is built to be easy on the ears: everything runs through a soft compressor and a
@@ -9,6 +9,8 @@
  * tuned to one pentatonic scale, so overlapping sounds stay consonant.
  */
 
+import { DEFAULT_VOLUMES, type AudioChannel } from "./audio-settings";
+import { DIALOGUE_AUDIO } from "./dialogue-audio";
 import type { Mood } from "../stages/types";
 
 export interface AudioState {
@@ -26,7 +28,12 @@ export interface AudioState {
   mood?: Mood;
 }
 
-const MASTER = 0.65;
+const MASTER = 0.85;
+/** Bring the quiet streamed score up to phone-speaker level without changing its source files. */
+const MUSIC_BOOST = 3;
+/** Keep the score at 22% of its level under audible dialogue. */
+const DIALOGUE_DUCK = 0.22;
+
 /**
  * The score: Kevin MacLeod (incompetech.com), CC BY 4.0, re-encoded at 72 kb/s and streamed (only
  * the pieces a run reaches are ever fetched). Each moment has its piece and its level, low under
@@ -71,6 +78,18 @@ export class GameAudio {
   private noise: AudioBuffer | null = null;
   private thrust: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private muted = false;
+  private levels = { ...DEFAULT_VOLUMES };
+  private effects: GainNode | null = null;
+  private speech: GainNode | null = null;
+  private voiceSource: AudioBufferSourceNode | null = null;
+  private voiceSerial = 0;
+
+  setVolume(channel: AudioChannel, value: number): void {
+    this.levels[channel] = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+    const node = channel === "effects" ? this.effects : channel === "voice" ? this.speech : null;
+    if (node && this.ctx) node.gain.setTargetAtTime(this.levels[channel], this.ctx.currentTime, 0.05);
+    if (channel === "music" && this.ctx) for (const piece of this.tracks.values()) piece.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05);
+  }
   private readonly tracks = new Map<Track, { element: HTMLAudioElement; gain: GainNode; idle: number }>();
   /** A piece played over the moment's own (a rescue, a loss) until this time (s, audio clock). */
   private playing: { track: Track; until: number } | null = null;
@@ -118,10 +137,17 @@ export class GameAudio {
     reverb.buffer = roomImpulse(ctx, 1.8);
     const reverbLevel = ctx.createGain();
     reverbLevel.gain.value = 0.35;
-    reverb.connect(reverbLevel).connect(compressor);
+    reverb.connect(reverbLevel);
     const dry = ctx.createGain();
     const wet = ctx.createGain();
-    dry.connect(compressor);
+    this.effects = ctx.createGain();
+    this.effects.gain.value = this.levels.effects;
+    this.effects.connect(compressor);
+    reverbLevel.connect(this.effects);
+    this.speech = ctx.createGain();
+    this.speech.gain.value = this.levels.voice;
+    this.speech.connect(compressor);
+    dry.connect(this.effects);
     wet.connect(reverb);
     this.bus = { dry, wet };
 
@@ -152,6 +178,7 @@ export class GameAudio {
     if (!this.ctx) return null;
     try {
       const response = await fetch(url);
+      if (!response.ok) return null;
       return await this.ctx.decodeAudioData(await response.arrayBuffer());
     } catch {
       return null;
@@ -173,19 +200,28 @@ export class GameAudio {
   }
 
   /** A spoken line (a small recorded file under /audio/voice/), with the music dipped under it. */
-  say(line: string): void {
+  say(line: string, text = "", speaker = ""): void {
     if (!this.ctx) return;
-    let buffer = this.voices.get(line);
+    const serial = ++this.voiceSerial;
+    this.voiceSource?.stop();
+    this.voiceSource = null;
+    const clip = line || DIALOGUE_AUDIO[`${speaker}:${text}`];
+    if (!clip) return;
+    let buffer = this.voices.get(clip);
     if (!buffer) {
-      buffer = this.decode(`/audio/voice/${line}.mp3`);
-      this.voices.set(line, buffer);
+      buffer = this.decode(`/audio/voice/${clip}.mp3`);
+      this.voices.set(clip, buffer);
     }
-    void buffer.then((b) => {
-      if (!b || !this.ctx) return;
-      this.sample(b, 1, 0.9, 0.12);
-      const now = this.ctx.currentTime;
-      for (const m of this.tracks.values()) m.gain.gain.setTargetAtTime(Math.min(m.gain.gain.value, 0.03), now, 0.08);
-      this.duckUntil = now + b.duration;
+    void buffer.then((decoded) => {
+      const ctx = this.ctx;
+      if (!decoded || !ctx || !this.speech || serial !== this.voiceSerial || ctx.state !== "running") return;
+      const source = ctx.createBufferSource();
+      source.buffer = decoded;
+      source.connect(this.speech);
+      this.voiceSource = source;
+      source.onended = () => { source.disconnect(); if (this.voiceSource === source) this.voiceSource = null; };
+      source.start();
+      this.duckUntil = ctx.currentTime + decoded.duration;
     });
   }
 
@@ -193,6 +229,10 @@ export class GameAudio {
 
   /** The tab is hidden or the game stopped: silence everything, music included. */
   suspend(): void {
+    this.voiceSerial++;
+    this.voiceSource?.stop();
+    this.voiceSource = null;
+    this.duckUntil = 0;
     for (const m of this.tracks.values()) m.element.pause();
     void this.ctx?.suspend();
   }
@@ -242,7 +282,7 @@ export class GameAudio {
     const mood = state.mood ?? (state.driving ? "drive" : "explore");
     if (this.playing && now > this.playing.until) this.playing = null;
     const wanted: Track = this.playing ? this.playing.track : mood === "boss" ? "boss" : mood === "fight" || this.fightLeft > 0 ? "fight" : mood;
-    const ducked = now < this.duckUntil;
+    const ducked = now < this.duckUntil && this.levels.voice > 0;
     for (const name of Object.keys(TRACKS) as Track[]) {
       const on = name === wanted;
       const piece = on ? this.track(ctx, name) : this.tracks.get(name);
@@ -250,9 +290,9 @@ export class GameAudio {
       piece.idle = on ? 0 : piece.idle + 1 / 60;
       if (on && piece.element.paused) void piece.element.play().catch(() => undefined);
       if (!on && piece.idle > IDLE_PAUSE && !piece.element.paused) piece.element.pause();
-      if (ducked) continue;
+
       const level = on ? TRACKS[name].level * (name === "drive" ? 1 - state.thrust * 0.35 : 1) : 0;
-      piece.gain.gain.setTargetAtTime(level, now, on ? 0.9 : 1.4);
+      piece.gain.gain.setTargetAtTime(level * MUSIC_BOOST * this.levels.music * (ducked ? DIALOGUE_DUCK : 1), now, ducked ? 0.08 : on ? 0.9 : 1.4);
     }
   }
 
@@ -373,6 +413,23 @@ export class GameAudio {
     this.bell(SCALE[this.pickupStep + 1] * 2, 0.025, 0.04, 0.5);
   }
 
+  private readonly animalBuffers = new Map<string, Promise<AudioBuffer | null>>();
+  private animalNext = 0;
+
+  /** Recorded CC0 dog vocals; wolves use a lower growl, boars retain their snort. */
+  animal(kind: string, warning = false): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.currentTime < this.animalNext) return;
+    this.animalNext = ctx.currentTime + 0.9;
+    if (kind !== "dog" && kind !== "wolf") { this.grunt(); return; }
+    const sound = warning || kind === "wolf" ? "growl" : "bark";
+    let buffer = this.animalBuffers.get(sound);
+    if (!buffer) { buffer = this.decode(`/audio/animals/${sound}.mp3`); this.animalBuffers.set(sound, buffer); }
+    void buffer.then((decoded) => {
+      if (decoded && this.ctx?.state === "running") this.sample(decoded, kind === "wolf" ? 0.8 : 1, 0.55, 0.08);
+    });
+  }
+
   /** The boar: a short, low, rough snort. */
   grunt(): void {
     this.whoosh({ duration: 0.2, from: 320, to: 180, q: 3, gain: 0.16, attack: 0.01 });
@@ -396,6 +453,9 @@ export class GameAudio {
   }
 
   dispose(): void {
+    this.voiceSerial++;
+    this.voiceSource?.stop();
+    this.voiceSource = null;
     for (const m of this.tracks.values()) m.element.pause();
     this.tracks.clear();
     void this.ctx?.close();

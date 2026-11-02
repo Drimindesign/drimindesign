@@ -47,7 +47,7 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
   };
   for (const beast of beasts) {
     const target = driving ? { x: v.x, mate: null } : prey(beast);
-    if (beast.update(dt, gravity, target.x, engaged.has(beast) || target.mate !== null)) audio.grunt();
+    if (beast.update(dt, gravity, target.x, engaged.has(beast) || target.mate !== null)) audio.animal(beast.kind);
     // A body hitting the road: dust thrown up and the thud of the fall, by how hard it landed.
     const thrown = beast.ragdoll?.impact ?? 0;
     if (thrown > 3 && beast.ragdoll) {

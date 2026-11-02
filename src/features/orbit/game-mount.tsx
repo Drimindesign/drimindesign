@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { retryImport } from "@/lib/utils/retry-import";
+import { DEFAULT_VOLUMES, type AudioChannel } from "./engine/audio-settings";
 import type { Command, Game } from "./engine/game";
 import type { Action } from "./engine/input";
 import styles from "./orbit.module.css";
@@ -66,6 +67,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
   const [muted, setMuted] = useState(false);
+  const [volumes, setVolumes] = useState(DEFAULT_VOLUMES);
   const [failed, setFailed] = useState(false);
   const [shared, setShared] = useState(false);
   // The arena look test replaces the game on this page (read on the client only).
@@ -86,6 +88,18 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
         if (cancelled) return;
         const game = new Game(canvas, { root, fields: (name) => root.querySelectorAll<HTMLElement>(`[data-hud="${name}"]`) });
         gameRef.current = game;
+        try {
+          const saved: unknown = JSON.parse(localStorage.getItem("drimin:orbit-volume") ?? "null");
+          if (saved && typeof saved === "object") {
+            const next = { ...DEFAULT_VOLUMES };
+            for (const channel of ["music", "effects", "voice"] as const) {
+              const value = Reflect.get(saved, channel);
+              if (typeof value === "number" && Number.isFinite(value)) next[channel] = Math.max(0, Math.min(1, value));
+            }
+            setVolumes(next);
+            for (const channel of ["music", "effects", "voice"] as const) game.audio.setVolume(channel, next[channel]);
+          }
+        } catch { /* Storage is optional. */ }
         // QA: /play?debug exposes the running game in the console.
         if (new URLSearchParams(window.location.search).has("debug")) (window as unknown as { orbit?: Game }).orbit = game;
         // /play?gpu: the same game with a WebGL2 glow and grade over the 2D frame.
@@ -144,6 +158,13 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
     game.audio.unlock();
     game.audio.setMuted(!muted);
     setMuted(!muted);
+  };
+  const changeVolume = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const channel = event.currentTarget.name as AudioChannel;
+    const next = { ...volumes, [channel]: Number(event.currentTarget.value) / 100 };
+    setVolumes(next);
+    gameRef.current?.audio.setVolume(channel, next[channel]);
+    try { localStorage.setItem("drimin:orbit-volume", JSON.stringify(next)); } catch { /* Storage is optional. */ }
   };
   const share = async (): Promise<void> => {
     const points = rootRef.current?.querySelector('[data-hud="total-score"]')?.textContent ?? "";
@@ -267,6 +288,15 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
             Quit to title
           </button>
         </div>
+        <fieldset className={styles.audioSettings}>
+          <legend>Audio</legend>
+          {([ ["music", "Music"], ["effects", "Sound effects & animals"], ["voice", "Dialogue"] ] as const).map(([channel, label]) => (
+            <label key={channel}>
+              <span>{label} · {Math.round(volumes[channel] * 100)}%</span>
+              <input type="range" name={channel} aria-label={`${label} volume`} min="0" max="100" value={Math.round(volumes[channel] * 100)} onChange={changeVolume} />
+            </label>
+          ))}
+        </fieldset>
         <p className={styles.small}>Controls · use the on-screen buttons on mobile</p>
         <p className={styles.hints}>→ drive · Space hop · Space in air boost · hold hover · tap ← → in air flip · E get out · F sword · on foot: Space twice double-jump, catch ropes in the air, hold → at a rock face to climb, Q switch weapon, V Fire Sword, C call the truck · R checkpoint · Esc pause</p>
         <p data-hud="prompt" className={styles.controlsPrompt} />

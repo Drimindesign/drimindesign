@@ -1,0 +1,142 @@
+[
+  {
+    "speaker": "Copycat",
+    "clip": "raider_gate",
+    "text": "Nobody gets past the gate tonight."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "hero_watch",
+    "text": "Watch me."
+  },
+  {
+    "speaker": "Copycat",
+    "clip": "raider_lost",
+    "text": "You're a long way from the city, girl."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "hero_far",
+    "text": "And you're a long way from walking away."
+  },
+  {
+    "speaker": "Grey's brute",
+    "clip": "brute_snap",
+    "text": "I'll snap you like a twig."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "hero_big",
+    "text": "Big talk. Let's see it."
+  },
+  {
+    "speaker": "Copycat",
+    "clip": "raider_road",
+    "text": "Turn back. That Spark belongs to Mr. Grey now."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "hero_take",
+    "text": "Then come and take it."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "hero_clear",
+    "text": "Road's clear. Let's move."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "dialogue-10",
+    "text": "No road. Then I walk."
+  },
+  {
+    "speaker": "Crew",
+    "clip": "dialogue-11",
+    "text": "We'll have the truck on the far side. Keep that lantern lit."
+  },
+  {
+    "speaker": "Knight",
+    "clip": "dialogue-12",
+    "text": "A real hero! My shield is yours, Kachujin."
+  },
+  {
+    "speaker": "Knight",
+    "clip": "dialogue-13",
+    "text": "Shields up! Here they come!"
+  },
+  {
+    "speaker": "Barbarian",
+    "clip": "dialogue-14",
+    "text": "Free! Take my spare axe. Hit them like you mean it."
+  },
+  {
+    "speaker": "Barbarian",
+    "clip": "dialogue-15",
+    "text": "More of them. Good. I was bored."
+  },
+  {
+    "speaker": "Mage",
+    "clip": "dialogue-16",
+    "text": "Your blade... let me give it fire. Press V when you need it."
+  },
+  {
+    "speaker": "Mage",
+    "clip": "dialogue-17",
+    "text": "I feel them in the dark. Careful."
+  },
+  {
+    "speaker": "Ranger",
+    "clip": "dialogue-18",
+    "text": "Thank you. I never miss. Well. Almost never."
+  },
+  {
+    "speaker": "Ranger",
+    "clip": "dialogue-19",
+    "text": "Movement ahead. I have them in my sights."
+  },
+  {
+    "speaker": "Rogue",
+    "clip": "dialogue-20",
+    "text": "I'd have picked that lock myself. Eventually. Thanks."
+  },
+  {
+    "speaker": "Rogue",
+    "clip": "dialogue-21",
+    "text": "Shh. Something's coming."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "dialogue-22",
+    "text": "Glad to have you. Stay close."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "dialogue-23",
+    "text": "Thanks. Let's make some noise."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "dialogue-24",
+    "text": "Fire. I like it."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "dialogue-25",
+    "text": "Then keep them off my back."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "dialogue-26",
+    "text": "Sure you would. Come on."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "dialogue-27",
+    "text": "Good dog. Let's go."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "dialogue-28",
+    "text": "No... I'm sorry, little one. Rest now."
+  }
+]

@@ -81,6 +81,11 @@ export interface StageHud {
   prompt: string;
   /** A conversation is being played (the world holds still; the Skip button shows). */
   talking?: boolean;
+  /** What the Revive button would do now (its label), and whether the Feed button can throw food; food and Spark Hearts carried. */
+  revive?: string | null;
+  feed?: boolean;
+  food?: number;
+  sparkHearts?: number;
   /** The music's mood. */
   mood?: Mood;
   /** On foot with a weapon: the sword and weapon pads show. */
@@ -144,6 +149,8 @@ export interface Stage {
   rollIn?(speed: number): void;
   /** Skips the conversation being played, if any. */
   skipTalk?(): void;
+  /** How fast she's going (m/s): carried into the next level. */
+  momentum?(): number;
 }
 
 /** Collectibles: hover, bob, get taken when something passes within reach. */

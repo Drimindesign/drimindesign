@@ -32,6 +32,8 @@ const PADS: readonly { action: Action; label: string; glyph: string; caption: st
   { action: "weapon", label: "Switch weapon", glyph: "⇄", caption: "Weapon" },
   { action: "skill", label: "Light the Fire Sword", glyph: "✹", caption: "Fire" },
   { action: "master", label: "Master Stroke: throw everyone around you off their feet", glyph: "✦", caption: "Master" },
+  { action: "revive", label: "Revive a teammate", glyph: "✚", caption: "Revive" },
+  { action: "feed", label: "Throw food to the bull", glyph: "❀", caption: "Feed" },
   { action: "jump", label: "Thrusters: tap to hop, tap again in the air to boost, hold to hover; on foot, jump (twice for a double jump)", glyph: "▲", caption: "" },
 ];
 
@@ -236,6 +238,22 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       </div>
 
       <p data-hud="team" className={styles.team} aria-label="Your team" />
+      {/* The level's name, a small notice that slides in and out while play goes on. */}
+      <p className={styles.notice} aria-live="polite">
+        Level <span data-hud="stage-number">01</span> · <span data-hud="stage-title">The Spark</span>
+      </p>
+      {/* What Revive would do right now (the button shows only then). */}
+      <p className={styles.reviveHint} aria-live="polite">
+        ✚ <span data-hud="revive-label" />
+      </p>
+      <p className={styles.carried} aria-hidden="true">
+        <span className={styles.foodCount}>
+          ❀ <span data-hud="food">0</span>
+        </span>
+        <span className={styles.heartCount}>
+          ♥ <span data-hud="spark-hearts">0</span>
+        </span>
+      </p>
       {/* A conversation: tap anywhere (or press Space) for the next line, or skip it all. */}
       <button type="button" data-command="skip" className={styles.skip} onClick={command}>
         Skip ▸▸

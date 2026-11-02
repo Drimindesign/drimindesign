@@ -2,7 +2,7 @@ import type { Terrain } from "../engine/terrain";
 import type { WeaponId } from "./arsenal";
 
 /** Who can be found locked up: the five KayKit toys, a village dog, and Gorr the giant. */
-export type MateKind = "knight" | "barbarian" | "mage" | "ranger" | "rogue" | "dog" | "giant";
+export type MateKind = "knight" | "barbarian" | "mage" | "ranger" | "rogue" | "dog" | "giant" | "bull";
 
 export interface MateSpec {
   name: string;
@@ -38,6 +38,8 @@ export const MATES: Record<MateKind, MateSpec> = {
   ranger: { name: "Ranger", height: 0.95, health: 10, attack: "arrow", range: 11, every: 1.7, power: 1.4, speed: 4.8, leaper: false, freed: "Thank you. I never miss. Well. Almost never.", warns: "Movement ahead. I have them in my sights." },
   rogue: { name: "Rogue", height: 0.9, health: 10, attack: "melee", range: 1.1, every: 0.9, power: 1, speed: 5, leaper: false, freed: "I'd have picked that lock myself. Eventually. Thanks.", warns: "Shh. Something's coming." },
   dog: { name: "Dog", height: 0.62, health: 12, attack: "bite", range: 1, every: 1.1, power: 1, speed: 5.2, leaper: true, freed: "Thank you! I'm coming with you!", warns: "Wolves. Many. That way." },
+  // A wild gaur tamed with food: charges whatever comes at her (other bulls hardest of all), and carries her.
+  bull: { name: "Gaur", height: 1.65, health: 30, attack: "melee", range: 1.9, every: 1.5, power: 4, speed: 6, leaper: true, freed: "", warns: "" },
   giant: { name: "Gorr", height: 2.45, health: 30, attack: "melee", range: 1.8, every: 1.6, power: 3, speed: 4.6, leaper: true, freed: "Gorr is free. Gorr carries you now, small queen. Press E.", warns: "Gorr smells them. Many." },
 };
 
@@ -47,7 +49,17 @@ export interface Member {
   /** Health left (of its spec's `health`). */
   hearts: number;
   alive: boolean;
+  /** Its place in the order freed (0 the first): each one freed after another comes in stronger. */
+  rank?: number;
 }
+
+/** Each teammate freed after another hits this much harder (share per place in the order). */
+const RANK_POWER = 0.15;
+/**
+ * Healing: a teammate left alone (no blow for `after` s) gets back a point of health every
+ * `every` s, glowing green as it does.
+ */
+const REGEN = { after: 4, every: 0.8 } as const;
 
 /*
  * The run's team and what it has unlocked. It outlives the levels: whoever was freed comes along
@@ -57,10 +69,17 @@ export class Party {
   readonly members: Member[] = [];
   readonly carried: WeaponId[] = ["blade", "dagger"];
   fire = false;
+  /** Teammates Grey's men dragged off (not dead): each turns up in a cage on a later level. */
+  readonly taken: Member[] = [];
+  /** Spark Hearts in hand (each brings one taken teammate straight back), food carried (for taming bulls), and the Mage's revive recharging (s). */
+  hearts = 0;
+  food = 0;
+  reviveRecharge = 0;
 
   /** A freed prisoner joins (the same member its body carries, so its health is the team's). */
   join(member: Member): void {
     if (this.members.includes(member)) return;
+    member.rank = this.members.length;
     this.members.push(member);
     const unlocks = MATES[member.kind].unlocks;
     if (unlocks?.weapon && !this.carried.includes(unlocks.weapon)) this.carried.push(unlocks.weapon);
@@ -69,6 +88,20 @@ export class Party {
 
   has(kind: MateKind): boolean {
     return this.members.some((m) => m.kind === kind);
+  }
+
+  /** A teammate down too long is dragged off by Grey's men: alive, held somewhere ahead. */
+  take(member: Member): void {
+    member.alive = false;
+    if (!this.taken.includes(member)) this.taken.push(member);
+  }
+
+  /** A taken teammate back with her, at full strength. */
+  restore(member: Member): void {
+    member.alive = true;
+    member.hearts = MATES[member.kind].health;
+    const i = this.taken.indexOf(member);
+    if (i >= 0) this.taken.splice(i, 1);
   }
 
   /** A new member, at full health. */
@@ -117,8 +150,10 @@ export class Mate {
   private hop: { x0: number; y0: number; x1: number; y1: number; t: number } | null = null;
   /** Faded out (catching up out of sight) and back in. */
   alpha = 1;
-  /** Hits taken (the 3D body's flinch reads it). */
+  /** Hits taken (the 3D body's flinch reads it); time since the last (s), and the healing under way. */
   hitSerial = 0;
+  private calm = 0;
+  private mending = 0;
   /** A villager (one of her team's kind already with her): freed, it thanks her and goes home instead of joining. */
   visitor = false;
   /** Riding on another's back (a toy on the dog), or null. */
@@ -156,6 +191,16 @@ export class Mate {
     return this.active && this.mercy === 0 && this.carrier === null;
   }
 
+  /** How hard its blows land: its kind's power, more for each place later it was freed. */
+  get power(): number {
+    return this.spec.power * (1 + RANK_POWER * (this.member.rank ?? 0));
+  }
+
+  /** Healing right now (left alone a while, not at full health). */
+  get healing(): boolean {
+    return this.active && this.calm > REGEN.after && this.member.hearts < this.spec.health;
+  }
+
   /** Health left, 0 … 1 (for the bar over its head). */
   get health(): number {
     return this.member.hearts / this.spec.health;
@@ -185,6 +230,7 @@ export class Mate {
     if (!this.open) return false;
     this.member.hearts = Math.max(0, this.member.hearts - damage);
     this.hitSerial++;
+    this.calm = 0;
     this.mercy = MERCY;
     this.vx = Math.sign(this.x - fromX) * 2.2;
     if (this.member.hearts === 0) {
@@ -211,6 +257,17 @@ export class Mate {
     this.timer += dt;
     this.reload = Math.max(0, this.reload - dt);
     this.mercy = Math.max(0, this.mercy - dt);
+    // Left alone a while, it heals: a point of health at a time.
+    this.calm += dt;
+    if (this.healing) {
+      this.mending += dt;
+      if (this.mending >= REGEN.every) {
+        this.mending = 0;
+        this.member.hearts = Math.min(this.spec.health, this.member.hearts + 1);
+      }
+    } else {
+      this.mending = 0;
+    }
     this.alpha = Math.min(1, this.alpha + dt * 2);
     if (this.carrier) return null;
     if (this.hop) {
@@ -225,9 +282,14 @@ export class Mate {
     const ground = this.terrain.height(this.x);
     switch (this.state) {
       case "caged":
-      case "dead":
         this.vx = 0;
         this.y = ground;
+        return null;
+      case "dead":
+        // Dragged off: gone from sight in a couple of seconds.
+        this.vx = 0;
+        this.y = ground;
+        this.alpha = Math.max(0, 1 - this.timer / 2);
         return null;
       case "wounded":
         this.vx = 0;
@@ -354,6 +416,24 @@ export class Mate {
     const dog = this.kind === "dog";
     const giant = this.kind === "giant";
     const speed = Math.abs(this.vx);
+    if (this.kind === "bull") {
+      if (this.hop) return { name: "Gallop_Jump", speed: 1, once: false };
+      switch (this.state) {
+        case "hurt":
+          return { name: "Idle_HitReact1", speed: 1, once: true };
+        case "wounded":
+        case "dead":
+          return { name: "Death", speed: 0.7, once: true };
+        case "attack":
+          return { name: "Attack_Headbutt", speed: 1.3, once: true };
+        case "freeing":
+        case "cheering":
+        case "caged":
+          return { name: "Eating", speed: 1, once: false };
+        default:
+          return speed > 3 ? { name: "Gallop", speed: speed / 6, once: false } : speed > 0.3 ? { name: "Walk", speed: speed / 1.6, once: false } : { name: "Idle", speed: 1, once: false };
+      }
+    }
     if (this.carrier) return { name: "Sit_Floor_Idle", speed: 1, once: false };
     if (this.hop) return dog ? { name: "Gallop_Jump", speed: 1.2, once: false } : giant ? { name: "foe_run", speed: 1, once: false } : { name: "Jump_Full_Short", speed: 1.3, once: true };
     if (giant) {
@@ -389,7 +469,7 @@ export class Mate {
       case "dead":
         return dog ? { name: "Death", speed: 1, once: true } : { name: "Death_A", speed: 1, once: true };
       case "attack": {
-        const name = dog ? "Attack" : { knight: "Melee_1H_Attack_Chop", barbarian: "Melee_2H_Attack_Chop", mage: "Ranged_Magic_Shoot", ranger: "Ranged_Bow_Release", rogue: "Melee_1H_Attack_Chop", dog: "Attack", giant: "foe_heavy" }[this.kind];
+        const name = dog ? "Attack" : { knight: "Melee_1H_Attack_Chop", barbarian: "Melee_2H_Attack_Chop", mage: "Ranged_Magic_Shoot", ranger: "Ranged_Bow_Release", rogue: "Melee_1H_Attack_Chop", dog: "Attack", giant: "foe_heavy", bull: "Attack_Headbutt" }[this.kind];
         return { name, speed: 1.3, once: true };
       }
       default:

@@ -37,7 +37,7 @@ const COMPLETE_DELAY = 0.4;
  * up out of it over `in` (s) already moving, and the project it unlocked shows in a corner for
  * `reward` (s) while you play on.
  */
-const TRANSITION = { out: 0.35, in: 0.45, reward: 8 } as const;
+const TRANSITION = { out: 0.35, in: 0.45, reward: 8, dissolve: 0.6, notice: 3.4 } as const;
 /** The furthest level reached (to carry on from), kept on this device. */
 const LEVEL_KEY = "drimin:orbit-level";
 /** Finishing fast pays: points per second under PAR at the end of the run. */
@@ -152,6 +152,14 @@ export class Game {
       this.slowScale = scale;
     },
   };
+  /**
+   * Between levels there's no stop and no card: the last frame of the old level dissolves into the
+   * new one (`snapshot`, fading over `dissolve`) while she walks on, and a small notice names the
+   * new level for a few seconds (`notice`, s left).
+   */
+  private snapshot: HTMLCanvasElement | null = null;
+  private dissolve = 0;
+  private notice = 0;
   /** Coming up out of the dip to black into a new stage (1 → 0), and how long the last stage's reward stays up (s). */
   private fadeIn = 0;
   private rewardLeft = 0;
@@ -352,7 +360,7 @@ export class Game {
         this.score.update(STEP);
       }
       // Presses go to the first step only; held state applies to every step.
-      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, masterPressed: false, resetPressed: false, pausePressed: false };
+      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, masterPressed: false, revivePressed: false, feedPressed: false, resetPressed: false, pausePressed: false };
       this.accumulator -= STEP;
       steps++;
     }
@@ -410,7 +418,38 @@ export class Game {
     // The furthest level reached is remembered, to carry on from next time.
     if (n > (readNumber(LEVEL_KEY) ?? 0)) writeNumber(LEVEL_KEY, n);
     this.writeBest();
-    this.setPhase("intro");
+    // Straight into play, the level named in a small notice (no title card in the way).
+    this.setPhase("play");
+    this.notice = TRANSITION.notice;
+  }
+
+  /*
+   * A level done: its bonus, and straight on into the next without a stop. The last frame is kept
+   * and dissolves into the new level, she keeps her pace, and the notice names where she is.
+   */
+  private advance(): void {
+    const stage = this.stage;
+    this.totals.collected += stage.collected;
+    this.totals.available += stage.available;
+    this.totals.landings += stage.cleanLandings;
+    this.score.total += POINTS.stageClear;
+    this.audio.sting("victory", 5);
+    const carry = stage.momentum?.() ?? 0;
+    this.keepFrame();
+    this.beginStage(this.levelNumber + 1);
+    this.stage.rollIn?.(carry);
+    this.dissolve = 1;
+  }
+
+  /* The frame on screen, kept to dissolve from. */
+  private keepFrame(): void {
+    const frame = this.snapshot ?? document.createElement("canvas");
+    if (frame.width !== this.canvas.width || frame.height !== this.canvas.height) {
+      frame.width = this.canvas.width;
+      frame.height = this.canvas.height;
+    }
+    frame.getContext("2d")?.drawImage(this.canvas, 0, 0);
+    this.snapshot = frame;
   }
 
   private next(): void {
@@ -448,6 +487,8 @@ export class Game {
     this.phaseTime += dt;
     this.cinemaLeft = Math.max(0, this.cinemaLeft - dt);
     this.fadeIn = Math.max(0, this.fadeIn - dt / TRANSITION.in);
+    this.dissolve = Math.max(0, this.dissolve - dt / TRANSITION.dissolve);
+    this.notice = Math.max(0, this.notice - dt);
     if (this.rewardLeft > 0) {
       this.rewardLeft -= dt;
       if (this.rewardLeft <= 0) this.dropReward();
@@ -466,7 +507,7 @@ export class Game {
         this.runTime += dt;
         if (input.pausePressed) this.setPhase("paused");
         else if (input.resetPressed) this.stage.respawn();
-        else if (this.stage.complete) this.setPhase("complete");
+        else if (this.stage.complete) this.advance();
         break;
       case "paused":
         if (input.pausePressed || (advance && this.phaseTime > 0.2)) this.setPhase("play");
@@ -550,6 +591,14 @@ export class Game {
       ctx.fillStyle = `rgba(4, 4, 10, ${fade})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
+    // The old level's last frame, dissolving into the new one.
+    if (this.dissolve > 0 && this.snapshot) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = this.dissolve * this.dissolve;
+      ctx.drawImage(this.snapshot, 0, 0);
+      ctx.restore();
+    }
   }
 
   private text(name: string, value: string): void {
@@ -585,6 +634,15 @@ export class Game {
     this.set("foot", hud.foot ? "true" : "false");
     this.set("armed", hud.armed ? "true" : "false");
     this.set("talk", hud.talking ? "on" : "off");
+    // The level's notice; the Revive and Feed buttons (only when they'd do something); food and Spark Hearts carried.
+    this.set("notice", this.notice > 0 ? "on" : "off");
+    this.set("revive", hud.revive ? "on" : "off");
+    this.text("revive-label", hud.revive ? (this.touch ? hud.revive : `H · ${hud.revive}`) : "");
+    this.set("feed", hud.feed ? "on" : "off");
+    this.text("food", String(hud.food ?? 0));
+    this.set("food", (hud.food ?? 0) > 0 ? "on" : "off");
+    this.text("spark-hearts", String(hud.sparkHearts ?? 0));
+    this.set("heartsCarried", (hud.sparkHearts ?? 0) > 0 ? "on" : "off");
     this.set("cinema", this.cinemaLeft > 0 ? "on" : "off");
     // The weapon in hand and the Fire Sword's charge; the team's names and hearts.
     this.text("weapon", hud.weapon ?? "");

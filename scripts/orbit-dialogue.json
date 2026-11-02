@@ -298,5 +298,130 @@
     "speaker": "Kachujin",
     "clip": "voice-60",
     "text": "Run. Don't look back."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-61",
+    "text": "They took the Knight! I'll come back for you!"
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-62",
+    "text": "They took the Barbarian! I'll come back for you!"
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-63",
+    "text": "They took the Mage! I'll come back for you!"
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-64",
+    "text": "They took the Ranger! I'll come back for you!"
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-65",
+    "text": "They took the Rogue! I'll come back for you!"
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-66",
+    "text": "They took the Dog! I'll come back for you!"
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-67",
+    "text": "They took the Gorr! I'll come back for you!"
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-68",
+    "text": "They took the Gaur! I'll come back for you!"
+  },
+  {
+    "speaker": "Knight",
+    "clip": "voice-69",
+    "text": "You came back for me!"
+  },
+  {
+    "speaker": "Barbarian",
+    "clip": "voice-70",
+    "text": "You came back for me!"
+  },
+  {
+    "speaker": "Mage",
+    "clip": "voice-71",
+    "text": "You came back for me!"
+  },
+  {
+    "speaker": "Ranger",
+    "clip": "voice-72",
+    "text": "You came back for me!"
+  },
+  {
+    "speaker": "Rogue",
+    "clip": "voice-73",
+    "text": "You came back for me!"
+  },
+  {
+    "speaker": "Dog",
+    "clip": "voice-74",
+    "text": "You came back for me!"
+  },
+  {
+    "speaker": "Gorr",
+    "clip": "voice-75",
+    "text": "You came back for me!"
+  },
+  {
+    "speaker": "Knight",
+    "clip": "voice-76",
+    "text": "I'm back! Let's go."
+  },
+  {
+    "speaker": "Barbarian",
+    "clip": "voice-77",
+    "text": "I'm back! Let's go."
+  },
+  {
+    "speaker": "Mage",
+    "clip": "voice-78",
+    "text": "I'm back! Let's go."
+  },
+  {
+    "speaker": "Ranger",
+    "clip": "voice-79",
+    "text": "I'm back! Let's go."
+  },
+  {
+    "speaker": "Rogue",
+    "clip": "voice-80",
+    "text": "I'm back! Let's go."
+  },
+  {
+    "speaker": "Dog",
+    "clip": "voice-81",
+    "text": "I'm back! Let's go."
+  },
+  {
+    "speaker": "Gorr",
+    "clip": "voice-82",
+    "text": "I'm back! Let's go."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-83",
+    "text": "Always."
+  },
+  {
+    "speaker": "Mage",
+    "clip": "voice-84",
+    "text": "Get up! The light is with you."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "voice-85",
+    "text": "Easy... easy. You're one of us now."
   }
 ]

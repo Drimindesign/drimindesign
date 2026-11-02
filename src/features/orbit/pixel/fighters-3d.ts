@@ -123,7 +123,7 @@ const THREE_QUARTER = 0.4;
  * The toys (KayKit Adventurers, CC0): each body, what it holds in which hand slot, and the clips
  * they share (one file). The dog is the husky from the animals.
  */
-const TOYS: Record<Exclude<MateKind, "dog" | "giant">, { model: string; right?: string; left?: string }> = {
+const TOYS: Record<Exclude<MateKind, "dog" | "giant" | "bull">, { model: string; right?: string; left?: string }> = {
   knight: { model: "knight.glb", right: "sword_1handed.gltf", left: "shield_round_color.gltf" },
   barbarian: { model: "barbarian.glb", right: "axe_2handed.gltf" },
   mage: { model: "mage.glb", right: "staff.gltf" },
@@ -132,7 +132,7 @@ const TOYS: Record<Exclude<MateKind, "dog" | "giant">, { model: string; right?: 
 };
 const TOY_CLIPS = "/game/toys/toy_clips.glb";
 /** Each mate's standing height (m). */
-const MATE_HEIGHT: Record<Exclude<MateKind, "dog" | "giant">, number> = { knight: 0.95, barbarian: 1, mage: 0.95, ranger: 0.95, rogue: 0.9 };
+const MATE_HEIGHT: Record<Exclude<MateKind, "dog" | "giant" | "bull">, number> = { knight: 0.95, barbarian: 1, mage: 0.95, ranger: 0.95, rogue: 0.9 };
 /** The hero's longsword, built in code: slim and long (m), its steel bright and hard. */
 const LONGSWORD = { blade: 1.02, width: 0.034, thick: 0.006, guard: 0.17, grip: 0.21 } as const;
 /** Scene lights (torches, fires) that fall on the figures at once: the nearest few. */
@@ -422,7 +422,7 @@ export class Fighters3D {
           t.hero.root.rotation.set(0, yaw, roll);
         } else {
           // Riding Gorr: up on his shoulders (and in front of him, so he doesn't hide her).
-          t.hero.root.position.set(x, y + (hero.riding ? 2.05 : 0), hero.riding ? 0.5 : 0);
+          t.hero.root.position.set(x, y + (hero.riding ? hero.rideHeight : 0), hero.riding ? 0.5 : 0);
           t.hero.root.rotation.set(0, yaw, 0);
         }
         this.carry(t, hero);
@@ -726,7 +726,8 @@ export class Fighters3D {
         play(actor, "Idle_HitReact1");
         break;
       case "wait":
-        play(actor, beast.kind === "wolf" ? "Idle" : "Eating");
+      case "eat":
+        play(actor, beast.kind === "wolf" && beast.state === "wait" ? "Idle" : "Eating");
         break;
       default:
         if (!beast.grounded) play(actor, "Gallop_Jump");
@@ -869,6 +870,7 @@ export class Fighters3D {
       const held = new Map(props);
       const makeMate = (kind: MateKind): Actor => {
         if (kind === "dog") return makeAnimal("dog");
+        if (kind === "bull") return makeAnimal("bull");
         if (kind === "giant") return t.make("giant");
         const source = sources.get(kind);
         if (!source) throw new Error(`Missing toy ${kind}`);
@@ -944,6 +946,7 @@ export class Fighters3D {
         const reused = t.spare.get(kind)?.pop();
         if (reused) return reused;
         if (kind === "giant") return t.make("giant");
+        if (kind === "bull") return t.makeAnimal("bull");
         const actor = prepared.get(kind);
         if (actor) { prepared.delete(kind); return actor; }
         return makeMate(kind);

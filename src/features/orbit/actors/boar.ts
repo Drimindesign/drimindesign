@@ -4,7 +4,10 @@ import { Ragdoll, type Joint } from "../engine/ragdoll";
 import type { Terrain } from "../engine/terrain";
 import { BOAR, type Sprite } from "../pixel/props";
 
-export type BoarState = "wait" | "charge" | "circle" | "attack" | "block" | "stagger" | "knocked" | "getup" | "flee" | "down" | "blasted" | "gone";
+export type BoarState = "wait" | "charge" | "circle" | "attack" | "block" | "stagger" | "knocked" | "getup" | "flee" | "down" | "blasted" | "gone" | "eat";
+
+/** Taming a bull: feeds it takes, and how long it stops to eat each one (s). */
+export const TAME = { feeds: 3, eat: 2.6 } as const;
 
 /** The creatures on the roads: animals, raiders and brutes. */
 export type BeastKind = "boar" | "wolf" | "dog" | "raider" | "brute" | "bull" | "chief";
@@ -107,6 +110,9 @@ export class Boar {
   /** Blows taken so far, and the last one (where it landed, how hard, which way it travelled): the 3D body's reflex reads them. */
   hitSerial = 0;
   lastBlow: { joint: Joint; power: number; dir: number } = { joint: "chest", power: 0, dir: 1 };
+  /** Times it's been fed (a bull: enough and it's tamed), and tamed (it joins her). */
+  fed = 0;
+  tamed = false;
   /** On fire (s left): a burning blade sets it alight; it smokes, glows, and the fire hurts it once more as it goes out. */
   burning = 0;
   /** Tumbling after a car hit or a blast: angle (rad) and spin (rad/s). */
@@ -128,7 +134,7 @@ export class Boar {
   }
 
   get active(): boolean {
-    return this.state !== "wait" && this.state !== "gone" && this.state !== "blasted" && this.state !== "down" && this.state !== "knocked" && this.state !== "getup";
+    return this.state !== "wait" && this.state !== "eat" && this.state !== "gone" && this.state !== "blasted" && this.state !== "down" && this.state !== "knocked" && this.state !== "getup";
   }
 
   /** Limp (a ragdoll): knocked down or fallen for good. */
@@ -237,6 +243,20 @@ export class Boar {
     return this.kind === "bull" || this.kind === "brute" || this.kind === "chief";
   }
 
+  /** Can be tamed with food (a bull, not yet tamed or beaten). */
+  get tameable(): boolean {
+    return this.kind === "bull" && !this.tamed && this.health > 0 && this.state !== "gone" && this.state !== "down";
+  }
+
+  /** Food thrown to it: it skids to a stop and eats; fed enough, it's tamed. */
+  feed(): void {
+    if (!this.tameable) return;
+    this.fed++;
+    this.state = "eat";
+    this.timer = TAME.eat;
+    this.vx *= 0.3;
+  }
+
   /** Set alight by a burning blade. */
   ignite(): void {
     this.burning = 2.5;
@@ -317,6 +337,14 @@ export class Boar {
       if (this.burning === 0 && this.health > 0 && this.active) this.health--;
     }
     switch (this.state) {
+      case "eat":
+        // Eating: still, calm; after the last feed it's hers, otherwise it goes back to being wild.
+        if (this.grounded) this.vx = approach(this.vx, 0, 14 * dt);
+        if (this.timer === 0) {
+          if (this.fed >= TAME.feeds) this.tamed = true;
+          else this.state = "charge";
+        }
+        break;
       case "wait":
         if (Math.abs(this.x - targetX) < spec.notice) {
           this.state = "charge";
@@ -456,6 +484,8 @@ export class Boar {
    */
   hit(dir: number, power: number, joint: Joint = "chest", heavy = false, damage = 1): boolean {
     this.health = Math.max(0, this.health - damage);
+    // Struck while being tamed: the trust is gone.
+    this.fed = 0;
     this.struck(joint, power, dir);
     const share = 90 / this.spec.mass;
     this.vx = dir * power * share;

@@ -123,6 +123,8 @@ export class Explorer {
   shockwave = false;
   /** Riding on the giant's shoulders (he carries her: further, faster, higher). */
   riding = false;
+  /** How high she sits when riding (m): on Gorr's shoulders, or on the bull's back. */
+  rideHeight = 2.05;
   /** Time into the current swing (s), or -1 when not swinging. */
   private swing = -1;
   /** Which blow of the combo (0 … 2) the current or last swing is, and when the last one ended (s). */

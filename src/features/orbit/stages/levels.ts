@@ -94,15 +94,17 @@ export function level(n: number): Level {
   const guards: [number, BeastKind][] = [];
   const boulders: BoulderZone[] = [];
   const walks: Walk[] = [];
+  const food: [number, number][] = [];
+  const sparks: [number, number][] = [];
   let x = 22;
   const together = Math.min(4, 2 + Math.floor(n / 7));
   const crowd = Math.min(10, 3 + Math.floor(n * 0.35));
 
   // What each place is made of (the first three sections are its signature, then any of them).
   const flavour: Record<Biome, readonly string[]> = {
-    jungle: ["ravine", "canopy", "patrol", "steps", "ravine", "drop"],
-    river: ["water", "patrol", "canopy", "ambush", "ravine", "steps"],
-    hills: ["hill", "patrol", "hill", "ambush", "steps"],
+    jungle: ["ravine", "canopy", "graze", "patrol", "steps", "ravine", "drop"],
+    river: ["water", "graze", "patrol", "canopy", "ambush", "ravine", "steps"],
+    hills: ["hill", "graze", "patrol", "hill", "ambush", "steps"],
     caves: ["drop", "patrol", "steps", "ravine", "ambush"],
     ruins: ["patrol", "steps", "ravine", "drop", "patrol"],
     coast: ["water", "patrol", "canopy", "steps", "ravine"],
@@ -207,10 +209,20 @@ export function level(n: number): Level {
         x += 10;
         const length = 20 + rand() * 8;
         walks.push({ x0: x, x1: x + length, above: 5.8 + rand() * 0.8 });
-        cells.push([x + length * 0.4, 7.2], [x + length * 0.75, 7.2]);
+        cells.push([x + length * 0.4, 7.2]);
+        // Up there: a Spark Heart, now and then.
+        if (rand() < 0.5) sparks.push([x + length * 0.75, 7.4]);
         ambushes.push({ x: x + 4, count: Math.min(6, 3 + Math.floor(n / 4)), kinds: place.animals });
         torches.push(x - 3);
         x += length + 10;
+        break;
+      }
+      case "graze": {
+        // A wild bull grazing on the path, food lying before it: feed it three times and it's hers.
+        x += 8;
+        food.push([x, 0.6], [x + 3, 0.6], [x + 6, 0.6]);
+        guards.push([x + 16, "bull"]);
+        x += 26;
         break;
       }
       case "patrol": {
@@ -261,6 +273,8 @@ export function level(n: number): Level {
     beasts: guards,
     boulders,
     walks,
+    food,
+    sparks,
     ambushes,
     opening: [{ who: "Kachujin", clip: "", text: OPENING[biome], at: 1.4 }],
     ropes,

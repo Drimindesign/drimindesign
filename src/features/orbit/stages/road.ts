@@ -74,6 +74,11 @@ export interface RoadConfig {
   truck?: boolean;
   /** Logs floating on the rivers. */
   logs?: readonly LogSpec[];
+  /**
+   * Walkways in the trees: a vine up a trunk at `x0`, then planks `above` (m) over the highest
+   * ground under them, running to `x1`; a way above the danger on the path below.
+   */
+  walks?: readonly { x0: number; x1: number; above: number }[];
   /** Hillsides with boulders rolling down them. */
   boulders?: readonly BoulderZone[];
   /** What's said as the level opens (on foot), if anything. */
@@ -168,8 +173,8 @@ const RESCUE_ZOOM = 1.42;
  */
 const DIRECTOR = { lead: 2.2, leadIdle: 1, fightClose: 1.42, fightWide: 1.08, run: 0.08, pushIn: 1.06, idle: 2.5, kill: { zoom: 1.5, time: 1, slow: 0.2 }, open: { ahead: 10, zoom: 1, time: 2.3 } } as const;
 /** A rope is a chain of this many links (verlet), stepped this many times a step to hold its length. */
-const ROPE_LINKS = 12;
-const ROPE_ITERATIONS = 6;
+const ROPE_LINKS = 6;
+const ROPE_ITERATIONS = 10;
 /** Riding Gorr: she sits this high (m) on his shoulders, and he runs and leaps this much further than she does. */
 const RIDE = { height: 2.05, stride: 1.25, spring: 1.4 } as const;
 /**
@@ -321,10 +326,14 @@ export class RoadStage implements Stage {
   private hold = 0;
   private holdZoom = 1;
   private wasOnRope = false;
+  /** The walkways (where their planks lie) and the vines up to them. */
+  private readonly walks: { x0: number; x1: number; y: number }[];
   /** Boulders rolling down the hills, and when the next one comes (s). */
   private boulders: { x: number; y: number; vx: number; vy: number; spin: number; angle: number }[] = [];
   private nextBoulder = 0;
   /** A conversation under way: its lines, which is being said, how long it has left (s), and where the camera frames it. */
+  /** The backdrop's soft focus while a conversation plays (0 … 1, eased in and out). */
+  private focus = 0;
   private talk: { lines: readonly Line[]; index: number; left: number; focus: { x: number; y: number }; zoom: number } | null = null;
   /** Villagers freed and on their way home (drawn until they're gone). */
   private readonly leaving: Mate[] = [];
@@ -341,6 +350,7 @@ export class RoadStage implements Stage {
   private mount: Mate | null = null;
   /** E pressed this step (to help a downed friend up), and the stage's own clock (s, for the wind on the ropes). */
   private reviveAsked = false;
+  private jumpAsked = false;
   private clock = 0;
   private readonly fighters: Fighters3D;
   private readonly debris = new Debris();
@@ -415,6 +425,11 @@ export class RoadStage implements Stage {
       return { x, y, length: ROPE.length, links };
     });
     this.props = (config.props ?? []).map(([x, kind]) => ({ x, kind, broken: false }));
+    this.walks = (config.walks ?? []).map((w) => {
+      let top = -Infinity;
+      for (let x = w.x0 - 1; x <= w.x1; x += 0.5) top = Math.max(top, this.terrain.height(x));
+      return { x0: w.x0, x1: w.x1, y: top + w.above };
+    });
     this.logs = (config.logs ?? []).map((spec, i) => ({ spec, x: spec.x, px: spec.x, phase: i * 1.9, vx: 0 }));
     if (config.scene === "snow") for (let i = 0; i < 70; i++) this.flakes.push({ x: Math.random() * 480, y: Math.random() * 270, s: 0.4 + Math.random() * 0.8 });
     // Her team so far comes with her; prisoners not yet freed wait in their cages.
@@ -515,11 +530,12 @@ export class RoadStage implements Stage {
       }
     }
     this.reviveAsked = input.interactPressed && !this.mount;
+    this.jumpAsked = input.jumpPressed;
     this.stepMount(input);
     // The river's logs move first, so she rides each where it is this step (no lag, no judder).
     this.stepLogs(dt);
     // Stopped anywhere, the truck can be left (to fight, or to walk); on foot you climb back in at the door.
-    this.crew.step(dt, this.gravity, input, { board: true, alight: !this.onFoot });
+    this.crew.step(dt, this.gravity, input, { board: this.truck, alight: !this.onFoot });
     if (this.crew.explorer.shockwave) this.masterStroke();
     this.stepFire();
     for (const w of this.waves) w.t += dt;
@@ -803,27 +819,28 @@ export class RoadStage implements Stage {
    * team) is pushed apart along the ground, the lighter one moved more, never through a wall.
    */
   private separate(): void {
-    type Solid = { x: number; y: number; half: number; mass: number; move: (dx: number) => void };
+    type Solid = { x: number; y: number; half: number; mass: number; friend: boolean; move: (dx: number) => void };
     const solids: Solid[] = [];
     const e = this.crew.explorer;
     const ground = (x: number): number => this.terrain.height(x);
     const fits = (from: number, to: number): boolean => Math.abs(ground(to) - ground(from)) < 0.45;
-    if (this.crew.mode === "foot" && !e.ragdoll && !e.ropeAnchor && !e.riding && e.body.climb < 0) {
+    const heroIn = this.crew.mode === "foot" && !e.ragdoll && !e.ropeAnchor && !e.riding && e.body.climb < 0;
+    if (heroIn) {
       const spec = BODY.hero ?? { half: 0.32, mass: 60 };
-      solids.push({ x: e.body.x, y: e.body.y, half: spec.half, mass: spec.mass, move: (dx) => {
+      solids.push({ x: e.body.x, y: e.body.y, half: spec.half, mass: spec.mass, friend: true, move: (dx) => {
         if (fits(e.body.x, e.body.x + dx)) e.body.x += dx;
       } });
     }
     for (const b of this.boars) {
       if (!b.active && b.state !== "attack" && b.state !== "block") continue;
       const spec = BODY[b.kind] ?? { half: 0.4, mass: b.mass };
-      solids.push({ x: b.x, y: b.y, half: spec.half, mass: spec.mass, move: (dx) => {
+      solids.push({ x: b.x, y: b.y, half: spec.half, mass: spec.mass, friend: false, move: (dx) => {
         if (fits(b.x, b.x + dx)) b.x += dx;
       } });
     }
     for (const m of this.mates) {
       if (!m.active || m.carrier || m === this.mount || m.airborne) continue;
-      solids.push({ x: m.x, y: m.y, half: m.kind === "giant" ? 0.55 : m.kind === "dog" ? 0.3 : 0.24, mass: m.kind === "giant" ? 200 : 30, move: (dx) => {
+      solids.push({ x: m.x, y: m.y, half: m.kind === "giant" ? 0.55 : m.kind === "dog" ? 0.3 : 0.24, mass: m.kind === "giant" ? 200 : 30, friend: true, move: (dx) => {
         if (fits(m.x, m.x + dx)) m.x += dx;
       } });
     }
@@ -831,13 +848,28 @@ export class RoadStage implements Stage {
       for (let j = i + 1; j < solids.length; j++) {
         const a = solids[i];
         const c = solids[j];
+        // Friends walk through her (she's never pushed or dragged by her own team); between
+        // themselves they just keep a little room, so they spread out instead of bunching up.
+        if (a.friend && c.friend) {
+          const hero = a === solids[0] && heroIn;
+          if (hero) continue;
+          const room = 0.55 - Math.abs(a.x - c.x);
+          if (room > 0 && Math.abs(a.y - c.y) < 0.9) {
+            const d = Math.sign(c.x - a.x) || 1;
+            a.move(-d * room * 0.25);
+            c.move(d * room * 0.25);
+          }
+          continue;
+        }
         const overlap = a.half + c.half - Math.abs(a.x - c.x);
         // Only bodies side by side on the ground (one jumping over another passes over it).
         if (overlap <= 0 || Math.abs(a.y - c.y) > 0.9) continue;
         const dir = Math.sign(c.x - a.x) || (Math.random() < 0.5 ? 1 : -1);
-        const total = a.mass + c.mass;
+        // Against her, an enemy gives way more (she holds her ground; she isn't shoved along).
+        const ma = a === solids[0] && a.friend && !c.friend ? a.mass * 2 : a.mass;
+        const total = ma + c.mass;
         const pa = overlap * (c.mass / total);
-        const pc = overlap * (a.mass / total);
+        const pc = overlap * (ma / total);
         a.move(-dir * pa);
         c.move(dir * pc);
         a.x -= dir * pa;
@@ -963,7 +995,7 @@ export class RoadStage implements Stage {
       if (spec.unlocks?.weapon) this.context.score.add(0, "Axe unlocked · Q to switch", cage.x, ground + 3.2);
       if (spec.unlocks?.fire) this.context.score.add(0, "Fire Sword unlocked · V", cage.x, ground + 3.2);
       // A barricade's road waits for the rescue: back to the truck after it.
-      if (this.encounters.some((f) => f.cleared) && this.boardIn < 0 && !this.onFoot) this.boardIn = CAGE.scene + 2.5;
+      if (this.encounters.some((f) => f.cleared) && this.boardIn < 0 && !this.onFoot && this.truck) this.boardIn = CAGE.scene + 2.5;
     }
   }
 
@@ -1108,11 +1140,12 @@ export class RoadStage implements Stage {
         this.context.fx.slowmo(0.8, 0.25);
         this.context.fx.punch(0.12);
         this.clearStop(fight.stop);
-        this.boardIn = ARENA.boardIn;
+        if (this.truck && !this.onFoot) this.boardIn = ARENA.boardIn;
       }
     }
     // The road's clear: back to the truck (called down if she's wandered from it), and in; but not
     // while a prisoner is still locked up nearby.
+    if (this.boardIn > 0 && (!this.truck || this.onFoot)) this.boardIn = -1;
     if (this.boardIn > 0) {
       this.boardIn -= dt;
       const waiting = this.cages.some((c) => !c.broken && Math.abs(c.x - e.x) < 25);
@@ -1192,8 +1225,8 @@ export class RoadStage implements Stage {
       const links = rope.links;
       const gust = Math.sin(this.clock * 0.9 + rope.x) * 0.35;
       for (const l of links) {
-        const vx = (l.x - l.px) * 0.985;
-        const vy = (l.y - l.py) * 0.985;
+        const vx = (l.x - l.px) * 0.96;
+        const vy = (l.y - l.py) * 0.96;
         l.px = l.x;
         l.py = l.y;
         l.x += vx + gust * dt * dt;
@@ -1228,6 +1261,14 @@ export class RoadStage implements Stage {
     }
     this.clock += dt;
     if (this.crew.mode !== "foot" || e.riding) return;
+    for (const w of this.walks) {
+      const vineX = w.x0 - 0.35;
+      // A jump at the vine (from the ground beside it, or flying into it) and her hands are on it.
+      if ((this.jumpAsked || !e.body.grounded) && Math.abs(e.body.x - vineX) < 1 && e.body.y < w.y - 0.5 && e.grabVine(vineX, w.y, { x: w.x0 + 0.7, y: w.y })) {
+        this.context.audio.footstep();
+        break;
+      }
+    }
     for (const rope of this.ropes) {
       if (!e.catchRope(rope.x, rope.y, rope.length)) continue;
       // Her weight hits the rope: it jerks, and the branch creaks.
@@ -1350,6 +1391,7 @@ export class RoadStage implements Stage {
     const v = this.crew.car.vehicle;
     if (!this.crew.car.occupied && v.grounded && v.upright) out.push({ x0: v.x - 2.1, x1: v.x + 2.1, top: v.y + 0.95, vx: v.vx });
     for (const log of this.logs) out.push({ x0: log.x - 1.3, x1: log.x + 1.3, top: this.waterLevel(log.spec.x) + 0.25, vx: log.vx });
+    for (const w of this.walks) out.push({ x0: w.x0, x1: w.x1, top: w.y, vx: 0 });
     return out;
   }
 
@@ -1565,24 +1607,34 @@ export class RoadStage implements Stage {
     const camera = { x: snapped.x + (Math.random() - 0.5) * shake, y: snapped.y + (Math.random() - 0.5) * shake };
     const toScreen = projector(camera, this.width, this.height);
 
-    // The painted backdrop, softened when the camera's in close (a film's shallow focus), never blown up into blocks.
+    // The painted backdrop, softened when the camera's in close (a film's shallow focus), never blown up
+    // into blocks; in a conversation it goes out of focus and darker behind the speakers, the ground
+    // they stand on and everyone on it staying sharp.
     ctx.imageSmoothingEnabled = view.zoom > 1.02;
     ctx.imageSmoothingQuality = "high";
+    this.focus = this.talk ? Math.min(1, this.focus + view.dt * 2.5) : Math.max(0, this.focus - view.dt * 2.5);
+    const soft = this.focus > 0.02 && !this.context.still ? `blur(${(this.focus * 2.5).toFixed(2)}px) brightness(${(1 - this.focus * 0.28).toFixed(2)})` : "none";
+    ctx.filter = soft;
     if (this.world) {
       this.world.drawBack(ctx, camera, time);
+      ctx.filter = "none";
       ctx.imageSmoothingEnabled = false;
       this.world.drawGround(ctx, camera, time);
     }
     if (this.city) {
       ctx.imageSmoothingEnabled = view.zoom > 1.02;
+      ctx.filter = soft;
       this.city.drawBack(ctx, camera);
+      ctx.filter = "none";
       ctx.imageSmoothingEnabled = false;
       this.city.drawGround(ctx, camera);
       this.city.drawLamps(ctx, toScreen, camera, 0);
     }
     if (this.village) {
       ctx.imageSmoothingEnabled = view.zoom > 1.02;
+      ctx.filter = soft;
       this.village.drawBack(ctx, camera);
+      ctx.filter = "none";
       ctx.imageSmoothingEnabled = false;
       this.village.drawGround(ctx, camera);
       this.village.drawLanterns(ctx, toScreen, camera, time);
@@ -1610,6 +1662,7 @@ export class RoadStage implements Stage {
     this.drawProps(painter, toScreen, time);
     this.drawRopes(ctx, toScreen, time);
     this.drawLogs(painter, toScreen, alpha);
+    this.drawWalks(ctx, painter, toScreen, time);
     this.drawBoulders(ctx, toScreen);
     this.drawTorches(ctx, painter, toScreen, time);
     this.debris.draw(ctx, toScreen, this.width);
@@ -1653,10 +1706,14 @@ export class RoadStage implements Stage {
       ctx.moveTo(ax - 40, ay - 26);
       ctx.quadraticCurveTo(ax - 8, ay - 2, ax + 26, ay - 6);
       ctx.stroke();
-      // The rope itself: a smooth line through its links, a frayed knot at the end.
-      const points = rope.links.map((l) => toScreen(l.x, l.y));
+      // The rope itself: one thick line through its links (taut and straight under her weight, the
+      // free end hanging below her hands), a knot at the end.
+      const held = this.crew.explorer.ropeAnchor;
+      const holding = held !== null && held.x === rope.x && held.y === rope.y;
+      const hands = this.fighters.hands ?? this.crew.explorer.hands;
+      const points = holding ? [[ax, ay] as [number, number], toScreen(hands.x, hands.y), toScreen(hands.x + (rope.links[ROPE_LINKS].x - hands.x) * 0.3, hands.y - 0.55)] : rope.links.map((l) => toScreen(l.x, l.y));
       ctx.strokeStyle = "#8a6a44";
-      ctx.lineWidth = 1.1;
+      ctx.lineWidth = 1.6;
       ctx.lineJoin = "round";
       ctx.beginPath();
       ctx.moveTo(points[0][0], points[0][1]);
@@ -1686,6 +1743,39 @@ export class RoadStage implements Stage {
       painter.disc(sx + 0.3, top - 3 + flicker * 0.3, 2.2, "#ff8a2a");
       painter.disc(sx + 0.3 + flicker * 0.3, top - 4.5 + flicker * 0.4, 1.2, "#ffd28a");
       glow(ctx, sx, top - 3, 22, "255, 140, 60", 0.16 + flicker * 0.02);
+    }
+  }
+
+  /* Tree walkways: a trunk with its vine hanging to the ground, planks between posts high above the path, a rope rail. */
+  private drawWalks(ctx: CanvasRenderingContext2D, painter: Painter, toScreen: ToScreen, time: number): void {
+    for (const w of this.walks) {
+      const [x0, y] = toScreen(w.x0, w.y);
+      const [x1] = toScreen(w.x1, w.y);
+      if (x1 < -40 || x0 > this.width + 40) continue;
+      // The trunk, rising past the planks into the canopy, and the vine down it.
+      const [tx, ground] = toScreen(w.x0 - 0.9, this.terrain.height(w.x0 - 0.9));
+      painter.rect(tx - 4, y - 46, 8, ground - y + 46, "#1a130d");
+      painter.rect(tx - 4, y - 46, 2, ground - y + 46, "#2a1f15");
+      painter.disc(tx, y - 48, 16, "#0d1a10");
+      painter.disc(tx + 12, y - 42, 11, "#102014");
+      const [vx, vGround] = toScreen(w.x0 - 0.35, this.terrain.height(w.x0 - 0.35));
+      ctx.save();
+      ctx.strokeStyle = "#3e5a2a";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(vx, y - 2);
+      for (let k = 1; k <= 8; k++) ctx.lineTo(vx + Math.sin(time * 1.1 + k * 0.9) * 0.6, y - 2 + ((vGround - y + 2) * k) / 8);
+      ctx.stroke();
+      ctx.restore();
+      for (let k = 0; k < 6; k++) painter.disc(vx + (k % 2 ? 1.2 : -1.2), y + ((vGround - y) * (k + 0.5)) / 6, 1.3, "#4a6e32");
+      // Posts down to the ground, the planks, and a rope rail.
+      for (let px = w.x0 + 1; px < w.x1; px += 6) {
+        const [sx, sy] = toScreen(px, this.terrain.height(px));
+        painter.rect(sx - 0.75, y, 1.5, sy - y, "#2a1f15");
+      }
+      painter.rect(x0, y, x1 - x0, 3, "#5a4232");
+      for (let px = x0; px < x1; px += 5) painter.rect(px, y, 0.5, 3, "#3a2a1c");
+      painter.rect(x0, y - 9, x1 - x0, 0.6, "#8a6a44");
     }
   }
 
@@ -2081,6 +2171,9 @@ export class RoadStage implements Stage {
     const e = this.crew.explorer;
     const x = e.body.x;
     if (e.ropeAnchor) return "← → Swing    Space · Let go";
+    if (e.onVine) return "Climbing…    ← or → with Space · Jump off";
+    const vine = this.walks.find((w) => w.x0 - x > -1 && w.x0 - x < 6 && e.body.y < w.y - 1);
+    if (vine) return "A vine up the tree: jump at it to climb to the walkway";
     const urgent = this.urgentPrompt();
     if (urgent) return urgent;
     const cage = this.cages.find((c) => !c.broken && Math.abs(c.x - x) < 8);

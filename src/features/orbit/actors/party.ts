@@ -77,8 +77,13 @@ export class Party {
   }
 }
 
-/** Following: how far behind her the first stands (m), and the gap between each after (m). */
-const FOLLOW = { first: 1.4, gap: 0.95 } as const;
+/**
+ * The escort: alternate places ahead of her and behind (m from her, growing by `gap` each pair),
+ * so they surround her like a guard instead of trailing in a queue; and how far out they spot an
+ * enemy and go for it (m: further for archers and mages).
+ */
+const FOLLOW = { first: 1.5, gap: 1.1 } as const;
+const SPOT = { melee: 11, ranged: 13 } as const;
 /** Further from her than this (m), or past a drop it can't take, a mate catches up out of sight. */
 const STRAY = 13;
 /** A step up it hops (m); a leaper bounds up this much, and across a gap this wide (m). */
@@ -261,7 +266,9 @@ export class Mate {
       case "follow": {
         const spec = this.spec;
         // Danger in reach: turn and fight it (closing in if it fights up close).
-        if (foe && Math.abs(foe.x - this.x) < Math.max(spec.range + 3, 5)) {
+        // An enemy in sight: a soldier goes for it (out ahead of her if need be), then falls back in.
+        const spot = spec.attack === "arrow" || spec.attack === "magic" ? SPOT.ranged : SPOT.melee;
+        if (foe && Math.abs(foe.x - this.x) < spot) {
           const d = foe.x - this.x;
           this.facing = Math.sign(d) || this.facing;
           if (Math.abs(d) <= spec.range && this.reload === 0) {
@@ -275,7 +282,8 @@ export class Mate {
           return null;
         }
         // Otherwise in line behind her.
-        const target = hero.x - hero.facing * (FOLLOW.first + slot * FOLLOW.gap);
+        const side = slot % 2 === 0 ? -1 : 1;
+        const target = hero.x + side * hero.facing * (FOLLOW.first + Math.floor(slot / 2) * FOLLOW.gap);
         const gap = target - this.x;
         if (Math.abs(hero.x - this.x) > STRAY) {
           this.catchUp(target);

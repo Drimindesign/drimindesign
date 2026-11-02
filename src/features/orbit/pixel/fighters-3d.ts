@@ -787,6 +787,10 @@ export class Fighters3D {
     }
     // On a rope: hand over hand up it, or hanging and swinging with it (the clip's swing matched
     // to the pendulum's). Hauling up a rock face: the motion-captured climb, timed to the haul.
+    if (hero.onVine) {
+      play(actor, "hero_rope_climb", 1.1);
+      return;
+    }
     if (hero.ropeAnchor) {
       if (hero.ropeClimbing) play(actor, "hero_rope_climb", 1);
       else play(actor, "hero_swing", 0.7);

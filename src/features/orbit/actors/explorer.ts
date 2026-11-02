@@ -61,6 +61,8 @@ const MERCY = 1.4;
  * shorter than `shortest` (m).
  */
 const ROPE = { hang: 1.95, pump: 1.3, drag: 0.08, lift: 2.6, regrab: 0.45, catch: 0.85, shortest: 2.2, highest: 1.1 } as const;
+/** Up a vine, hand over hand (m/s). */
+const VINE_CLIMB = 1.5;
 /** Caught low on a rope, she climbs it hand over hand (m/s) until it's this long (m) to her hands: a better swing. */
 const ROPE_CLIMB = { speed: 0.9, length: 4.6 } as const;
 
@@ -106,6 +108,8 @@ export class Explorer {
   /** On a rope (or not), and how long until a rope can be caught again (s). */
   private rope: Rope | null = null;
   private regrab = 0;
+  /** Climbing a vine up a tree: where it hangs, the top (the walkway's height), and where she steps off onto it. */
+  private vine: { x: number; top: number; land: { x: number; y: number } } | null = null;
   /** The weapon in hand, and the ones she carries (switched in turn). */
   weapon: WeaponId = "blade";
   carried: WeaponId[] = ["blade", "dagger"];
@@ -163,6 +167,7 @@ export class Explorer {
   /** Puts the explorer somewhere new (a checkpoint, the car door) without the hair whipping. */
   place(x: number, y = this.terrain.height(x)): void {
     this.rope = null;
+    this.vine = null;
     this.body.place(x, y);
     this.body.grounded = true;
     this.animator.settle(x, y, this.body.facing);
@@ -205,7 +210,7 @@ export class Explorer {
 
   /** The weapon is put away on her back: both hands are needed (a rope, a climb, the truck's door). */
   get sheathed(): boolean {
-    return this.rope !== null || this.body.climb >= 0 || this.transition !== null;
+    return this.rope !== null || this.vine !== null || this.body.climb >= 0 || this.transition !== null;
   }
 
   /** On a rope: its angle from straight down (rad), and whether she's climbing it. */
@@ -333,6 +338,50 @@ export class Explorer {
   heal(): void {
     this.hearts = MAX_HEARTS;
     this.mercy = 0;
+  }
+
+  /** Climbing a vine. */
+  get onVine(): boolean {
+    return this.vine !== null;
+  }
+
+  /** In the air at a vine: her hands catch it and she climbs (returns true if caught). */
+  grabVine(x: number, top: number, land: { x: number; y: number }): boolean {
+    if (this.vine || this.rope || this.ragdoll || this.body.climb >= 0 || this.regrab > 0) return false;
+    this.vine = { x, top, land };
+    this.swing = -1;
+    return true;
+  }
+
+  /*
+   * Up the vine hand over hand to the top, where she hauls onto the walkway; ← or → with a jump
+   * lets go, springing off sideways.
+   */
+  private climbVine(dt: number, input: MoveInput): void {
+    const v = this.vine;
+    if (!v) return;
+    const b = this.body;
+    b.px = b.x;
+    b.py = b.y;
+    if (input.jumpPressed && input.move !== 0) {
+      this.vine = null;
+      this.regrab = ROPE.regrab;
+      b.vx = input.move * 3.5;
+      b.vy = 4;
+      b.grounded = false;
+      b.refreshAirJump();
+      return;
+    }
+    b.x = v.x - b.facing * 0.25;
+    b.vx = 0;
+    b.vy = 0;
+    b.y = Math.min(v.top - ROPE.hang + 0.4, b.y + VINE_CLIMB * dt);
+    if (b.y >= v.top - ROPE.hang + 0.39) {
+      this.vine = null;
+      this.place(v.land.x, v.land.y);
+      b.facing = 1;
+      this.audio.land(0.3);
+    }
   }
 
   /** Where the hands hold the rope (its anchor), while hanging from one. */
@@ -494,6 +543,10 @@ export class Explorer {
     this.swingStarted = false;
     if (this.rope) {
       this.swingRope(dt, gravity, input);
+      return;
+    }
+    if (this.vine) {
+      this.climbVine(dt, input);
       return;
     }
     // Knocked down: no control while the ragdoll falls and settles, then the get-up plays.

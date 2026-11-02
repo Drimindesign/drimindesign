@@ -212,17 +212,9 @@
     }
   }
 
-  /*
-   * A conversation: the painted backdrop goes soft and a little darker behind the speakers (the 3D
-   * characters, on their own canvas, stay sharp), like a film's shallow focus; and a Skip button.
-   */
-  .canvas {
-    transition: filter 0.45s var(--ease-out-expo);
-  }
+  /* A conversation's Skip button (the backdrop's soft focus is drawn by the game itself). */
 
-  .root[data-talk="on"] .canvas {
-    filter: blur(2.5px) brightness(0.72) saturate(0.85);
-  }
+
 
   .skip {
     position: absolute;
@@ -252,12 +244,6 @@
   .skip:focus-visible {
     outline: 2px solid #fff6dc;
     outline-offset: 3px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .canvas {
-      transition: none;
-    }
   }
 
   /* Carry on from the furthest level reached (only once there is one). */

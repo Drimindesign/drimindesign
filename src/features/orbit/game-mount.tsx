@@ -40,10 +40,11 @@ const ArenaMount = dynamic(() => import("./arena/arena-mount").then((m) => m.Are
 const noSubscription = (): (() => void) => () => undefined;
 const arenaRequested = (): boolean => new URLSearchParams(window.location.search).has("arena");
 
-/* Phones: full screen and locked to landscape where the browser allows it. */
+/* Full screen (and locked to landscape on phones) where the browser allows it. */
 async function playFullscreen(): Promise<void> {
   try {
-    await document.documentElement.requestFullscreen?.();
+    if (document.fullscreenElement) return;
+    await document.documentElement.requestFullscreen?.({ navigationUI: "hide" });
     const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
     await orientation.lock?.("landscape");
   } catch {
@@ -119,7 +120,11 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       })
       .catch(() => setFailed(true));
 
-    const unlock = (): void => gameRef.current?.audio.unlock();
+    // The first press or tap anywhere: sound on, and the game goes full screen (browsers only allow both from one).
+    const unlock = (): void => {
+      gameRef.current?.audio.unlock();
+      void playFullscreen();
+    };
     window.addEventListener("pointerdown", unlock);
     window.addEventListener("keydown", unlock);
     return () => {
@@ -276,7 +281,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
           <button type="button" data-command="continue-level" className={`${styles.secondary} ${styles.continue}`} onClick={command}>
             Continue · Level <span data-hud="saved-level" />
           </button>
-          <button type="button" className={`${styles.secondary} ${styles.touchOnly}`} onClick={() => void playFullscreen()}>
+          <button type="button" className={styles.secondary} onClick={() => void playFullscreen()}>
             Full screen
           </button>
         </div>

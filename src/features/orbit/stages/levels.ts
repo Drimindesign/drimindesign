@@ -3,6 +3,7 @@ import type { MateKind } from "../actors/party";
 import { random } from "../engine/noise";
 import type { RoadFeature } from "../engine/terrain";
 import type { AmbushSpec, BoulderZone, LogSpec, RoadConfig, StopSpec } from "./road";
+type Walk = { x0: number; x1: number; above: number };
 import { JUNGLE_RUN, VILLAGE_RUN } from "./routes";
 import type { StageId } from "./types";
 
@@ -92,18 +93,19 @@ export function level(n: number): Level {
   const ambushes: AmbushSpec[] = [];
   const guards: [number, BeastKind][] = [];
   const boulders: BoulderZone[] = [];
+  const walks: Walk[] = [];
   let x = 22;
   const together = Math.min(4, 2 + Math.floor(n / 7));
   const crowd = Math.min(10, 3 + Math.floor(n * 0.35));
 
   // What each place is made of (the first three sections are its signature, then any of them).
   const flavour: Record<Biome, readonly string[]> = {
-    jungle: ["ravine", "patrol", "ambush", "steps", "ravine", "drop"],
-    river: ["water", "patrol", "water", "ambush", "ravine", "steps"],
+    jungle: ["ravine", "canopy", "patrol", "steps", "ravine", "drop"],
+    river: ["water", "patrol", "canopy", "ambush", "ravine", "steps"],
     hills: ["hill", "patrol", "hill", "ambush", "steps"],
     caves: ["drop", "patrol", "steps", "ravine", "ambush"],
     ruins: ["patrol", "steps", "ravine", "drop", "patrol"],
-    coast: ["water", "patrol", "ambush", "steps", "ravine"],
+    coast: ["water", "patrol", "canopy", "steps", "ravine"],
     snow: ["hill", "patrol", "ambush", "ravine", "steps"],
   };
   const count = Math.min(9, 5 + Math.floor(n / 4));
@@ -199,6 +201,18 @@ export function level(n: number): Level {
         x += 26;
         break;
       }
+      case "canopy": {
+        // A vine up a tree to a walkway high over the path, with a pack prowling below it: up and
+        // over (sparks to take on the way), or down among them.
+        x += 10;
+        const length = 20 + rand() * 8;
+        walks.push({ x0: x, x1: x + length, above: 5.8 + rand() * 0.8 });
+        cells.push([x + length * 0.4, 7.2], [x + length * 0.75, 7.2]);
+        ambushes.push({ x: x + 4, count: Math.min(6, 3 + Math.floor(n / 4)), kinds: place.animals });
+        torches.push(x - 3);
+        x += length + 10;
+        break;
+      }
       case "patrol": {
         // Grey's men on watch along the way: they see her coming and come at her.
         const count2 = Math.min(4, 2 + Math.floor(n / 8));
@@ -246,6 +260,7 @@ export function level(n: number): Level {
     props: [],
     beasts: guards,
     boulders,
+    walks,
     ambushes,
     opening: [{ who: "Kachujin", clip: "", text: OPENING[biome], at: 1.4 }],
     ropes,

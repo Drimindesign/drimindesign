@@ -1,3 +1,8 @@
+import { CompanionSupport } from "../actors/companion-support";
+import { drawDroppedPrisonKey, drawPrisonTransportDolly } from "./prisoner-mission-art";
+import { CompanionNavigator } from "../actors/companion-navigation";
+import type { RouteMapSnapshot, SquadOrder } from "../route-map-state";
+import { PrisonerMission, type PrisonerMissionSave } from "./prisoner-mission";
 import { separateBodies, type SolidBody } from "../engine/body-separation";
 import { Boar, type BeastKind } from "../actors/boar";
 import { Car, type CarEvent } from "../actors/car";
@@ -330,9 +335,14 @@ export class RoadStage implements Stage {
   private readonly cages: Cage[];
   /** Travel direction changes between encounters, so a combat turn never flips the whole squad. */
   private marchFacing = 1;
+  private unlockRequested = false;
   private readonly torches: number[];
   /** The team with her (freed here or brought from earlier stages). */
   private readonly mates: Mate[] = [];
+  private readonly navigator: CompanionNavigator;
+  private readonly mission: PrisonerMission | null;
+  private missionSave: PrisonerMissionSave | null = null;
+  private keyCarrier: Boar | null = null;
   /** Shots in flight from the team, drawn as streaks: arrows and the Mage's fire (from, to, s left). */
   private readonly shots: { x0: number; y0: number; x1: number; y1: number; left: number; fire: boolean }[] = [];
   /** Seconds left of a held camera: on a freed prisoner, or over one that fell. */
@@ -449,18 +459,26 @@ export class RoadStage implements Stage {
     });
     this.logs = (config.logs ?? []).map((spec, i) => ({ spec, x: spec.x, px: spec.x, phase: i * 1.9, vx: 0 }));
     if (config.scene === "snow") for (let i = 0; i < 70; i++) this.flakes.push({ x: Math.random() * 480, y: Math.random() * 270, s: 0.4 + Math.random() * 0.8 });
+    const support = new CompanionSupport(this.terrain, {
+      features: config.features, gravity: this.gravity, walks: this.walks,
+      wantsCanopy: () => explorer.onVine || this.walks.some((w) => explorer.body.x >= w.x0 && explorer.body.x <= w.x1 && Math.abs(explorer.body.y - w.y) < 1),
+      logs: this.logs.map((log) => ({ homeX: log.spec.x, top: this.waterLevel(log.spec.x) + 0.25, center: (secondsAhead: number): number => secondsAhead === 0 ? log.x : log.spec.x + log.spec.span * (0.5 - 0.5 * Math.cos(log.phase + secondsAhead * log.spec.speed / Math.max(0.5, log.spec.span))) })),
+    });
+    this.navigator = new CompanionNavigator(this.terrain, { features: config.features, ropes: this.ropes, walks: config.walks ?? [], gravity: this.gravity }, support);
+    this.mission = config.rescueObjective ? new PrisonerMission({ extractionX: config.finish }) : null;
+    if (this.mission) { this.keyCarrier = new Boar(55, this.terrain, "raider"); this.boars.push(this.keyCarrier); this.missionSave = this.mission.checkpoint(); }
     // Her team so far comes with her; prisoners not yet freed wait in their cages.
     explorer.carried = context.party.carried;
     explorer.fireUnlocked = context.party.fire;
-    for (const member of context.party.members) if (member.alive) this.mates.push(new Mate(member, explorer.body.x - 2 - this.mates.length * 1.6, this.terrain, false));
+    for (const member of context.party.members) if (member.alive) this.mates.push(new Mate(member, explorer.body.x - 2 - this.mates.length * 1.6, this.terrain, false, this.navigator));
     // Each cage holds a prisoner who'll join her; if her team already has one of their kind, a villager who'll go home.
     const taken = [...context.party.taken];
     this.cages = (config.cages ?? []).map(([x, kind]) => {
       const held = taken.shift();
-      if (held) return { x, blows: CAGE.blows, broken: false, shake: 0, mate: new Mate(held, x, this.terrain, true) };
+      if (held) return { x, blows: CAGE.blows, broken: false, shake: 0, mate: new Mate(held, x, this.terrain, true, this.navigator) };
       const villager = kind === "giant" ? context.party.has(kind) : context.party.members.filter((m) => m.alive).length >= 10;
       const who = villager && kind === "giant" ? TOY_KINDS[Math.floor(x) % TOY_KINDS.length] : kind;
-      const mate = new Mate(Party.member(who), x, this.terrain, true);
+      const mate = new Mate(Party.member(who), x, this.terrain, true, this.navigator);
       mate.visitor = villager;
       return { x, blows: CAGE.blows, broken: false, shake: 0, mate };
     });
@@ -547,6 +565,7 @@ export class RoadStage implements Stage {
       this.stepLiftoff(dt, input);
       return;
     }
+    this.stepMission(dt, input);
     // Reviving a downed mate: she kneels to it, still, until it's back up.
     if (this.channel) {
       input = { ...input, move: 0, jumpPressed: false, attackPressed: false, interactPressed: false };
@@ -601,6 +620,7 @@ export class RoadStage implements Stage {
     for (const c of this.config.checkpoints) {
       if (at.x >= c && at.grounded && c > this.reached) {
         this.reached = c;
+        if (this.mission) this.missionSave = this.mission.checkpoint();
         // Each new checkpoint patches the truck up.
         if (!this.onFoot && car.damage > 0.05) {
           car.repair(REPAIR);
@@ -656,6 +676,12 @@ export class RoadStage implements Stage {
 
   private rescueComplete(): boolean {
     if (!this.config.rescueObjective) return true;
+    if (this.mission) {
+      const cage = this.cages[0];
+      const prisoner = this.mates.find((m) => m.member === cage?.mate.member);
+      this.mission.updatePrisoner({ alive: prisoner?.member.alive ?? false, down: prisoner?.state === "wounded" || !prisoner?.active, x: prisoner?.x ?? Number.NaN });
+      return this.mission.extract(this.crew.mode === "car" ? this.crew.car.vehicle.x : this.crew.explorer.body.x);
+    }
     return this.cages.every((c) => c.broken && this.mates.some((m) => m.member === c.mate.member && m.active && Math.abs(m.x - this.config.finish) < 45));
   }
 
@@ -881,7 +907,14 @@ export class RoadStage implements Stage {
     for (const m of this.mates) {
       if (!m.active || m.carrier || m === this.mount || m.airborne) continue;
       solids.push({ x: m.x, y: m.y, half: m.kind === "giant" ? 0.85 : m.kind === "dog" ? 0.3 : 0.32, mass: m.kind === "giant" ? 200 : 30, friend: true, move: (dx) => {
-        if (!fits(m.x, m.x + dx)) return 0;
+        const footing = Math.abs(m.y - ground(m.x)) > 0.45
+          ? this.platforms().find((p) => m.x >= p.x0 && m.x <= p.x1 && Math.abs(m.y - p.top) < 0.35)
+          : undefined;
+        if (footing) {
+          if (m.x + dx < footing.x0 || m.x + dx > footing.x1) return 0;
+          m.x += dx; m.y = footing.top; return dx;
+        }
+        if (Math.abs(m.y - ground(m.x)) > 0.45 || !fits(m.x, m.x + dx)) return 0;
         m.x += dx;
         m.y = ground(m.x);
         return dx;
@@ -965,27 +998,101 @@ export class RoadStage implements Stage {
    * Cages: blows break them (the bars shake, splinters fly); the prisoner gets up, cheers, speaks,
    * and joins her. The camera holds on them, the music lifts, and anything it brings is hers.
    */
+  private stepMission(dt: number, input: InputSnapshot): void {
+    this.unlockRequested = input.interactPressed;
+    if (!this.mission) return;
+    const e = this.crew.explorer;
+    if (this.keyCarrier?.state === "wait") {
+      const guard = this.keyCarrier;
+      if (guard.x >= 61) guard.vx = -1.4;
+      else if (guard.x <= 49 || guard.vx === 0) guard.vx = 1.4;
+      guard.facing = Math.sign(guard.vx) || 1;
+    }
+    const queenX = this.crew.mode === "car" ? this.crew.car.vehicle.x : e.body.x;
+    if (this.keyCarrier && (this.keyCarrier.health <= 0 || this.keyCarrier.state === "gone")) this.mission.markKeyCarrierDefeated(this.keyCarrier.x);
+    const before = this.mission.snapshot();
+      // The wheeled cage queues behind solid scenery until the player clears the route.
+      const convoyBlocked = before.phase === "transporting" && (
+        this.props?.some((prop) => !prop.broken && prop.x > before.cageX && prop.x - before.cageX < 1.2)
+        || this.stops.some((stop) => !stop.broken && stop.x > before.cageX && stop.x - before.cageX < 1.2)
+      );
+      const state = this.mission.update(convoyBlocked ? 0 : dt, queenX);
+    const cage = this.cages[0];
+    if (cage && !cage.broken) { cage.x = state.cageX; cage.mate.place(cage.x); }
+    if (before.phase !== "transporting" && state.phase === "transporting") {
+      // The enemy opens its own road gate to let the wheeled prison transport leave.
+      for (const stop of this.stops) if (stop.x > state.cageX && stop.x < state.cageX + 20) { stop.broken = true; stop.logs = 0; }
+    }
+    if (this.crew.mode === "foot" && input.interactPressed && this.mission.pickupKey(e.body.x)) {
+      this.context.audio.pickup(); this.context.score.add(0, "Prison key recovered · E at the cage", e.body.x, e.body.y + 2);
+      this.unlockRequested = false;
+    }
+    const prisoner = this.mates.find((m) => m.member === cage?.mate.member);
+    if (prisoner) this.mission.updatePrisoner({ alive: prisoner.member.alive, down: !prisoner.active, x: prisoner.x });
+  }
+
+  private restoreMission(): void {
+    if (!this.mission || !this.missionSave) return;
+    this.mission.restore(this.missionSave);
+    const cage = this.cages[0];
+    if (!cage) return;
+    const state = this.mission.snapshot();
+    if (!state.keyCarrierDefeated) this.keyCarrier?.reset();
+    if (!state.cageOpen) { cage.x = state.cageX; cage.blows = CAGE.blows; cage.broken = false; cage.mate.place(cage.x); }
+    if (state.cageOpen && !cage.mate.member.alive) {
+      for (let i = this.mates.length - 1; i >= 0; i--) {
+        if (this.mates[i].member === cage.mate.member) this.mates.splice(i, 1);
+      }
+      this.context.party.restore(cage.mate.member);
+      const returned = new Mate(cage.mate.member, this.reached, this.terrain, false, this.navigator);
+      returned.order = { kind: "regroup" };
+      this.mates.push(returned);
+    }
+  }
+
+  orderSquad(order: SquadOrder): void {
+    const mate = this.mates.find((m) => m.member.rank === order.unit && m.active);
+    if (!mate || (order.x !== undefined && !Number.isFinite(order.x))) return;
+    mate.order = { kind: order.kind, x: order.kind === "hold" ? mate.x : Math.max(0, Math.min(this.config.finish, order.x ?? mate.x)) };
+  }
+
+  private routeMap(): RouteMapSnapshot {
+    const e = this.crew.explorer.body;
+    const queenX = this.crew.mode === "car" ? this.crew.car.vehicle.x : e.x;
+    const mission = this.mission?.snapshot();
+    return {
+      finish: this.config.finish, queenX, queenUpper: e.y - this.terrain.height(e.x) > 2,
+      units: this.mates.filter((m) => m.alive).map((m) => ({ id: m.member.rank ?? -1, name: m.spec.name, x: m.x, upper: m.y - this.terrain.height(m.x) > 2, health: m.health, state: m.state === "wounded" ? "wounded" : m.state === "attack" ? "fighting" : m.active && Math.abs(m.vx) < 0.1 ? "waiting" : "moving" })),
+      upper: this.walks.map((w) => ({ x0: w.x0, x1: w.x1 })),
+      crossings: [...this.ropes.map((r) => ({ x: r.x, kind: "rope" as const })), ...this.config.features.filter((f) => f.kind === "ravine" || f.kind === "water").map((f) => ({ x: f.x + f.size / 2, kind: f.kind === "water" ? "water" as const : "gap" as const }))],
+      objectives: [...(mission && !mission.keyHeld && !mission.keyAvailable && this.keyCarrier && this.keyCarrier.health > 0 ? [{ x: this.keyCarrier.x, label: "Key carrier patrol" }] : []), ...this.cages.filter((c) => !c.broken).map((c) => ({ x: c.x, label: "Prisoner" })), ...(mission?.keyAvailable ? [{ x: mission.keyX, label: "Dropped prison key" }] : []), { x: this.config.finish, label: "Extraction" }],
+    };
+  }
+
   private stepCages(dt: number): void {
     this.hold = Math.max(0, this.hold - dt);
     const e = this.crew.explorer;
     for (const cage of this.cages) {
       cage.shake = Math.max(0, cage.shake - dt);
-      if (cage.broken || this.crew.mode !== "foot" || !e.striking || e.struck.has(cage)) continue;
+      const unlocking = this.mission?.snapshot().keyHeld && this.unlockRequested && Math.abs(cage.x - e.body.x) < 3;
+      if (cage.broken || this.crew.mode !== "foot" || (!unlocking && (!e.striking || e.struck.has(cage)))) continue;
       const box = e.hitbox;
-      if (box.x1 < cage.x - 0.7 || box.x0 > cage.x + 0.7) continue;
+      if (!unlocking && (box.x1 < cage.x - 0.7 || box.x0 > cage.x + 0.7)) continue;
       e.struck.add(cage);
       e.recoil();
-      cage.blows--;
+      cage.blows = unlocking ? 0 : cage.blows - 1;
       cage.shake = 0.3;
       const ground = this.terrain.height(cage.x);
       this.context.audio.crack();
       this.context.particles.dust(cage.x, ground + 0.8, e.body.facing * 2, 10, 0.8);
       if (cage.blows > 0) continue;
+      if (this.mission && !this.mission.openCage(unlocking ? "key" : "breach", e.body.x)) continue;
       cage.broken = true;
       this.debris.burst(cage.x, ground + 0.7, e.body.facing * 3, 2, 18, 3, ["#4a3424", "#6b4f3a", "#2b2d33"], 0.3);
       this.context.audio.land(0.6);
       const mate = cage.mate;
       mate.free();
+      if (this.mission) mate.order = { kind: "regroup" };
       const spec = MATES[mate.kind];
       if (this.context.party.taken.includes(mate.member)) {
         this.context.party.restore(mate.member);
@@ -1015,6 +1122,8 @@ export class RoadStage implements Stage {
       this.context.score.add(POINTS.stageClear / 2, `${spec.name} freed`, cage.x, ground + 2.2);
       if (spec.unlocks?.weapon) this.context.score.add(0, "Axe unlocked · Q to switch", cage.x, ground + 3.2);
       if (spec.unlocks?.fire) this.context.score.add(0, "Fire Sword unlocked · V", cage.x, ground + 3.2);
+      // Freeing the mission prisoner is a recovery point: a later death must not put them back in the cage.
+      if (this.mission) this.missionSave = this.mission.checkpoint();
       // A barricade's road waits for the rescue: back to the truck after it.
       if (this.encounters.some((f) => f.cleared) && this.boardIn < 0 && !this.onFoot && this.truck) this.boardIn = CAGE.scene + 2.5;
     }
@@ -1033,21 +1142,15 @@ export class RoadStage implements Stage {
     const danger = foes.some((b) => Math.abs(b.x - e.x) < 12);
     if (!danger && Math.abs(e.vx) > 1) this.marchFacing = Math.sign(e.vx);
     const formationHero = { x: e.x, facing: this.marchFacing, viewHalf: this.reachOfView };
+    this.navigator.setBlockedRopes(this.crew.explorer.ropeAnchor ? [this.crew.explorer.ropeAnchor.x] : []);
     const assigned = new Map<Boar, number>();
     // The dog takes the smallest toy on its back while the way is quiet; at a fight they both jump to it.
     const dog = this.mates.find((m) => m.kind === "dog" && m.active);
     for (const m of this.mates) {
-      if (m.carrier && (danger || !dog || m.carrier !== dog || !m.carrier.active)) {
+      if (m.carrier && !m.carrier.airborne && Math.abs(m.carrier.y - this.terrain.height(m.carrier.x)) < 0.25 && (danger || !dog || m.carrier !== dog || !m.carrier.active || m.order.kind !== "follow")) {
         m.carrier.rider = null;
         m.carrier = null;
         m.place(m.x);
-      }
-    }
-    if (dog && !danger && !dog.rider && !inTruck) {
-      const toy = this.mates.find((m) => m.active && TOY_KINDS.includes(m.kind) && m !== dog && m.kind !== "giant" && !m.carrier && Math.abs(m.x - dog.x) < 3);
-      if (toy) {
-        toy.carrier = dog;
-        dog.rider = toy;
       }
     }
     // E beside a downed friend: she kneels and brings it round.
@@ -1080,7 +1183,7 @@ export class RoadStage implements Stage {
         continue;
       }
       // Distant soldiers must reach the truck on foot before boarding.
-      if (inTruck && mate.active && (mate.alpha === 0 || Math.abs(mate.x - v.x) < 3)) {
+      if (inTruck && mate.active && (mate.alpha === 0 || (!mate.airborne && Math.abs(mate.x - v.x) < 3 && Math.abs(mate.y - this.terrain.height(v.x)) < 1.2))) {
         mate.x = v.x - 1;
         mate.y = this.terrain.height(mate.x);
         mate.alpha = 0;
@@ -1168,7 +1271,7 @@ export class RoadStage implements Stage {
     if (party.hearts > 0 && lost) {
       party.hearts--;
       party.restore(lost);
-      const back = new Mate(lost, e.x - e.facing * 1.2, this.terrain, false);
+      const back = new Mate(lost, e.x - e.facing * 1.2, this.terrain, false, this.navigator);
       back.alpha = 0;
       this.mates.push(back);
       this.context.particles.sparks(back.x, back.y + 1, 1, 20);
@@ -1322,7 +1425,7 @@ export class RoadStage implements Stage {
   private stepRopes(dt: number): void {
     const e = this.crew.explorer;
     const held = e.ropeAnchor;
-    const hands = this.fighters.hands ?? e.hands;
+    const heroHands = this.fighters.hands ?? e.hands;
     for (const rope of this.ropes) {
       const links = rope.links;
       const gust = Math.sin(this.clock * 0.9 + rope.x) * 0.35;
@@ -1334,7 +1437,10 @@ export class RoadStage implements Stage {
         l.x += vx + gust * dt * dt;
         l.y += vy - this.gravity * dt * dt;
       }
-      const holding = held !== null && held.x === rope.x && held.y === rope.y;
+      const heroHolding = held !== null && held.x === rope.x && held.y === rope.y;
+      const companion = this.mates.find((m) => m.navigationPose.rope?.x === rope.x);
+      const hands = heroHolding ? heroHands : companion ? { x: companion.x, y: companion.y + 0.8 } : heroHands;
+      const holding = heroHolding || companion !== undefined;
       const grip = holding ? Math.min(ROPE_LINKS, Math.max(1, Math.round((Math.hypot(hands.x - rope.x, hands.y - rope.y) / rope.length) * ROPE_LINKS))) : -1;
       const step = rope.length / ROPE_LINKS;
       for (let k = 0; k < ROPE_ITERATIONS; k++) {
@@ -1372,6 +1478,7 @@ export class RoadStage implements Stage {
       }
     }
     for (const rope of this.ropes) {
+      if (this.mates.some((m) => m.navigationPose.rope?.x === rope.x)) continue;
       if (!e.catchRope(rope.x, rope.y, rope.length)) continue;
       // Her weight hits the rope: it jerks, and the branch creaks.
       for (const l of rope.links) l.px -= e.body.vx * 0.012;
@@ -1649,6 +1756,7 @@ export class RoadStage implements Stage {
     this.fade = 1;
     this.respawnIn = 0;
     const at = checkpointBefore(this.config.checkpoints, this.reached) + 1;
+    this.restoreMission();
     if (this.onFoot) {
       const e = this.crew.explorer;
       e.place(at);
@@ -1796,6 +1904,10 @@ export class RoadStage implements Stage {
     const framing = { zoom: view.zoom, pivotX: view.pivot.x, pivotY: view.pivot.y, roll: view.roll, ox: view.ox, oy: view.oy };
     const torch = dark && hero ? { x: hero.body.x, y: hero.body.y } : null;
     this.drawShots(ctx, toScreen);
+    const missionArt = this.mission?.snapshot();
+    if (missionArt && !missionArt.keyHeld && !missionArt.keyAvailable && this.keyCarrier && this.keyCarrier.health > 0) { const [kx, ky] = toScreen(this.keyCarrier.x, this.keyCarrier.y + 2.4); drawDroppedPrisonKey(painter, kx, ky, 0); }
+    if (missionArt?.keyAvailable) { const [kx, ky] = toScreen(missionArt.keyX, this.terrain.height(missionArt.keyX)); drawDroppedPrisonKey(painter, kx, ky, time); }
+    if (missionArt && !missionArt.cageOpen && (missionArt.phase === "transporting" || missionArt.phase === "intercept")) { const [cx, cy] = toScreen(missionArt.cageX, this.terrain.height(missionArt.cageX)); drawPrisonTransportDolly(painter, cx, cy); }
     const lights: SceneLight[] = this.torches.map((x) => ({ x, y: this.terrain.height(x) + TORCH.height, color: TORCH.color, power: TORCH.power }));
     const cages = this.cages.map((c) => ({ x: c.x + (c.shake > 0 ? Math.sin(time * 70) * 0.03 : 0), y: this.terrain.height(c.x), broken: c.broken }));
     if (!this.fighters.draw(camera, framing, dt, alpha, hero, this.boars, lamps, 1 - Math.max(this.fade, view.fade), torch, [...this.cages.filter((c) => !c.broken).map((c) => c.mate), ...this.mates, ...this.leaving], lights, cages) && hero) hero.draw(ctx, painter, toScreen, alpha, dt, this.gravity);
@@ -1823,8 +1935,11 @@ export class RoadStage implements Stage {
       // The rope itself: one thick line through its links (taut and straight under her weight, the
       // free end hanging below her hands), a knot at the end.
       const held = this.crew.explorer.ropeAnchor;
-      const holding = held !== null && held.x === rope.x && held.y === rope.y;
-      const hands = this.fighters.hands ?? this.crew.explorer.hands;
+      const heroHands = this.fighters.hands ?? this.crew.explorer.hands;
+      const heroHolding = held !== null && held.x === rope.x && held.y === rope.y;
+      const companion = this.mates.find((m) => m.navigationPose.rope?.x === rope.x);
+      const hands = heroHolding ? heroHands : companion ? { x: companion.x, y: companion.y + 0.8 } : heroHands;
+      const holding = heroHolding || companion !== undefined;
       const points = holding ? [[ax, ay] as [number, number], toScreen(hands.x, hands.y), toScreen(hands.x + (rope.links[ROPE_LINKS].x - hands.x) * 0.3, hands.y - 0.55)] : rope.links.map((l) => toScreen(l.x, l.y));
       ctx.strokeStyle = "#8a6a44";
       ctx.lineWidth = 1.6;
@@ -2250,6 +2365,11 @@ export class RoadStage implements Stage {
     else if (this.boars.some((b) => b.active && b.x - v.x > 0 && b.x - v.x < 30)) prompt = "Beasts: hit them fast, fly over, or blast them with the thrusters";
     else if (car.airborne && car.flipsInAir > 0) prompt = `${car.flipsInAir} flip${car.flipsInAir > 1 ? "s" : ""}: land it level`;
     else if (this.crew.canAlight) prompt = "Stopped: E · Get out on foot";
+    if (foot && this.mission) {
+      const m = this.mission.snapshot();
+      if (!m.cageOpen && Math.abs(e.body.x - m.cageX) < 5) prompt = m.keyHeld ? "E · Unlock the prison cage    F · Breach" : "F · Breach the prison cage, or recover the carrier’s key";
+      else if (m.keyAvailable && Math.abs(e.body.x - m.keyX) < 5) prompt = "E · Pick up the prison key";
+    }
     const driving = this.crew.mode === "car";
     const near = (b: Boar): boolean => b.active && Math.abs(b.x - (foot ? e.body.x : v.x)) < 14;
     const mood: Mood = driving ? "drive" : this.boars.some((b) => near(b) && b.kind === "brute") ? "boss" : this.boars.some((b) => near(b) && (b.fighter || b.kind === "wolf")) ? "fight" : "explore";
@@ -2266,7 +2386,8 @@ export class RoadStage implements Stage {
       fireCharge: e.fireCharge,
       master: e.master,
       stroke: e.stroke >= 0,
-      objective: this.config.rescueObjective ? this.cages.some((c) => !c.broken) ? "MISSION · Free the imprisoned Knight" : this.rescueComplete() ? "MISSION · Prisoner safe — escape together" : "MISSION · Bring the Knight alive to extraction; revive them if down. Restart the stage if captured." : undefined,
+      routeMap: this.routeMap(),
+      objective: this.mission ? `${this.mission.snapshot().objective}${this.mission.snapshot().phase === "key-or-breach" ? ` · Transfer in ${Math.ceil(this.mission.snapshot().secondsRemaining)}s` : ""}` : undefined,
       team: this.mates.filter((m) => m.state !== "caged").map((m) => ({ name: m.spec.name, distance: Math.round(m.x - e.body.x), fighting: m.state === "attack", health: m.health, alive: m.alive, down: m.state === "wounded" })),
       prompt,
       speed: driving ? v.speed * 3.6 : null,

@@ -1,3 +1,4 @@
+import { writeRouteMap, type SquadOrder } from "../route-map-state";
 import { MAX_HEARTS } from "../actors/explorer";
 import { Party } from "../actors/party";
 import { Combo, POINTS, Score } from "../actors/score";
@@ -88,6 +89,29 @@ export class Game {
     return this.stage;
   }
   private stage: Stage;
+  private mapResume = false;
+  private mapOpen = false;
+
+  toggleMap(): void {
+    if (this.mapOpen) { this.closeMap(); return; }
+    if (this.phase !== "play" && this.phase !== "paused") return;
+    this.mapResume = this.phase === "play";
+    this.mapOpen = true;
+    this.hud.root.dataset.map = "on";
+    this.input.clear();
+    this.setPhase("paused");
+  }
+
+  closeMap(): void {
+    if (!this.mapOpen) return;
+    this.mapOpen = false;
+    this.hud.root.dataset.map = "off";
+    this.input.clear();
+    if (this.mapResume) this.setPhase("play");
+  }
+
+  orderSquad(order: SquadOrder): void { this.stage.orderSquad?.(order); }
+
   /** Score when the current stage began (restarting the stage rolls back to it). */
   private stageStartScore = 0;
   /** The level being played (1 and up: the journey never ends), and what it is. */
@@ -248,6 +272,7 @@ export class Game {
   /** From the overlay buttons; the keyboard does the same through `flow`. */
   command(command: Command): void {
     this.audio.unlock();
+    if (this.mapOpen) this.closeMap();
     switch (command) {
       case "start":
         if (this.phase === "title") this.beginStage(1);
@@ -351,7 +376,15 @@ export class Game {
     }
     this.accumulator += elapsed * this.timeScale;
     let input = this.input.read();
-    this.flow(input, elapsed);
+    if (input.mapPressed) {
+      this.toggleMap();
+      input = { ...input, mapPressed: false, pausePressed: false };
+    } else if (this.mapOpen && input.pausePressed) {
+      this.closeMap();
+      // Closing the map consumes Escape; the same press must not immediately pause again.
+      input = { ...input, pausePressed: false };
+    }
+    if (!this.mapOpen) this.flow(input, elapsed);
     let steps = 0;
     while (this.accumulator >= STEP && steps < MAX_STEPS) {
       // The stage keeps running under its title card and through the dip between stages: play never stops.
@@ -360,17 +393,17 @@ export class Game {
         this.score.update(STEP);
       }
       // Presses go to the first step only; held state applies to every step.
-      input = { ...input, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, masterPressed: false, revivePressed: false, resetPressed: false, pausePressed: false };
+      input = { ...input, mapPressed: false, flipPressed: 0, jumpPressed: false, interactPressed: false, switchPressed: false, planetPressed: false, attackPressed: false, weaponPressed: false, skillPressed: false, masterPressed: false, revivePressed: false, resetPressed: false, pausePressed: false };
       this.accumulator -= STEP;
       steps++;
     }
     this.time += elapsed;
     this.frameDt = Math.max(1 / 240, elapsed);
     this.frame++;
-    this.draw(this.accumulator / STEP);
-    this.onFrame?.();
+    // The tactical map and pause menu hold a frozen world; only input and HUD need polling.
+    if (this.phase !== "paused") { this.draw(this.accumulator / STEP); this.onFrame?.(); }
     // The HUD at ~20 Hz: each write restyles the overlay, which phones feel; bars ease between writes in CSS.
-    if (this.frame % 3 === 0 || this.phase !== "play") this.writeHud();
+    if (this.frame % 3 === 0) this.writeHud();
     const hud = this.stage.hud();
     const playing = this.phase === "play";
     this.audio.update({ driving: playing && hud.speed !== null, speed: (hud.speed ?? 0) / 3.6, throttle: input.move, thrust: input.jumpHeld && hud.speed !== null && playing ? 1 : 0, combat: playing && hud.combat === true, mood: hud.mood });
@@ -612,6 +645,7 @@ export class Game {
   private writeHud(): void {
     const hud = this.stage.hud();
     const root = this.hud.root;
+    if (hud.routeMap) writeRouteMap(root, hud.routeMap);
     this.text("prompt", this.phase === "play" ? (this.touch ? touchPrompt(hud.prompt) : hud.prompt) : "");
     // The subtitle: the speaker's name and their line, while it's being said.
     this.set("line", hud.line ? "on" : "off");

@@ -501,3 +501,7 @@ The hero remains white. The selected-work ring is the only full orange home sect
 The ring includes Idea to Orbit with a static, tier-sized WebP banner, studio development credit and a Play game link to `/play`. Clicking that panel opens the game directly; other panels retain their tissue transitions. No game engine or live demo runs in the home ring.
 
 On landscape screens, the caption uses a solid orange panel with the existing medium radius and surface border. This keeps the title, description and Play link readable as the band turns behind the column, without changing the camera framing.
+
+### Orbit tactical route map
+
+The game HUD uses a compact pair of aligned ground/canopy tracks with queen, soldier and objective markers. Amber marks combat, red marks wounded soldiers, and dashed outlines mark waiting. The expanded panel pauses simulation and offers a soldier selector plus hold, regroup, advance and resume orders. Controls retain 44 px targets and visible focus, with a scrollable panel capped at 85svh. No decorative map motion is required in reduced-motion mode. Soldiers keep world positions and role speeds; ropes use visible grip/release and gravity, logs carry passengers, and ledge climbs use hand-supported mantles.

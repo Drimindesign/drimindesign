@@ -1,3 +1,4 @@
+import type { RouteMapSnapshot, SquadOrder } from "../route-map-state";
 import type { Combo, Score } from "../actors/score";
 import type { GameAudio } from "../engine/audio";
 import type { InputSnapshot } from "../engine/input";
@@ -78,6 +79,7 @@ export interface View {
 }
 
 export interface StageHud {
+  routeMap?: RouteMapSnapshot;
   objective?: string;
   prompt: string;
   /** A conversation is being played (the world holds still; the Skip button shows). */
@@ -127,6 +129,7 @@ export interface StageHud {
 }
 
 export interface Stage {
+  orderSquad?(order: SquadOrder): void;
   readonly id: StageId;
   /** Sparks or cells collected / available. */
   readonly collected: number;

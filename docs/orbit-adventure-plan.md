@@ -15,8 +15,14 @@ Floodgates and buoyant crossing platforms; a counterweighted lift; stealth throu
 ## Acceptance gates
 Test queen departures at 30, 60, 150 and 300 m with no coordinate discontinuity, fade or speed increase. Verify separated combat continues. Test body separation in crowds and near walls. Validate every required crossing for every companion class, including alternate routes. Run each mission with missing squad roles. Verify keyboard/touch map controls, reduced motion, pause, death, checkpoint and route restoration. Build, lint, unit/integration checks and production profiling precede deployment. The previous mobile Lighthouse score was 70; 95 remains an unresolved target.
 
-## Remaining work
-Navigation graph, physical rope traversal for companions, interactive two-track map, and the prisoner-transfer mission are not implemented by Release 1. Do not describe them as shipped.
+## Current implementation
 
-## First playable adventure
-The village now requires freeing the Knight and extracting together. Reaching the level end alone no longer completes it. This is the initial prison-break objective; the timed transport, alternate key route and navigation-dependent escort missions remain planned.
+Companions now plan crossings from authored terrain, rope stations and platforms. Shared reservations queue crossings. Rope travel uses gravity, a constrained grip, a real release and ballistic transfer before the next catch. Ledge mantles use bounded hand reach. Moving logs carry passengers; canopy travel uses the actual deck elevation. This is a local authored-route planner, not a general A* graph.
+
+The two-track map shows the queen, soldiers, health/combat state, crossings and objectives. T opens tactical orders and pauses simulation. Players can hold, regroup, advance to a selected distance or restore formation assignments. The soldier selector supplements markers that share a position on the full-level scale.
+
+The first village mission has a patrolling key carrier, dropped key, alternate three-hit cage breach, live-time transfer deadline, moving prison convoy and final interception point. Extraction requires the conscious prisoner to arrive with the queen. Checkpoints retain mission progress without duplicating soldiers. Later adventure types above remain planned.
+
+## Validation evidence
+
+Automated checks cover authored ravines, crossing queues and hero priority, all seven soldier classes across the full night jungle in both directions, moving logs, canopy climbing/descent, mission alternatives, pause-time behavior, dropped-key coordinates, checkpoint recovery and extraction. Browser map layouts were checked at 360, 390, 768, 1024, 1440, 1920 and 2560 px. Production build and lint pass. These checks do not certify every generated level or establish a Lighthouse 95 score.

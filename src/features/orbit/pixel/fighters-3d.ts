@@ -243,6 +243,8 @@ interface Actor {
  * its zoom. Loads in the background; until it's ready (or without WebGL) the 2D explorer is drawn.
  */
 export class Fighters3D {
+  private harnessGeometry: Three.TorusGeometry | null = null;
+  private harnessMaterial: Three.MeshStandardMaterial | null = null;
   private three: {
     THREE: ThreeModule;
     renderer: Three.WebGLRenderer;
@@ -526,6 +528,8 @@ export class Fighters3D {
     this.release?.();
     this.release = null;
     this.three = null;
+    this.harnessGeometry = null;
+    this.harnessMaterial = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -678,11 +682,37 @@ export class Fighters3D {
       actor = t.makeMate(mate.kind);
       t.mates.set(mate, actor);
     }
+    const pose = mate.navigationPose;
+    if (pose.kind === "rope") {
+      this.harnessGeometry ??= new t.THREE.TorusGeometry(0.17, 0.035, 6, 14);
+      this.harnessMaterial ??= new t.THREE.MeshStandardMaterial({ color: 0x76512d, roughness: 0.82, metalness: 0.05 });
+      if (!actor.root.userData.companionHarness) {
+        const harness = new t.THREE.Mesh(this.harnessGeometry, this.harnessMaterial);
+        harness.name = "companion-rope-harness";
+        harness.rotation.x = Math.PI / 2;
+        harness.position.y = mate.spec.height * 0.46;
+        actor.root.add(harness);
+        actor.root.userData.companionHarness = harness;
+      }
+    }
     actor.root.visible = true;
     setOpacity(actor, mate.alpha);
     actor.root.position.set(mate.x, mate.y, 0.35);
     actor.root.rotation.set(0, mate.facing > 0 ? Math.PI / 2 - THREE_QUARTER : -Math.PI / 2 + THREE_QUARTER, 0);
-    const clip = mate.clip;
+    actor.root.rotation.z = pose.kind === "rope" && pose.rope
+      ? Math.atan2(pose.rope.x - mate.x, pose.rope.y - mate.y - 0.8) * 0.18
+      : 0;
+    const clip = pose.kind === "rope"
+      ? mate.kind === "dog"
+        ? { name: "Gallop_Jump", speed: 0.75, once: false }
+        : mate.kind === "giant"
+          ? { name: "foe_run", speed: 0.55, once: false }
+          : { name: "Jump_Full_Short", speed: 0.65, once: false }
+      : pose.kind === "climb"
+        ? { name: mate.kind === "dog" ? "Walk" : mate.kind === "giant" ? "hero_climb" : "Jump_Full_Short", speed: 0.5, once: false }
+        : pose.kind === "ride"
+          ? { name: mate.kind === "dog" ? "Idle" : mate.kind === "giant" ? "foe_idle" : "Idle_A", speed: 0.75, once: false }
+          : mate.clip;
     // A one-shot clip plays from the top when it starts, and again for a fresh hit.
     play(actor, clip.name, clip.speed, clip.once && (actor.current !== clip.name || mate.hitSerial !== actor.reflex.serial));
     actor.reflex.serial = mate.hitSerial;
@@ -838,7 +868,8 @@ export class Fighters3D {
         break;
       }
       case "wait":
-        play(actor, "foe_idle");
+        if (Math.abs(beast.vx) > 0.3) play(actor, "foe_walk", Math.abs(beast.vx) / 1.6);
+        else play(actor, "foe_idle");
         break;
       case "circle":
         play(actor, "foe_strafe", Math.max(0.5, Math.abs(beast.vx) / 1.5));

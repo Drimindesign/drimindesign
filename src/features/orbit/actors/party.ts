@@ -2,6 +2,7 @@ import type { Boar } from "./boar";
 import { formationOffset } from "./squad-formation";
 import type { Terrain } from "../engine/terrain";
 import type { WeaponId } from "./arsenal";
+import { CompanionNavigator, type CompanionCrossing } from "./companion-navigation";
 
 /** Who can be found locked up: the five KayKit toys, a village dog, and Gorr the giant. */
 export type MateKind = "knight" | "barbarian" | "mage" | "ranger" | "rogue" | "dog" | "giant";
@@ -126,15 +127,17 @@ const MERCY = 0.9;
 export const WOUND = { wait: 10, revive: 1.2, back: 0.5 } as const;
 
 export type MateState = "caged" | "freeing" | "cheering" | "follow" | "attack" | "hurt" | "wounded" | "dead" | "leaving";
+export type MateOrder = { kind: "follow" | "hold" | "scout" | "regroup"; x?: number };
 
 /*
  * A mate on the ground: locked up, then freed (it stands, cheers, and joins), then following her
  * in a line, turning to fight whatever comes close (up close, with arrows, or with magic). Blows
  * cost it health; at none it goes down wounded and calls for her, and if she doesn't reach it in
- * time it's lost. It hops up ledges after her (four legs bound up them, and over gaps); what it
- * can't follow (a rope across a ravine) it finds its own way round and catches up out of sight.
+ * time it's lost. It climbs authored ledges, bounds where its body can, and uses the stage's
+ * reserved rope crossings for ravines; distant members keep moving through the same world.
  */
 export class Mate {
+  readonly navigationId: object = {};
   x: number;
   y: number;
   vx = 0;
@@ -147,8 +150,11 @@ export class Mate {
   private attackTarget: Boar | null = null;
   private mercy = 0;
   /** A hop or bound under way: from where to where, and how far through (0 … 1). */
-  private hop: { x0: number; y0: number; x1: number; y1: number; t: number } | null = null;
-  /** Faded out (catching up out of sight) and back in. */
+  hop: { x0: number; y0: number; x1: number; y1: number; t: number; climb?: boolean } | null = null;
+  fall: { vx: number; vy: number } | null = null;
+  traversal: CompanionCrossing | null = null;
+  order: MateOrder = { kind: "follow" };
+  /** Visibility for boarding, recruitment and casualties; distance never changes it. */
   alpha = 1;
   /** Hits taken (the 3D body's flinch reads it); time since the last (s), and the healing under way. */
   hitSerial = 0;
@@ -166,6 +172,7 @@ export class Mate {
     x: number,
     private readonly terrain: Terrain,
     caged: boolean,
+    private readonly navigator?: CompanionNavigator,
   ) {
     this.spec = MATES[member.kind];
     this.x = x;
@@ -234,6 +241,7 @@ export class Mate {
     this.mercy = MERCY;
     this.vx = Math.sign(this.x - fromX) * 2.2;
     if (this.member.hearts === 0) {
+      this.navigator?.disable(this);
       this.set("wounded");
       this.vx = 0;
       return true;
@@ -245,6 +253,7 @@ export class Mate {
 
   /** Stands at `x` (a rider's place on its carrier's back is set from outside). */
   place(x: number): void {
+    this.navigator?.reset(this);
     this.x = x;
     this.y = this.terrain.height(x);
     this.hop = null;
@@ -254,7 +263,7 @@ export class Mate {
    * One step. `slot`: its place in the line behind her. `foe`: the nearest enemy, if any. Returns
    * the enemy struck this step (its blow lands), if any; and reports a death (left wounded too long) through `lost`.
    */
-  update(dt: number, hero: { x: number; facing: number; viewHalf?: number }, slot: number, foe: Boar | null, lost?: () => void): Boar | null {
+  update(dt: number, hero: { x: number; facing: number; viewHalf?: number }, slot: number, foe: Boar | null, lost?: () => void, order: MateOrder = this.order): Boar | null {
     this.timer += dt;
     this.reload = Math.max(0, this.reload - dt);
     this.mercy = Math.max(0, this.mercy - dt);
@@ -271,6 +280,7 @@ export class Mate {
     }
     this.alpha = Math.min(1, this.alpha + dt * 2);
     if (this.carrier) return null;
+    if (this.hop && this.navigator) { this.navigator.move(this, dt, this.hop.x1); return null; }
     if (this.hop) {
       // A hop up a ledge or a bound over a gap: an arc between the two footings.
       this.hop.t = Math.min(1, this.hop.t + dt / HOP.time);
@@ -280,6 +290,7 @@ export class Mate {
       if (k >= 1) this.hop = null;
       return null;
     }
+    if (this.state === "wounded" || this.state === "dead") this.navigator?.rest(this, dt);
     const ground = this.terrain.height(this.x);
     switch (this.state) {
       case "caged":
@@ -289,12 +300,12 @@ export class Mate {
       case "dead":
         // Dragged off: gone from sight in a couple of seconds.
         this.vx = 0;
-        this.y = ground;
+        if (!this.fall && !this.navigator?.supportPhase(this)) this.y = ground;
         this.alpha = Math.max(0, 1 - this.timer / 2);
         return null;
       case "wounded":
         this.vx = 0;
-        this.y = ground;
+        if (!this.fall && !this.navigator?.supportPhase(this)) this.y = ground;
         if (this.timer > WOUND.wait) {
           this.member.alive = false;
           this.set("dead");
@@ -334,8 +345,20 @@ export class Mate {
         // Danger in reach: turn and fight it (closing in if it fights up close).
         // An enemy in sight: a soldier goes for it (out ahead of her if need be), then falls back in.
         const spot = spec.attack === "arrow" || spec.attack === "magic" ? SPOT.ranged : SPOT.melee;
-        const target = hero.x + formationOffset(slot, this.kind) * hero.facing;
+        const target = order.kind === "hold" || order.kind === "scout"
+          ? order.x ?? this.x
+          : order.kind === "regroup"
+            ? hero.x - hero.facing * Math.min(1.8, 0.7 + slot * 0.12)
+            : hero.x + formationOffset(slot, this.kind) * hero.facing;
         if (foe && Math.abs(foe.x - this.x) < spot) {
+          if (order.kind === "hold" || (order.kind === "regroup" && Math.abs(foe.x - hero.x) > 1.6)) {
+            const gap = target - this.x;
+            const want = Math.abs(gap) < 0.25 ? 0 : Math.sign(gap) * Math.min(spec.speed, Math.abs(gap) * 2.4);
+            this.vx = approach(this.vx, want, 12 * dt);
+            if (Math.abs(this.vx) > 0.2) this.facing = Math.sign(this.vx);
+            this.move(dt, target);
+            return null;
+          }
           const d = foe.x - this.x;
           this.facing = Math.sign(d) || this.facing;
           if (Math.abs(d) <= spec.range && this.reload === 0) {
@@ -346,7 +369,7 @@ export class Mate {
           }
           const want = Math.abs(d) > spec.range * 0.8 && (spec.attack === "melee" || spec.attack === "bite") ? Math.sign(d) * spec.speed : 0;
           this.vx = approach(this.vx, want, 14 * dt);
-          this.move(dt);
+          this.move(dt, want === 0 ? this.x : foe.x - Math.sign(d) * spec.range * 0.75);
           return null;
         }
         // Keep the assigned front, rear or close-guard slot while the hero advances.
@@ -355,14 +378,18 @@ export class Mate {
         this.vx = approach(this.vx, want, 12 * dt);
         if (Math.abs(this.vx) > 0.2) this.facing = Math.sign(this.vx);
         else this.facing = hero.facing;
-        this.move(dt);
+        this.move(dt, target);
         return null;
       }
     }
   }
 
   /* Walks along the ground; hops up a ledge (bounds, on four legs, up higher and over gaps); otherwise stops at what it can't take. */
-  private move(dt: number): void {
+  private move(dt: number, targetX = this.x + this.vx * dt): void {
+    if (this.navigator) {
+      this.navigator.move(this, dt, targetX);
+      return;
+    }
     const next = this.x + this.vx * dt;
     const here = this.terrain.height(this.x);
     const there = this.terrain.height(next);
@@ -397,7 +424,24 @@ export class Mate {
 
   /** In the air (hopping or bounding). */
   get airborne(): boolean {
-    return this.hop !== null;
+    const supportPhase = this.navigator?.supportPhase(this);
+    return this.hop !== null || this.fall !== null || this.traversal !== null || supportPhase === "jump" || supportPhase === "climb";
+  }
+
+  /** Traversal data for stage rendering and diagnostics; the actor stays in world coordinates. */
+  get navigationPose(): { kind: "ground" | "hop" | "rope" | "walk" | "climb" | "jump" | "ride"; rope: { x: number; y: number; length: number } | null } {
+    const crossing = this.traversal;
+    if (!crossing) {
+      const supportPhase = this.navigator?.supportPhase(this);
+      return { kind: supportPhase ?? (this.hop?.climb ? "climb" : this.hop || this.fall ? "hop" : "ground"), rope: null };
+    }
+    if (crossing.kind === "rope" && crossing.ropePhase !== "swing") return { kind: "hop", rope: null };
+    return {
+      kind: crossing.kind,
+      rope: crossing.kind === "rope" && crossing.ropeX !== undefined
+        ? { x: crossing.ropeX, y: crossing.ropeY ?? this.y + 2, length: crossing.ropeLength ?? 6.4 }
+        : null,
+    };
   }
 
   /** The motion-captured clip its body plays now, and how fast. */

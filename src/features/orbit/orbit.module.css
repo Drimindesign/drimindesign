@@ -405,17 +405,19 @@
   }
 
   /* Dialogue: a GTA-style subtitle, the speaker in the brand violet, centred low over the scene. */
+  /* Subtitles: small, at the bottom centre, like a film's (on the black bar when one is down). */
   .subtitle {
     position: absolute;
     left: 50%;
-    bottom: clamp(7.5rem, 30svh, 11rem);
+    bottom: calc(max(0.5rem, env(safe-area-inset-bottom)) + 0.2rem);
+    z-index: 2;
     display: none;
-    max-width: min(36rem, 90%);
+    max-width: min(34rem, 70%);
     translate: -50% 0;
     text-align: center;
-    font-size: var(--text-body);
-    font-weight: 600;
-    line-height: 1.35;
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.3;
     text-shadow: 0 2px 0 rgb(10 8 14 / 0.95), 0 0 8px rgb(10 8 14 / 0.8);
     pointer-events: none;
   }
@@ -426,6 +428,7 @@
 
   .speaker {
     color: #b48eec;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
@@ -995,7 +998,7 @@
     .pad[data-action="feed"] {
       width: 4rem;
       height: 4rem;
-      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 0.4rem);
+      bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 2rem);
       animation: offer 1s ease-in-out infinite alternate;
     }
 

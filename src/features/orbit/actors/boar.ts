@@ -82,6 +82,17 @@ let sprites: [Sprite, Sprite] | null = null;
  * its back stuns it longer; after enough blows it runs away. A fast car sends it tumbling
  * (momentum: the beast is a small fraction of the car), and the thruster jet blasts it away.
  */
+/**
+ * Grey's men grow as her team does: each level her teammates have gained on average adds this
+ * much to every enemy's health and to the damage its blows do (a little under the team's own
+ * growth, so leveling up still pays). Set by the stage before it brings anyone on.
+ */
+export const ENEMY_GROWTH = { health: 0.1, damage: 0.12 } as const;
+let enemyLevel = 0;
+export function setEnemyLevel(level: number): void {
+  enemyLevel = Math.max(0, level);
+}
+
 export class Boar {
   x: number;
   y: number;
@@ -112,13 +123,17 @@ export class Boar {
   private spin = 0;
   private readonly sprite: [Sprite, Sprite];
 
+  /** The team's average level when it came on (fixed for its life). */
+  private readonly might: number;
+
   constructor(
     readonly home: number,
     private readonly terrain: Terrain,
     readonly kind: BeastKind = "boar",
   ) {
     this.spec = SPECS[kind];
-    this.health = this.spec.health;
+    this.might = enemyLevel;
+    this.health = this.maxHealth;
     this.x = home;
     this.y = terrain.height(home);
     sprites ??= [BOAR(0), BOAR(1)];
@@ -227,7 +242,12 @@ export class Boar {
 
   /** How many blows it can take in all (for the health bar over the big ones). */
   get maxHealth(): number {
-    return this.spec.health;
+    return Math.round(this.spec.health * (1 + ENEMY_GROWTH.health * this.might) * 10) / 10;
+  }
+
+  /** How hard its blows land on her team, grown with them. */
+  get damageScale(): number {
+    return 1 + ENEMY_GROWTH.damage * this.might;
   }
 
   /** Big enough to carry a health bar: brutes and the chief. */
@@ -293,7 +313,7 @@ export class Boar {
     this.y = this.terrain.height(this.home);
     this.vx = 0;
     this.vy = 0;
-    this.health = this.spec.health;
+    this.health = this.maxHealth;
     this.state = "wait";
     this.angle = 0;
     this.spin = 0;

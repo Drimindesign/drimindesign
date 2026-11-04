@@ -183,7 +183,7 @@ export function stepBeasts(beasts: readonly Boar[], crew: Crew, context: StageCo
     const mate = target.mate;
     if (mate?.open && beast.dangerous && Math.abs(beast.x - mate.x) < reach && (!beast.fighter || Math.sign(mate.x - beast.x) === beast.facing)) {
       // Soldiers take two points from ordinary strikes, four from skilled heavy opponents.
-      const killed = mate.hurt(beast.x, beast.kind === "brute" || beast.kind === "chief" ? 4 : 2);
+      const killed = mate.hurt(beast.x, (beast.kind === "brute" || beast.kind === "chief" ? 4 : 2) * beast.damageScale);
       particles.blood(mate.x, mate.y + mate.spec.height * 0.6, Math.sign(mate.x - beast.x) || 1, killed ? 16 : 8, 1);
       audio.thwack();
       if (!beast.fighter) beast.rebound(Math.sign(beast.x - mate.x) || 1);

@@ -4,12 +4,13 @@ import { CompanionNavigator } from "../actors/companion-navigation";
 import type { RouteMapSnapshot, SquadOrder } from "../route-map-state";
 import { PrisonerMission, type PrisonerMissionSave } from "./prisoner-mission";
 import { separateBodies, type SolidBody } from "../engine/body-separation";
-import { Boar, type BeastKind } from "../actors/boar";
+import { Boar, setEnemyLevel, type BeastKind } from "../actors/boar";
 import { Car, type CarEvent } from "../actors/car";
 import { Crew } from "../actors/crew";
 import { Explorer } from "../actors/explorer";
 import { MASTER } from "../actors/arsenal";
 import { MATES, Mate, Party, RALLY, SKILLS, WOUND, type MateKind } from "../actors/party";
+import { planTargets } from "../actors/squad-tactics";
 import { MAX_HEARTS } from "../actors/explorer";
 import { POINTS, STUNTS } from "../actors/score";
 import { FollowCamera, projector, type Camera, type ToScreen } from "../engine/camera";
@@ -118,7 +119,8 @@ export interface RoadConfig {
   /** Ropes hanging over ravines from the branches above (x, m). */
   ropes?: readonly number[];
   /** Prisoners in cages (x, m, and who), each with a torch beside it. */
-  cages?: readonly (readonly [number, MateKind])[];
+  /** Where, who, and whether they are a villager (rescued, they go home instead of joining). */
+  cages?: readonly (readonly [number, MateKind, boolean?])[];
   /** Torches on poles (x, m): real light on whoever passes. */
   torches?: readonly number[];
 }
@@ -235,14 +237,8 @@ const SKILL = {
   throw: { range: 12, damage: 2 },
   howl: { reach: 10 },
 } as const;
-/** Gorr guards her: any enemy this close to her (m) is his first. */
-const BODYGUARD = 6;
-/** A fight a teammate started is chased this far (m) before it gives up on it. */
-const COMMIT = 20;
 /** A teammate notices (turns to face, ready) an enemy this close (m). */
 const ALERT = 15;
-/** An enemy this close to a teammate (m) is its fight first, whatever else is going on. */
-const SELF_DEFENCE = 2.6;
 /** Calling the team (T): everyone drops what they're doing and fights at her side this long (s). */
 const RALLY_CALL = 8;
 /** Gorr's ground slam: his blow also hits every enemy within this reach (m) of the struck one, at this share. */
@@ -410,12 +406,12 @@ export class RoadStage implements Stage {
   /** Who each teammate is fighting (for finishing fights, and for the minimap). */
   private readonly mateTargets = new Map<Mate, Boar | null>();
   /**
-   * Grey answers a bigger army with more men: once she has three teammates, every pack and camp
-   * brings one more enemy for each two of them.
+   * Grey answers her army with his (like a base built to match the attacker): every pack and camp
+   * brings one more enemy for each teammate she has, from the second one on.
    */
   private get armyBonus(): number {
     const army = this.context.party.members.filter((m) => m.alive).length;
-    return army >= 3 ? Math.floor(army / 2) : 0;
+    return army >= 2 ? army : 0;
   }
   /** Seconds left of a call to the team. */
   private rallyCall = 0;
@@ -486,6 +482,9 @@ export class RoadStage implements Stage {
     this.cells = new Pickups(config.cells.map(([x, h]) => [x, Math.max(0, this.terrain.height(x)) + h] as const));
     this.rings = config.rings.map(([x, h]) => ({ x, y: Math.max(0, this.terrain.height(x)) + h, taken: false }));
     this.traffic = config.traffic.map((t) => ({ ...t, at: t.x, moving: true, passed: false, sprite: TRAFFIC(t.kind, t.color) }));
+    // Grey's men match her team's growth (the average level of those still with her).
+    const team = context.party.members.filter((m) => m.alive);
+    setEnemyLevel(team.length > 0 ? team.reduce((sum, m) => sum + (m.level ?? 0), 0) / team.length : 0);
     this.boars = config.beasts.map(([x, kind]) => new Boar(x, this.terrain, kind));
     this.stops = (config.stops ?? []).map((s) => ({ x: s.x, logs: BARRICADE.logs, broken: false }));
     this.encounters = (config.stops ?? []).map((spec, i) => ({ stop: this.stops[i], spec, started: false, left: spec.enemies + this.armyBonus, next: 0, enemies: [], cleared: false }));
@@ -521,10 +520,10 @@ export class RoadStage implements Stage {
     for (const member of context.party.members) if (member.alive) this.mates.push(new Mate(member, explorer.body.x - 2 - this.mates.length * 1.6, this.terrain, false, this.navigator));
     // Each cage holds a prisoner who'll join her; if her team already has one of their kind, a villager who'll go home.
     const taken = [...context.party.taken];
-    this.cages = (config.cages ?? []).map(([x, kind]) => {
+    this.cages = (config.cages ?? []).map(([x, kind, visit]) => {
       const held = taken.shift();
       if (held) return { x, blows: CAGE.blows, broken: false, shake: 0, mate: new Mate(held, x, this.terrain, true, this.navigator) };
-      const villager = kind === "giant" ? context.party.has(kind) : context.party.members.filter((m) => m.alive).length >= 10;
+      const villager = visit === true || (kind === "giant" ? context.party.has(kind) : context.party.members.filter((m) => m.alive).length >= 10);
       const who = villager && kind === "giant" ? TOY_KINDS[Math.floor(x) % TOY_KINDS.length] : kind;
       const mate = new Mate(Party.member(who), x, this.terrain, true, this.navigator);
       mate.visitor = villager;
@@ -1261,7 +1260,6 @@ export class RoadStage implements Stage {
     // Boarding must change the rendezvous to the live truck, not the queen's parked foot body.
     const formationHero = { x: inTruck ? v.x : e.x, facing: this.marchFacing, viewHalf: this.reachOfView, trouble };
     this.navigator.setBlockedRopes(this.crew.explorer.ropeAnchor ? [this.crew.explorer.ropeAnchor.x] : []);
-    const assigned = new Map<Boar, number>();
     // The dog takes the smallest toy on its back while the way is quiet; at a fight they both jump to it.
     const dog = this.mates.find((m) => m.kind === "dog" && m.active);
     for (const m of this.mates) {
@@ -1295,6 +1293,18 @@ export class RoadStage implements Stage {
       }
     }
     const places = new Map(guard.map((m, i) => [m, i] as const));
+    // The battle plan for this step: everyone's target chosen together, so they spread out.
+    const fighters = this.mates
+      .filter((m) => m.active && !m.carrier && m !== this.mount)
+      .map((m) => ({
+        mate: m,
+        x: m.x,
+        y: m.y,
+        ranged: m.spec.attack === "arrow" || m.spec.attack === "magic",
+        bodyguard: m.kind === "giant",
+        previous: this.mateTargets.get(m) ?? null,
+      }));
+    const plan = new Map([...planTargets(fighters, foes, { heroX: e.x, trouble })].map(([f, part]) => [f.mate, part] as const));
     for (const mate of this.mates) {
       const slot = places.get(mate) ?? 0;
       if (!mate.alive) {
@@ -1323,33 +1333,11 @@ export class RoadStage implements Stage {
         mate.alpha = 0;
         continue;
       }
-      let foe: (typeof foes)[number] | null = null;
-      // Gorr the bodyguard: whoever is on her is his, before anything else.
-      if (mate.kind === "giant") {
-        for (const b of foes) {
-          if (Math.abs(b.x - e.x) > BODYGUARD || inTruck) continue;
-          if (!foe || Math.abs(b.x - e.x) < Math.abs(foe.x - e.x)) foe = b;
-        }
-      }
-      // Self-defence: an enemy on it (ahead or behind) is fought and finished before anything else.
-      if (!foe) for (const b of foes) {
-        if (Math.abs(b.x - mate.x) > SELF_DEFENCE || Math.abs(b.y - mate.y) > 1.6) continue;
-        if (!foe || Math.abs(b.x - mate.x) < Math.abs(foe.x - mate.x)) foe = b;
-      }
-      // Then, in trouble, whoever is on her; otherwise the nearest enemy to itself.
-      const pool = trouble && onHer.length > 0 ? onHer : foes;
-      const from = trouble ? e.x : mate.x;
-      if (!foe) for (const b of pool) {
-        if ((assigned.get(b) ?? 0) >= (trouble ? 3 : 2)) continue;
-        if (!foe || Math.abs(b.x - from) < Math.abs(foe.x - from)) foe = b;
-      }
-      // A fight already started is finished: the same enemy, chased down (up to 20 m), not left behind.
-      const previous = this.mateTargets.get(mate);
-      const keep = previous && previous.active && Math.abs(previous.x - mate.x) < COMMIT && (!foe || Math.abs(foe.x - mate.x) > SELF_DEFENCE);
-      if (keep) foe = previous;
-      if (foe) assigned.set(foe, (assigned.get(foe) ?? 0) + 1);
-      if (foe && !trouble && !keep && Math.abs(foe.x - mate.x) > 12) foe = null;
-      mate.committed = keep === true;
+      // Its part in the squad's plan (who takes which enemy).
+      const part = plan.get(mate);
+      let foe = part?.foe ?? null;
+      if (inTruck) foe = null;
+      mate.committed = part?.committed === true;
       this.mateTargets.set(mate, foe);
       // Alert: it turns to face the nearest enemy it can see coming.
       let seen: number | null = null;

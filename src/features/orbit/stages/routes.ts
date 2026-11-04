@@ -229,10 +229,10 @@ export const JUNGLE_RUN: RoadConfig = {
   cages: [[126, "ranger"]],
   torches: [8, 52, 172, 280, 394, 467],
   ambushes: [
-    { x: 90, count: 2, kinds: ["wolf"] },
-    { x: 205, count: 3, kinds: ["wolf"] },
-    { x: 330, count: 3, kinds: ["wolf", "wolf"] },
-    { x: 440, count: 4, kinds: ["wolf"] },
-    { x: 505, count: 2, kinds: ["raider"] },
+    { x: 90, count: 3, kinds: ["wolf"] },
+    { x: 205, count: 4, kinds: ["wolf"] },
+    { x: 330, count: 5, kinds: ["wolf", "wolf"] },
+    { x: 440, count: 6, kinds: ["wolf"] },
+    { x: 505, count: 3, kinds: ["raider"] },
   ],
 };

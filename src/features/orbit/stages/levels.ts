@@ -43,8 +43,10 @@ const OPENING: Record<Biome, string> = {
  * One recruit a level, light troops first and the heavy hitters later (level 1 the Knight, 2 the
  * Ranger); from level 8 the cages hold extra copies of the light troops for a bigger army.
  */
-const RECRUITS: Partial<Record<number, MateKind>> = { 3: "rogue", 4: "mage", 5: "barbarian", 6: "giant", 7: "dog" };
-const COPIES: readonly MateKind[] = ["rogue", "ranger", "knight"];
+const RECRUITS: Partial<Record<number, MateKind>> = { 4: "dog", 6: "mage", 8: "barbarian", 10: "giant", 11: "rogue" };
+const COPIES: readonly MateKind[] = ["knight", "ranger", "rogue"];
+/** Levels without a recruit before this one hold a villager in the cage (rescued, they go home). */
+const COPIES_FROM = 12;
 
 export interface Level {
   config: RoadConfig;
@@ -97,7 +99,7 @@ export function level(n: number): Level {
   const ropes: number[] = [];
   const logs: LogSpec[] = [];
   const torches: number[] = [8];
-  const cages: [number, MateKind][] = [];
+  const cages: [number, MateKind, boolean?][] = [];
   const stops: StopSpec[] = [];
   const ambushes: AmbushSpec[] = [];
   const guards: [number, BeastKind][] = [];
@@ -105,8 +107,9 @@ export function level(n: number): Level {
   const walks: Walk[] = [];
   const sparks: [number, number][] = [];
   let x = 22;
-  const together = Math.min(4, 2 + Math.floor(n / 7));
-  const crowd = Math.min(10, 3 + Math.floor(n * 0.35));
+  // Grey fields a real army: camps of 4 and up, growing every level, coming two or more at a time.
+  const together = Math.min(5, 2 + Math.floor(n / 5));
+  const crowd = Math.min(14, 4 + Math.floor(n * 0.5));
 
   // What each place is made of (the first three sections are its signature, then any of them).
   const flavour: Record<Biome, readonly string[]> = {
@@ -126,7 +129,9 @@ export function level(n: number): Level {
   while (plan.filter((p) => p === "ambush").length < 2) plan.splice(1 + Math.floor(rand() * (plan.length - 1)), 0, "ambush");
   plan.splice(Math.floor(plan.length / 2), 0, "camp");
   if (n >= 6) plan.push("camp");
-  const prisoner = RECRUITS[n] ?? COPIES[(n - 8) % COPIES.length];
+  const recruit = RECRUITS[n];
+  const prisoner = recruit ?? (n >= COPIES_FROM ? COPIES[(n - COPIES_FROM) % COPIES.length] : "knight");
+  const villager = recruit === undefined && n < COPIES_FROM;
   plan.splice(Math.min(plan.length, 2), 0, "cage");
 
   for (const section of plan) {
@@ -205,7 +210,7 @@ export function level(n: number): Level {
         // The mix changes every play: a pure pack, Copycats with it (from level 4), or Copycats alone (from 6).
         const roll = play();
         const kinds = n >= 6 && roll < 0.25 ? place.gang : n >= 4 && roll < 0.6 ? [...place.animals, ...place.gang] : place.animals;
-        ambushes.push({ x: x + 6 + play() * 6, count: Math.min(8, 3 + Math.floor(n / 3) + Math.floor(play() * 2)), kinds });
+        ambushes.push({ x: x + 6 + play() * 6, count: Math.min(10, 4 + Math.floor(n / 2.5) + Math.floor(play() * 2)), kinds });
         x += 26;
         break;
       }
@@ -218,7 +223,7 @@ export function level(n: number): Level {
         cells.push([x + length * 0.4, 7.2]);
         // Up there: a Spark Heart, now and then.
         if (rand() < 0.5) sparks.push([x + length * 0.75, 7.4]);
-        ambushes.push({ x: x + 4, count: Math.min(6, 3 + Math.floor(n / 4)), kinds: place.animals });
+        ambushes.push({ x: x + 4, count: Math.min(8, 4 + Math.floor(n / 3)), kinds: place.animals });
         torches.push(x - 3);
         x += length + 10;
         break;
@@ -235,7 +240,7 @@ export function level(n: number): Level {
       case "cage": {
         // A guard or two on the cage, too.
         x += 10;
-        cages.push([x, prisoner]);
+        cages.push([x, prisoner, villager]);
         guards.push([x + 4, pickFoe(place.gang)]);
         x += 14;
         break;

@@ -54,8 +54,15 @@ export interface Member {
   rank?: number;
 }
 
-/** Support damage stays below the hero’s and does not grow with recruitment. */
-const SUPPORT_POWER = 0.42;
+/** Base share of a teammate's kind power its blows carry. */
+const SUPPORT_POWER = 0.75;
+/**
+ * Strength in numbers: each teammate beyond the first adds this much to every teammate's blows
+ * and takes this much off the damage they suffer, up to the caps.
+ */
+const SQUAD = { power: 0.22, powerCap: 2.2, guard: 0.12, guardCap: 0.55 } as const;
+/** Running to her aid: the sprint (× its speed), and how close an enemy to her counts as trouble (m). */
+export const RALLY = { sprint: 1.35, trouble: 5 } as const;
 /**
  * Healing: a teammate left alone (no blow for `after` s) gets back a point of health every
  * `every` s, glowing green as it does.
@@ -165,6 +172,8 @@ export class Mate {
   /** Riding on another's back (a toy on the dog), or null. */
   rider: Mate | null = null;
   carrier: Mate | null = null;
+  /** Teammates fighting alongside right now (set by the stage each step): the bigger, the stronger. */
+  squad = 1;
   readonly spec: MateSpec;
 
   constructor(
@@ -200,7 +209,13 @@ export class Mate {
 
   /** How hard its blows land: its kind’s power scaled for a supporting role. */
   get power(): number {
-    return this.spec.power * SUPPORT_POWER;
+    const bonus = Math.min(SQUAD.powerCap, 1 + SQUAD.power * Math.max(0, this.squad - 1));
+    return this.spec.power * SUPPORT_POWER * bonus;
+  }
+
+  /** Share of a blow it actually takes: the bigger the squad, the better they cover each other. */
+  private get guard(): number {
+    return 1 - Math.min(SQUAD.guardCap, SQUAD.guard * Math.max(0, this.squad - 1));
   }
 
   /** Healing right now (left alone a while, not at full health). */
@@ -235,7 +250,8 @@ export class Mate {
   /** A blow from `fromX` costing `damage`. Returns true if this one put it down. */
   hurt(fromX: number, damage = 1): boolean {
     if (!this.open) return false;
-    this.member.hearts = Math.max(0, this.member.hearts - damage);
+    this.member.hearts = Math.max(0, this.member.hearts - damage * this.guard);
+    if (this.member.hearts < 0.05) this.member.hearts = 0;
     this.hitSerial++;
     this.calm = 0;
     this.mercy = MERCY;
@@ -263,7 +279,7 @@ export class Mate {
    * One step. `slot`: its place in the line behind her. `foe`: the nearest enemy, if any. Returns
    * the enemy struck this step (its blow lands), if any; and reports a death (left wounded too long) through `lost`.
    */
-  update(dt: number, hero: { x: number; facing: number; viewHalf?: number }, slot: number, foe: Boar | null, lost?: () => void, order: MateOrder = this.order): Boar | null {
+  update(dt: number, hero: { x: number; facing: number; viewHalf?: number; trouble?: boolean }, slot: number, foe: Boar | null, lost?: () => void, order: MateOrder = this.order): Boar | null {
     this.timer += dt;
     this.reload = Math.max(0, this.reload - dt);
     this.mercy = Math.max(0, this.mercy - dt);
@@ -342,15 +358,18 @@ export class Mate {
         return null;
       case "follow": {
         const spec = this.spec;
+        // She's in trouble: drop the formation and sprint to her, then into whoever is on her.
+        const rally = hero.trouble === true && order.kind !== "hold" && order.kind !== "scout";
+        const speed = spec.speed * (rally ? RALLY.sprint : 1);
         // Danger in reach: turn and fight it (closing in if it fights up close).
         // An enemy in sight: a soldier goes for it (out ahead of her if need be), then falls back in.
         const spot = spec.attack === "arrow" || spec.attack === "magic" ? SPOT.ranged : SPOT.melee;
         const target = order.kind === "hold" || order.kind === "scout"
           ? order.x ?? this.x
-          : order.kind === "regroup"
+          : order.kind === "regroup" || rally
             ? hero.x - hero.facing * Math.min(1.8, 0.7 + slot * 0.12)
             : hero.x + formationOffset(slot, this.kind) * hero.facing;
-        if (foe && Math.abs(foe.x - this.x) < spot) {
+        if (foe && (Math.abs(foe.x - this.x) < spot || rally)) {
           if (order.kind === "hold" || (order.kind === "regroup" && Math.abs(foe.x - hero.x) > 1.6)) {
             const gap = target - this.x;
             const want = Math.abs(gap) < 0.25 ? 0 : Math.sign(gap) * Math.min(spec.speed, Math.abs(gap) * 2.4);
@@ -367,14 +386,15 @@ export class Mate {
             this.set("attack");
             return null;
           }
-          const want = Math.abs(d) > spec.range * 0.8 && (spec.attack === "melee" || spec.attack === "bite") ? Math.sign(d) * spec.speed : 0;
+          const closing = spec.attack === "melee" || spec.attack === "bite" ? spec.range * 0.8 : spec.range * 0.9;
+          const want = Math.abs(d) > closing ? Math.sign(d) * speed : 0;
           this.vx = approach(this.vx, want, 14 * dt);
           this.move(dt, want === 0 ? this.x : foe.x - Math.sign(d) * spec.range * 0.75);
           return null;
         }
         // Keep the assigned front, rear or close-guard slot while the hero advances.
         const gap = target - this.x;
-        const want = Math.abs(gap) < 0.25 ? 0 : Math.sign(gap) * Math.min(spec.speed, Math.abs(gap) * 2.4);
+        const want = Math.abs(gap) < 0.25 ? 0 : Math.sign(gap) * Math.min(speed, Math.abs(gap) * 2.4);
         this.vx = approach(this.vx, want, 12 * dt);
         if (Math.abs(this.vx) > 0.2) this.facing = Math.sign(this.vx);
         else this.facing = hero.facing;

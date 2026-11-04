@@ -9,7 +9,7 @@ import { Car, type CarEvent } from "../actors/car";
 import { Crew } from "../actors/crew";
 import { Explorer } from "../actors/explorer";
 import { MASTER } from "../actors/arsenal";
-import { MATES, Mate, Party, WOUND, type MateKind } from "../actors/party";
+import { MATES, Mate, Party, RALLY, WOUND, type MateKind } from "../actors/party";
 import { POINTS, STUNTS } from "../actors/score";
 import { FollowCamera, projector, type Camera, type ToScreen } from "../engine/camera";
 import { CAR, CHARACTER, PLANETS, PPM } from "../engine/config";
@@ -159,8 +159,12 @@ const ANSWERS: Record<MateKind, string> = {
 /** A teammate dragged off by Grey's men (they turn up caged later), and one rescued back. */
 const TAKEN = (name: string): string => `They took the ${name}! I'll come back for you!`;
 const RETURNED = { thanks: "You came back for me!", answer: "Always." } as const;
-/** The Mage's revive (from afar, every `recharge` s) and a Spark Heart's: their words. */
-const MAGE_REVIVE = { recharge: 60, reach: 15, line: "Get up! The light is with you." } as const;
+/**
+ * Revive works from anywhere: a downed teammate anywhere on the level gets up at once; one Grey's
+ * men took comes back running in from behind her (free with a Spark Heart, otherwise every
+ * `recharge` s). The Mage, if she's with her, says the words.
+ */
+const MAGE_REVIVE = { recharge: 25, line: "Get up! The light is with you." } as const;
 const HEART_LINE = "I'm back! Let's go.";
 /** What she rides: how high she sits (m), his stride and spring (as multiples of hers). */
 const MOUNTS: Partial<Record<MateKind, { height: number; stride: number; spring: number }>> = { giant: { height: 2.05, stride: 1.25, spring: 1.4 } };
@@ -1170,9 +1174,12 @@ export class RoadStage implements Stage {
     const inTruck = this.crew.mode !== "foot";
     const foes = this.boars.filter((b) => b.active && b.kind !== "dog");
     const danger = foes.some((b) => Math.abs(b.x - e.x) < 12);
+    // In trouble: on foot with enemies on her, or hurt badly. Everyone runs to her.
+    const onHer = foes.filter((b) => Math.abs(b.x - e.x) < RALLY.trouble);
+    const trouble = !inTruck && (onHer.length > 0 || (danger && this.crew.explorer.hearts <= 1));
     if (!danger && Math.abs(e.vx) > 1) this.marchFacing = Math.sign(e.vx);
     // Boarding must change the rendezvous to the live truck, not the queen's parked foot body.
-    const formationHero = { x: inTruck ? v.x : e.x, facing: this.marchFacing, viewHalf: this.reachOfView };
+    const formationHero = { x: inTruck ? v.x : e.x, facing: this.marchFacing, viewHalf: this.reachOfView, trouble };
     this.navigator.setBlockedRopes(this.crew.explorer.ropeAnchor ? [this.crew.explorer.ropeAnchor.x] : []);
     const assigned = new Map<Boar, number>();
     // The dog takes the smallest toy on its back while the way is quiet; at a fight they both jump to it.
@@ -1191,6 +1198,19 @@ export class RoadStage implements Stage {
     }
     // Her guard: the weakest keep closest to her, the strongest take the outer places, ahead and behind.
     const guard = this.mates.filter((m) => m.active && !m.carrier && m !== this.mount).sort((a, b) => a.power - b.power);
+    // Strength in numbers: every teammate fighting makes the others hit harder and hold longer.
+    const squad = this.mates.filter((m) => m.active).length;
+    for (const m of this.mates) m.squad = squad;
+    // Stepping out of the truck, they climb out with her and are seen at once (no fade-in).
+    if (!inTruck) {
+      let behind = 0;
+      for (const m of this.mates) {
+        if (m.active && !m.carrier && m.alpha < 1) {
+          if (m.alpha === 0) m.place(v.x - 1.2 - behind++ * 0.7);
+          m.alpha = 1;
+        }
+      }
+    }
     const places = new Map(guard.map((m, i) => [m, i] as const));
     for (const mate of this.mates) {
       const slot = places.get(mate) ?? 0;
@@ -1221,12 +1241,15 @@ export class RoadStage implements Stage {
         continue;
       }
       let foe: (typeof foes)[number] | null = null;
-      for (const b of foes) {
-        if ((assigned.get(b) ?? 0) >= 2) continue;
-        if (!foe || Math.abs(b.x - mate.x) < Math.abs(foe.x - mate.x)) foe = b;
+      // In trouble they go for whoever is on her first; otherwise the nearest enemy to themselves.
+      const pool = trouble && onHer.length > 0 ? onHer : foes;
+      const from = trouble ? e.x : mate.x;
+      for (const b of pool) {
+        if ((assigned.get(b) ?? 0) >= (trouble ? 3 : 2)) continue;
+        if (!foe || Math.abs(b.x - from) < Math.abs(foe.x - from)) foe = b;
       }
       if (foe) assigned.set(foe, (assigned.get(foe) ?? 0) + 1);
-      if (foe && Math.abs(foe.x - mate.x) > 12) foe = null;
+      if (foe && !trouble && Math.abs(foe.x - mate.x) > 12) foe = null;
       const struck = mate.update(dt, formationHero, slot, foe, () => this.mourn(mate));
       if (!struck) continue;
       const spec = mate.spec;
@@ -1288,22 +1311,25 @@ export class RoadStage implements Stage {
       return;
     }
     const mage = this.mates.find((m) => m.kind === "mage" && m.active);
-    const far = this.mates.find((m) => m.state === "wounded" && Math.abs(m.x - e.x) < MAGE_REVIVE.reach);
-    if (mage && far && party.reviveRecharge === 0) {
+    // Anyone down, anywhere: the nearest gets up at once, wherever she is.
+    const far = this.mates
+      .filter((m) => m.state === "wounded")
+      .sort((a, b) => Math.abs(a.x - e.x) - Math.abs(b.x - e.x))[0];
+    if (far) {
       far.revive();
-      party.reviveRecharge = MAGE_REVIVE.recharge;
-      this.shots.push({ x0: mage.x, y0: mage.y + 0.7, x1: far.x, y1: far.y + 0.6, left: 0.25, fire: true });
+      if (mage) this.shots.push({ x0: mage.x, y0: mage.y + 0.7, x1: far.x, y1: far.y + 0.6, left: 0.25, fire: true });
       this.context.particles.sparks(far.x, far.y + 0.8, 1, 16);
       this.context.audio.ignite();
-      this.speak({ who: "Mage", clip: "", text: MAGE_REVIVE.line, at: 0 });
+      this.speak({ who: mage ? "Mage" : far.spec.name, clip: "", text: mage ? MAGE_REVIVE.line : HEART_LINE, at: 0 });
       return;
     }
     const lost = party.taken[0];
-    if (party.hearts > 0 && lost) {
-      party.hearts--;
+    if (lost && (party.hearts > 0 || party.reviveRecharge === 0)) {
+      if (party.hearts > 0) party.hearts--;
+      else party.reviveRecharge = MAGE_REVIVE.recharge;
       party.restore(lost);
-      const back = new Mate(lost, e.x - e.facing * 1.2, this.terrain, false, this.navigator);
-      back.alpha = 0;
+      // Back from just out of sight behind her, running in: never popping in beside her.
+      const back = new Mate(lost, e.x - e.facing * (this.reachOfView + 1), this.terrain, false, this.navigator);
       this.mates.push(back);
       this.context.particles.sparks(back.x, back.y + 1, 1, 20);
       this.context.audio.complete();
@@ -1317,11 +1343,11 @@ export class RoadStage implements Stage {
     const party = this.context.party;
     const near = this.mates.find((m) => m.state === "wounded" && Math.abs(m.x - e.x) < 1.8);
     if (near) return `Help the ${near.spec.name} up`;
-    const mage = this.mates.find((m) => m.kind === "mage" && m.active);
-    const far = this.mates.find((m) => m.state === "wounded" && Math.abs(m.x - e.x) < MAGE_REVIVE.reach);
-    if (mage && far && party.reviveRecharge === 0) return `Mage: revive the ${far.spec.name}`;
+    const far = this.mates.find((m) => m.state === "wounded");
+    if (far) return `Revive the ${far.spec.name}`;
     const lost = party.taken[0];
-    if (party.hearts > 0 && lost) return `Spark Heart: bring back the ${MATES[lost.kind].name}`;
+    if (lost && party.hearts > 0) return `Spark Heart: bring back the ${MATES[lost.kind].name}`;
+    if (lost && party.reviveRecharge === 0) return `Bring back the ${MATES[lost.kind].name}`;
     return null;
   }
 

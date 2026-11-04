@@ -220,7 +220,11 @@ const BODY: Partial<Record<string, { half: number; mass: number }>> = {
 };
 
 /** Lines for the moments of the fight. */
-const CRY = { down: "Help! I'm down!", revive: "I've got you. Get up!", master: "Enough!", ride: "Up you go, small queen." } as const;
+const CRY = { down: "Help! I'm down!", revive: "I've got you. Get up!", master: "Enough!", ride: "Up you go, small queen.", rally: "To me! All of you!" } as const;
+/** Calling the team (T): everyone drops what they're doing and fights at her side this long (s). */
+const RALLY_CALL = 8;
+/** Gorr's ground slam: his blow also hits every enemy within this reach (m) of the struck one, at this share. */
+const SLAM = { reach: 2.6, share: 0.6 } as const;
 
 /**
  * Breakables: mass (kg, for the momentum the car loses), the speed (m/s) below which the car just
@@ -379,6 +383,8 @@ export class RoadStage implements Stage {
   private mount: Mate | null = null;
   /** E pressed this step (to help a downed friend up), and the stage's own clock (s, for the wind on the ropes). */
   private reviveAsked = false;
+  /** Seconds left of a call to the team. */
+  private rallyCall = 0;
   private jumpAsked = false;
   private clock = 0;
   private readonly fighters: Fighters3D;
@@ -584,6 +590,12 @@ export class RoadStage implements Stage {
     const party = this.context.party;
     party.reviveRecharge = Math.max(0, party.reviveRecharge - dt);
     if (input.revivePressed) this.revive();
+    this.rallyCall = Math.max(0, this.rallyCall - dt);
+    if (input.rallyPressed && this.crew.mode === "foot" && this.mates.some((m) => m.active)) {
+      this.rallyCall = RALLY_CALL;
+      for (const m of this.mates) if (m.active && m.order.kind !== "follow") m.order = { kind: "follow" };
+      this.speak({ who: "Kachujin", clip: "", text: CRY.rally, at: 0 });
+    }
     this.stepRescuePickups();
     this.jumpAsked = input.jumpPressed;
     this.stepMount(input);
@@ -1176,7 +1188,7 @@ export class RoadStage implements Stage {
     const danger = foes.some((b) => Math.abs(b.x - e.x) < 12);
     // In trouble: on foot with enemies on her, or hurt badly. Everyone runs to her.
     const onHer = foes.filter((b) => Math.abs(b.x - e.x) < RALLY.trouble);
-    const trouble = !inTruck && (onHer.length > 0 || (danger && this.crew.explorer.hearts <= 1));
+    const trouble = !inTruck && (this.rallyCall > 0 || onHer.length > 0 || (danger && this.crew.explorer.hearts <= 1));
     if (!danger && Math.abs(e.vx) > 1) this.marchFacing = Math.sign(e.vx);
     // Boarding must change the rendezvous to the live truck, not the queen's parked foot body.
     const formationHero = { x: inTruck ? v.x : e.x, facing: this.marchFacing, viewHalf: this.reachOfView, trouble };
@@ -1266,6 +1278,14 @@ export class RoadStage implements Stage {
         this.context.audio.thwack();
       }
       const off = struck.hit(dir, mate.power, "chest", mate.power > 2, mate.power);
+      // Gorr's slam shakes everyone standing close to the one he hit.
+      if (mate.kind === "giant") {
+        for (const b of foes) {
+          if (b === struck || !b.active || Math.abs(b.x - struck.x) > SLAM.reach) continue;
+          b.hit(Math.sign(b.x - mate.x) || dir, mate.power * SLAM.share, "chest", true, mate.power * SLAM.share);
+        }
+        this.context.particles.dust(struck.x, this.terrain.height(struck.x), 0, 18, 1.6);
+      }
       this.context.particles.blood(struck.x - dir * 0.1, struck.y + 1.1, dir, off ? 14 : 6, 1);
       this.context.score.add(off ? POINTS.swordHit : 0, off ? `${spec.name}!` : "", struck.x, struck.y + 1.8);
     }

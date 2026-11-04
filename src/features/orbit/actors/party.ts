@@ -41,7 +41,7 @@ export const MATES: Record<MateKind, MateSpec> = {
   ranger: { name: "Ranger", height: 0.95, health: 7, attack: "arrow", range: 11, every: 1.7, power: 1.4, speed: 4.8, leaper: false, freed: "Thank you. I never miss. Well. Almost never.", warns: "Movement ahead. I have them in my sights." },
   rogue: { name: "Rogue", height: 0.9, health: 6, attack: "melee", range: 1.1, every: 0.9, power: 1, speed: 5, leaper: false, freed: "I'd have picked that lock myself. Eventually. Thanks.", warns: "Shh. Something's coming." },
   dog: { name: "Dog", height: 0.62, health: 5, attack: "bite", range: 1, every: 1.1, power: 1, speed: 5.2, leaper: true, freed: "Thank you! I'm coming with you!", warns: "Wolves. Many. That way." },
-  giant: { name: "Gorr", height: 2.45, health: 18, attack: "melee", range: 1.8, every: 1.6, power: 3, speed: 4.6, leaper: true, freed: "Gorr is free. Gorr carries you now, small queen. Press E.", warns: "Gorr smells them. Many." },
+  giant: { name: "Gorr", height: 2.45, health: 22, attack: "melee", range: 2.2, every: 1.5, power: 4.5, speed: 4.6, leaper: true, freed: "Gorr is free. Gorr carries you now, small queen. Press E.", warns: "Gorr smells them. Many." },
 };
 
 /** A member of the team over the whole run: carried from level to level, alive or lost. */

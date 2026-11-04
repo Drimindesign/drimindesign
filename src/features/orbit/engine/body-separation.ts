@@ -21,6 +21,9 @@ export function separateBodies(bodies: SolidBody[]): void {
     for (let i = 0; i < ordered.length; i++) for (let j = i + 1; j < ordered.length; j++) {
       const a = ordered[i];
       const b = ordered[j];
+      // Same side passes through: her team (and her) slip past each other, and so does the gang.
+      // Only the two sides block one another.
+      if (a.friend === b.friend) continue;
       const overlap = a.half + b.half - (b.x - a.x);
       if (overlap <= 0 || Math.abs(a.y - b.y) > VERTICAL_CLEARANCE) continue;
       const dir = 1;

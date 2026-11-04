@@ -34,6 +34,7 @@ const PADS: readonly { action: Action; label: string; glyph: string; caption: st
   { action: "skill", label: "Light the Fire Sword", glyph: "✹", caption: "Fire" },
   { action: "master", label: "Master Stroke: throw everyone around you off their feet", glyph: "✦", caption: "Master" },
   { action: "revive", label: "Revive a teammate", glyph: "✚", caption: "Revive" },
+  { action: "rally", label: "Call the team: everyone runs to you and fights beside you", glyph: "⚑", caption: "Team" },
   { action: "jump", label: "Thrusters: tap to hop, tap again in the air to boost, hold to hover; on foot, jump (twice for a double jump)", glyph: "▲", caption: "" },
 ];
 

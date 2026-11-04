@@ -9,7 +9,8 @@ import { Car, type CarEvent } from "../actors/car";
 import { Crew } from "../actors/crew";
 import { Explorer } from "../actors/explorer";
 import { MASTER } from "../actors/arsenal";
-import { MATES, Mate, Party, RALLY, WOUND, type MateKind } from "../actors/party";
+import { MATES, Mate, Party, RALLY, SKILLS, WOUND, type MateKind } from "../actors/party";
+import { MAX_HEARTS } from "../actors/explorer";
 import { POINTS, STUNTS } from "../actors/score";
 import { FollowCamera, projector, type Camera, type ToScreen } from "../engine/camera";
 import { CAR, CHARACTER, PLANETS, PPM } from "../engine/config";
@@ -26,7 +27,7 @@ import { CAVE, COAST, DAWN, JUNGLE, NIGHT, RIVER, SNOW, type Palette } from "../
 import { blit, CELL, glow, LAUNCH_PAD, TRAFFIC, type Sprite } from "../pixel/props";
 import { World } from "../pixel/world";
 import { stepBeasts } from "./beasts";
-import { checkpointBefore, Pickups, type Mood, type Stage, type StageContext, type StageHud, type StageId, type View } from "./types";
+import { checkpointBefore, Pickups, type Mood, type Stage, type StageContext, type StageHud, type StageId, type Tactical, type View } from "./types";
 
 interface TrafficSpec {
   x: number;
@@ -221,10 +222,33 @@ const BODY: Partial<Record<string, { half: number; mass: number }>> = {
 
 /** Lines for the moments of the fight. */
 const CRY = { down: "Help! I'm down!", revive: "I've got you. Get up!", master: "Enough!", ride: "Up you go, small queen.", rally: "To me! All of you!" } as const;
+/**
+ * Signature skills: Shield Wall's cover (s, and how near the Knight it reaches, m); the reach (m)
+ * and force of each attack skill, as multiples of the teammate's own blow.
+ */
+const SKILL = {
+  wall: { time: 3, reach: 5 },
+  bash: { reach: 3.2, knock: 2.2, damage: 1.5 },
+  nova: { reach: 3.6, knock: 1.8, damage: 1.4 },
+  rain: { range: 14, spread: 3, damage: 1.2 },
+  step: { range: 8, damage: 3 },
+  throw: { range: 12, damage: 2 },
+  howl: { reach: 10 },
+} as const;
+/** Gorr guards her: any enemy this close to her (m) is his first. */
+const BODYGUARD = 6;
+/** A fight a teammate started is chased this far (m) before it gives up on it. */
+const COMMIT = 20;
+/** A teammate notices (turns to face, ready) an enemy this close (m). */
+const ALERT = 15;
+/** An enemy this close to a teammate (m) is its fight first, whatever else is going on. */
+const SELF_DEFENCE = 2.6;
 /** Calling the team (T): everyone drops what they're doing and fights at her side this long (s). */
 const RALLY_CALL = 8;
 /** Gorr's ground slam: his blow also hits every enemy within this reach (m) of the struck one, at this share. */
-const SLAM = { reach: 2.6, share: 0.6 } as const;
+const SLAM = { reach: 2.6, wide: 4.2, share: 0.6 } as const;
+/** The Knight's guard (upgrade): every `every` s he mends one point on her and on each teammate within `reach` m. */
+const MENDING = { every: 5, reach: 3.5 } as const;
 
 /**
  * Breakables: mass (kg, for the momentum the car loses), the speed (m/s) below which the car just
@@ -383,8 +407,22 @@ export class RoadStage implements Stage {
   private mount: Mate | null = null;
   /** E pressed this step (to help a downed friend up), and the stage's own clock (s, for the wind on the ropes). */
   private reviveAsked = false;
+  /** Who each teammate is fighting (for finishing fights, and for the minimap). */
+  private readonly mateTargets = new Map<Mate, Boar | null>();
+  /**
+   * Grey answers a bigger army with more men: once she has three teammates, every pack and camp
+   * brings one more enemy for each two of them.
+   */
+  private get armyBonus(): number {
+    const army = this.context.party.members.filter((m) => m.alive).length;
+    return army >= 3 ? Math.floor(army / 2) : 0;
+  }
   /** Seconds left of a call to the team. */
   private rallyCall = 0;
+  /** Call team pressed: every ready skill fires this step. */
+  private skillBurst = false;
+  /** Time toward the Knight's next mend (s). */
+  private mendClock = 0;
   private jumpAsked = false;
   private clock = 0;
   private readonly fighters: Fighters3D;
@@ -450,7 +488,7 @@ export class RoadStage implements Stage {
     this.traffic = config.traffic.map((t) => ({ ...t, at: t.x, moving: true, passed: false, sprite: TRAFFIC(t.kind, t.color) }));
     this.boars = config.beasts.map(([x, kind]) => new Boar(x, this.terrain, kind));
     this.stops = (config.stops ?? []).map((s) => ({ x: s.x, logs: BARRICADE.logs, broken: false }));
-    this.encounters = (config.stops ?? []).map((spec, i) => ({ stop: this.stops[i], spec, started: false, left: spec.enemies, next: 0, enemies: [], cleared: false }));
+    this.encounters = (config.stops ?? []).map((spec, i) => ({ stop: this.stops[i], spec, started: false, left: spec.enemies + this.armyBonus, next: 0, enemies: [], cleared: false }));
     this.ambushes = (config.ambushes ?? []).map((spec) => ({ spec, sprung: false, queue: [] }));
     this.ropes = (config.ropes ?? []).map((x) => {
       // Hung from a branch above the ravine it crosses, measured from the higher of its two lips.
@@ -593,6 +631,7 @@ export class RoadStage implements Stage {
     this.rallyCall = Math.max(0, this.rallyCall - dt);
     if (input.rallyPressed && this.crew.mode === "foot" && this.mates.some((m) => m.active)) {
       this.rallyCall = RALLY_CALL;
+      this.skillBurst = true;
       for (const m of this.mates) if (m.active && m.order.kind !== "follow") m.order = { kind: "follow" };
       this.speak({ who: "Kachujin", clip: "", text: CRY.rally, at: 0 });
     }
@@ -825,14 +864,19 @@ export class RoadStage implements Stage {
     else this.context.fx.focus(calm);
   }
 
-  /* A scene of two or more lines is played as a conversation; a single line is just said over the play. */
+  /*
+   * A conversation is said over the play, never stopping it: no freeze, no zoom, nothing to skip.
+   * Each line follows the last once it has been on screen long enough to read.
+   */
   private converse(lines: readonly Line[]): void {
-    if (lines.length < 2 || this.context.still) {
-      this.scene = { lines, t: 0, next: 0 };
-      return;
-    }
-    this.scene = null;
-    this.talk = { lines, index: -1, left: 0, focus: { x: this.crew.explorer.body.x, y: this.crew.explorer.body.y + 1.2 }, zoom: TALK.close };
+    let cursor = 0;
+    const timed = lines.map((line) => {
+      const at = Math.max(line.at, cursor);
+      cursor = at + Math.max(TALK.least, TALK.base + line.text.length * TALK.perChar);
+      return { ...line, at };
+    });
+    this.talk = null;
+    this.scene = { lines: timed, t: 0, next: 0 };
   }
 
   /** Skip: the rest of the conversation goes unsaid and play carries on. */
@@ -1102,6 +1146,30 @@ export class RoadStage implements Stage {
     return `Escort the Knight to the exit · ${point(this.config.finish)}${queenX > this.config.finish + 5 ? " · Turn back" : ""}\n${status}`;
   }
 
+  /* The minimap: 40 m around her (or the truck), who's where, and who's fighting whom. */
+  private tactical(): Tactical {
+    const e = this.crew.explorer.body;
+    const inCar = this.crew.mode === "car";
+    const x = inCar ? this.crew.car.vehicle.x : e.x;
+    const y = inCar ? this.terrain.height(x) : e.y;
+    const span = 40;
+    const foes = this.boars.filter((b) => b.active && Math.abs(b.x - x) < span / 2 + 2);
+    return {
+      x,
+      y,
+      span,
+      ground: Array.from({ length: 33 }, (_, i) => this.terrain.height(x - span / 2 + (i * span) / 32)),
+      foes: foes.map((b) => ({ x: b.x, y: b.y, big: b.kind === "brute" || b.kind === "chief" })),
+      mates: this.mates
+        .filter((m) => m.alive && m.state !== "caged" && Math.abs(m.x - x) < span / 2 + 2 && m.alpha > 0)
+        .map((m) => {
+          const target = this.mateTargets.get(m);
+          const fight = target && (m.state === "attack" || Math.abs(target.x - m.x) < 4) ? foes.indexOf(target) : -1;
+          return { x: m.x, y: m.y, kind: m.kind, fight: fight >= 0 ? fight : null, down: m.state === "wounded" };
+        }),
+    };
+  }
+
   private routeMap(): RouteMapSnapshot {
     const e = this.crew.explorer.body;
     const queenX = this.crew.mode === "car" ? this.crew.car.vehicle.x : e.x;
@@ -1151,7 +1219,7 @@ export class RoadStage implements Stage {
         e.heal();
         e.charge(0.5);
         e.fireRecharge = 0;
-        for (const m of this.mates) if (m.active) m.member.hearts = Math.min(m.spec.health, m.member.hearts + Math.ceil(m.spec.health / 2));
+        for (const m of this.mates) if (m.active) m.member.hearts = Math.min(m.maxHealth, m.member.hearts + Math.ceil(m.maxHealth / 2));
         this.converse([{ who: spec.name, clip: "", text: VILLAGER.thanks, at: 1.2 }, { who: "Kachujin", clip: "", text: VILLAGER.answer, at: 3.4 }]);
         this.context.score.add(POINTS.stageClear, "Villager freed · team healed", cage.x, ground + 2.6);
       } else {
@@ -1208,8 +1276,11 @@ export class RoadStage implements Stage {
       const down = this.mates.find((m) => m.state === "wounded" && Math.abs(m.x - e.x) < 1.8);
       if (down) this.channel = { mate: down, left: WOUND.revive };
     }
-    // Her guard: the weakest keep closest to her, the strongest take the outer places, ahead and behind.
-    const guard = this.mates.filter((m) => m.active && !m.carrier && m !== this.mount).sort((a, b) => a.power - b.power);
+    // Her guard: Gorr, the strongest, leads at her side as her bodyguard; then the weakest keep
+    // closest to her and the strong take the outer places, ahead and behind.
+    const guard = this.mates
+      .filter((m) => m.active && !m.carrier && m !== this.mount)
+      .sort((a, b) => (a.kind === "giant" ? -1 : b.kind === "giant" ? 1 : a.power - b.power));
     // Strength in numbers: every teammate fighting makes the others hit harder and hold longer.
     const squad = this.mates.filter((m) => m.active).length;
     for (const m of this.mates) m.squad = squad;
@@ -1253,15 +1324,37 @@ export class RoadStage implements Stage {
         continue;
       }
       let foe: (typeof foes)[number] | null = null;
-      // In trouble they go for whoever is on her first; otherwise the nearest enemy to themselves.
+      // Gorr the bodyguard: whoever is on her is his, before anything else.
+      if (mate.kind === "giant") {
+        for (const b of foes) {
+          if (Math.abs(b.x - e.x) > BODYGUARD || inTruck) continue;
+          if (!foe || Math.abs(b.x - e.x) < Math.abs(foe.x - e.x)) foe = b;
+        }
+      }
+      // Self-defence: an enemy on it (ahead or behind) is fought and finished before anything else.
+      if (!foe) for (const b of foes) {
+        if (Math.abs(b.x - mate.x) > SELF_DEFENCE || Math.abs(b.y - mate.y) > 1.6) continue;
+        if (!foe || Math.abs(b.x - mate.x) < Math.abs(foe.x - mate.x)) foe = b;
+      }
+      // Then, in trouble, whoever is on her; otherwise the nearest enemy to itself.
       const pool = trouble && onHer.length > 0 ? onHer : foes;
       const from = trouble ? e.x : mate.x;
-      for (const b of pool) {
+      if (!foe) for (const b of pool) {
         if ((assigned.get(b) ?? 0) >= (trouble ? 3 : 2)) continue;
         if (!foe || Math.abs(b.x - from) < Math.abs(foe.x - from)) foe = b;
       }
+      // A fight already started is finished: the same enemy, chased down (up to 20 m), not left behind.
+      const previous = this.mateTargets.get(mate);
+      const keep = previous && previous.active && Math.abs(previous.x - mate.x) < COMMIT && (!foe || Math.abs(foe.x - mate.x) > SELF_DEFENCE);
+      if (keep) foe = previous;
       if (foe) assigned.set(foe, (assigned.get(foe) ?? 0) + 1);
-      if (foe && !trouble && Math.abs(foe.x - mate.x) > 12) foe = null;
+      if (foe && !trouble && !keep && Math.abs(foe.x - mate.x) > 12) foe = null;
+      mate.committed = keep === true;
+      this.mateTargets.set(mate, foe);
+      // Alert: it turns to face the nearest enemy it can see coming.
+      let seen: number | null = null;
+      for (const b of foes) if (Math.abs(b.x - mate.x) < ALERT && (seen === null || Math.abs(b.x - mate.x) < Math.abs(seen - mate.x))) seen = b.x;
+      mate.alertAt = seen;
       const struck = mate.update(dt, formationHero, slot, foe, () => this.mourn(mate));
       if (!struck) continue;
       const spec = mate.spec;
@@ -1278,16 +1371,36 @@ export class RoadStage implements Stage {
         this.context.audio.thwack();
       }
       const off = struck.hit(dir, mate.power, "chest", mate.power > 2, mate.power);
+      // Upgrade: the archer looses a second arrow straight after the first.
+      if (spec.attack === "arrow" && this.context.party.perks.has("volley") && struck.active) {
+        this.shots.push({ x0: mate.x, y0: mate.y + spec.height * 0.62, x1: struck.x, y1: struck.y + 0.9, left: 0.24, fire: false });
+        struck.hit(dir, mate.power, "chest", false, mate.power);
+      }
       // Gorr's slam shakes everyone standing close to the one he hit.
       if (mate.kind === "giant") {
         for (const b of foes) {
-          if (b === struck || !b.active || Math.abs(b.x - struck.x) > SLAM.reach) continue;
+          const reach = this.context.party.perks.has("quake") ? SLAM.wide : SLAM.reach;
+          if (b === struck || !b.active || Math.abs(b.x - struck.x) > reach) continue;
           b.hit(Math.sign(b.x - mate.x) || dir, mate.power * SLAM.share, "chest", true, mate.power * SLAM.share);
         }
         this.context.particles.dust(struck.x, this.terrain.height(struck.x), 0, 18, 1.6);
       }
       this.context.particles.blood(struck.x - dir * 0.1, struck.y + 1.1, dir, off ? 14 : 6, 1);
       this.context.score.add(off ? POINTS.swordHit : 0, off ? `${spec.name}!` : "", struck.x, struck.y + 1.8);
+    }
+    this.stepSkills(foes, onHer.length, inTruck);
+    // Upgrade: the Knight's guard mends her and whoever stands with him.
+    const knight = this.mates.find((m) => m.kind === "knight" && m.active);
+    if (knight && this.context.party.perks.has("mending")) {
+      this.mendClock += dt;
+      if (this.mendClock >= MENDING.every) {
+        this.mendClock = 0;
+        const hero = this.crew.explorer;
+        if (Math.abs(hero.body.x - knight.x) < MENDING.reach) hero.hearts = Math.min(MAX_HEARTS, hero.hearts + 1);
+        for (const m of this.mates) {
+          if (m.active && Math.abs(m.x - knight.x) < MENDING.reach) m.member.hearts = Math.min(m.maxHealth, m.member.hearts + 1);
+        }
+      }
     }
     // Teammates dragged off fade from sight and leave her side.
     for (let i = this.mates.length - 1; i >= 0; i--) if (this.mates[i].state === "dead" && this.mates[i].alpha <= 0) this.mates.splice(i, 1);
@@ -1296,6 +1409,104 @@ export class RoadStage implements Stage {
     for (let i = this.leaving.length - 1; i >= 0; i--) if (this.leaving[i].alpha <= 0) this.leaving.splice(i, 1);
     for (const shot of this.shots) shot.left -= dt;
     while (this.shots.length > 0 && this.shots[0].left <= 0) this.shots.shift();
+  }
+
+  /*
+   * Signature skills. Each teammate uses its own when the moment is right (the Knight when she's
+   * surrounded, the Mage when they crowd in, the Ranger on a group...), or all of them at once
+   * when she calls the team. Each recharges on its own clock.
+   */
+  private stepSkills(foes: Boar[], onHer: number, inTruck: boolean): void {
+    const burst = this.skillBurst;
+    this.skillBurst = false;
+    if (inTruck || foes.length === 0) return;
+    const hero = this.crew.explorer;
+    const near = (x: number, reach: number): Boar[] => foes.filter((b) => b.active && Math.abs(b.x - x) <= reach);
+    const fx = this.context.particles;
+    for (const m of this.mates) {
+      if (!m.active || m.carrier || m.skillIn > 0 || m === this.mount) continue;
+      const power = m.power;
+      const used = (dir: number): void => {
+        m.useSkill(dir);
+        this.speak({ who: m.spec.name, clip: "", text: SKILLS[m.kind].name, at: 0 });
+        this.context.score.add(0, SKILLS[m.kind].name, m.x, m.y + m.spec.height + 0.4);
+      };
+      switch (m.kind) {
+        case "knight": {
+          if (!(onHer >= 2 || (burst && onHer >= 1))) break;
+          used(Math.sign(hero.body.x - m.x) || m.facing);
+          if (Math.abs(hero.body.x - m.x) <= SKILL.wall.reach) hero.guarded = SKILL.wall.time;
+          for (const o of this.mates) if (o.active && Math.abs(o.x - m.x) <= SKILL.wall.reach) o.guarded = SKILL.wall.time;
+          fx.sparks(m.x + m.facing * 0.4, m.y + 1.1, m.facing, 18);
+          this.context.audio.thwack();
+          break;
+        }
+        case "barbarian": {
+          const first = near(m.x, SKILL.bash.reach).sort((a, b) => Math.abs(a.x - m.x) - Math.abs(b.x - m.x))[0];
+          if (!first || (!burst && near(m.x, SKILL.bash.reach).length < 2)) break;
+          const dir = Math.sign(first.x - m.x) || m.facing;
+          used(dir);
+          for (const b of near(m.x, SKILL.bash.reach)) if (Math.sign(b.x - m.x) === dir) b.hit(dir, power * SKILL.bash.knock, "chest", true, power * SKILL.bash.damage);
+          fx.dust(m.x + dir * 1.2, m.y, dir * 3, 16, 1.4);
+          this.context.audio.thwack();
+          break;
+        }
+        case "mage": {
+          const crowd = near(m.x, SKILL.nova.reach);
+          if (crowd.length < (burst ? 1 : 2)) break;
+          used(m.facing);
+          for (const b of crowd) {
+            const dir = Math.sign(b.x - m.x) || 1;
+            b.hit(dir, power * SKILL.nova.knock, "chest", true, power * SKILL.nova.damage);
+            this.shots.push({ x0: m.x, y0: m.y + 1, x1: b.x, y1: b.y + 1, left: 0.2, fire: true });
+          }
+          for (const dir of [-1, 1]) fx.sparks(m.x, m.y + 0.8, dir, 22);
+          this.context.audio.ignite();
+          break;
+        }
+        case "ranger": {
+          const target = near(m.x, SKILL.rain.range).find((b) => near(b.x, SKILL.rain.spread).length >= (burst ? 1 : 2));
+          if (!target) break;
+          used(Math.sign(target.x - m.x) || m.facing);
+          for (const b of near(target.x, SKILL.rain.spread)) {
+            this.shots.push({ x0: b.x - 1.5, y0: b.y + 7, x1: b.x, y1: b.y + 0.8, left: 0.3, fire: false });
+            b.hit(Math.sign(b.x - m.x) || 1, power, "head", false, power * SKILL.rain.damage);
+          }
+          this.context.audio.swing(false, 1.6);
+          break;
+        }
+        case "rogue": {
+          const prey = near(m.x, SKILL.step.range).sort((a, b) => Math.abs(a.x - m.x) - Math.abs(b.x - m.x))[0];
+          if (!prey || (!burst && Math.abs(prey.x - m.x) < 1.5)) break;
+          fx.dust(m.x, m.y, 0, 14, 1);
+          const behind = prey.x - (prey.facing || 1) * 0.9;
+          m.place(behind);
+          const dir = Math.sign(prey.x - behind) || 1;
+          used(dir);
+          prey.hit(dir, power * 1.4, "chest", false, power * SKILL.step.damage);
+          fx.dust(behind, m.y, 0, 14, 1);
+          this.context.particles.blood(prey.x, prey.y + 1.1, dir, 10, 1.2);
+          break;
+        }
+        case "giant": {
+          const far = near(m.x, SKILL.throw.range).filter((b) => Math.abs(b.x - m.x) > 3).sort((a, b) => Math.abs(b.x - m.x) - Math.abs(a.x - m.x))[0];
+          if (!far) break;
+          const dir = Math.sign(far.x - m.x) || 1;
+          used(dir);
+          this.shots.push({ x0: m.x, y0: m.y + 2.2, x1: far.x, y1: far.y + 0.6, left: 0.35, fire: false });
+          far.hit(dir, power * 1.6, "chest", true, power * SKILL.throw.damage);
+          fx.dust(far.x, this.terrain.height(far.x), dir * 2, 22, 1.6);
+          break;
+        }
+        case "dog": {
+          const wolves = foes.filter((b) => b.kind === "wolf" && b.active && Math.abs(b.x - m.x) <= SKILL.howl.reach);
+          if (wolves.length < (burst ? 1 : 2)) break;
+          used(m.facing);
+          for (const w of wolves) w.scare(Math.sign(w.x - m.x) || 1);
+          break;
+        }
+      }
+    }
   }
 
   /* A mate fell: slow motion, the camera holds on it, the music turns, and she speaks over it. */
@@ -1478,7 +1689,7 @@ export class RoadStage implements Stage {
         // The team senses it first (the dog before anyone).
         const lookout = this.mates.find((m) => m.alive && m.kind === "dog") ?? this.mates.find((m) => m.alive && m.state !== "caged");
         if (lookout) this.speak({ who: lookout.spec.name, clip: "", text: lookout.spec.warns, at: 0 });
-        a.queue = Array.from({ length: a.spec.count }, (_, i) => ({ in: i * 0.45 + Math.random() * 1.4, kind: pick(a.spec.kinds) }));
+        a.queue = Array.from({ length: a.spec.count + this.armyBonus }, (_, i) => ({ in: i * 0.45 + Math.random() * 1.4, kind: pick(a.spec.kinds) }));
       }
       for (const q of a.queue) {
         q.in -= dt;
@@ -1594,7 +1805,7 @@ export class RoadStage implements Stage {
 
   private speak(line: Line): void {
     this.context.audio.say(line.clip, line.text, line.who);
-    this.line = { who: line.who, text: line.text, left: LINE_TIME };
+    this.line = { who: line.who, text: line.text, left: Math.max(LINE_TIME, TALK.base + line.text.length * TALK.perChar) };
   }
 
   /*
@@ -2464,6 +2675,7 @@ export class RoadStage implements Stage {
       master: e.master,
       stroke: e.stroke >= 0,
       routeMap: this.routeMap(),
+      tactical: this.tactical(),
       objective: this.missionGuidance(),
       team: this.mates.filter((m) => m.state !== "caged").map((m) => ({ name: m.spec.name, distance: Math.round(m.x - e.body.x), fighting: m.state === "attack", health: m.health, alive: m.alive, down: m.state === "wounded" })),
       prompt,

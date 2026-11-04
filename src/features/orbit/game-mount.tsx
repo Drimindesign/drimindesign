@@ -239,6 +239,7 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
       </div>
 
       <RouteMap />
+      <canvas data-minimap className={styles.minimap} aria-hidden="true" />
       <p data-hud="objective" className={styles.mission} aria-live="polite" />
       <p data-hud="team" className={styles.team} aria-label="Your team" />
       {/* The level's name, a small notice that slides in and out while play goes on. */}
@@ -345,6 +346,25 @@ export function GameMount({ rewards }: { rewards: readonly Reward[] }): React.Re
           Discover
         </p>
         <p className={styles.lede} data-hud="stage-goal" />
+      </section>
+
+      {/* Stage cleared: pick one upgrade for the rest of the run, then on to the next stage. */}
+      <section className={`${styles.card} ${styles.perkCard}`} aria-live="polite">
+        <p className={styles.kicker}>Stage cleared · choose an upgrade</p>
+        <div className={styles.perks}>
+          <button type="button" data-command="perk-volley" data-perk="volley" className={styles.perk} onClick={command}>
+            <span className={styles.perkTitle}>Twin arrows</span>
+            <span className={styles.small}>The archer shoots twice.</span>
+          </button>
+          <button type="button" data-command="perk-mending" data-perk="mending" className={styles.perk} onClick={command}>
+            <span className={styles.perkTitle}>Healing guard</span>
+            <span className={styles.small}>The knight heals you and anyone near him.</span>
+          </button>
+          <button type="button" data-command="perk-quake" data-perk="quake" className={styles.perk} onClick={command}>
+            <span className={styles.perkTitle}>Wide slam</span>
+            <span className={styles.small}>Gorr&apos;s slam reaches much further.</span>
+          </button>
+        </div>
       </section>
 
       {/* The stage just cleared: its bonus and the project it unlocked, in a corner while play goes on. */}

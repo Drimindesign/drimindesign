@@ -225,8 +225,8 @@ export const JUNGLE_RUN: RoadConfig = {
   traffic: [],
   props: [],
   beasts: [],
-  // Prisoners along the way (the wolves guard the dog; the Mage's cage is past the wide ravine), and torches at the camps.
-  cages: [[126, "rogue"], [212, "dog"], [318, "mage"], [452, "barbarian"]],
+  // One prisoner: the Ranger, the second to join (one recruit a level keeps each one special), and torches at the camps.
+  cages: [[126, "ranger"]],
   torches: [8, 52, 172, 280, 394, 467],
   ambushes: [
     { x: 90, count: 2, kinds: ["wolf"] },

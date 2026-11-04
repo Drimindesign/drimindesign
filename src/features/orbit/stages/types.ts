@@ -78,8 +78,22 @@ export interface View {
   fade: number;
 }
 
+/** The square minimap: the ground and everyone near her, in metres around her position. */
+export interface Tactical {
+  x: number;
+  y: number;
+  /** Width and height of the square (m). */
+  span: number;
+  /** Ground heights across the square, left to right. */
+  ground: number[];
+  /** Teammates; `fight` indexes `foes` (the enemy it's fighting). */
+  mates: { x: number; y: number; kind: string; fight: number | null; down: boolean }[];
+  foes: { x: number; y: number; big: boolean }[];
+}
+
 export interface StageHud {
   routeMap?: RouteMapSnapshot;
+  tactical?: Tactical;
   objective?: string;
   prompt: string;
   /** A conversation is being played (the world holds still; the Skip button shows). */

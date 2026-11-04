@@ -102,6 +102,8 @@ export class Explorer {
   /** Getting into or out of the car, and how far along (for the 3D model's sit and stand clips). */
   transition: { kind: "in" | "out"; progress: number } | null = null;
   private mercy = 0;
+  /** Behind the Knight's Shield Wall: blows don't reach her this long (s). */
+  guarded = 0;
   /** Hits taken so far, and the last one (where, how hard, which way it travelled): the 3D body's reflex reads them. */
   hitSerial = 0;
   lastBlow: { joint: Joint; power: number; dir: number } = { joint: "chest", power: 0, dir: 1 };
@@ -283,7 +285,7 @@ export class Explorer {
 
   /** Knocked by something coming from `fromX`. Returns false while still blinking from the last hit. */
   hurt(fromX: number, heavy = false): boolean {
-    if (this.mercy > 0 || this.ragdoll || this.stroke >= 0) return false;
+    if (this.mercy > 0 || this.guarded > 0 || this.ragdoll || this.stroke >= 0) return false;
     this.charge(MASTER.perHurt);
     this.hearts = Math.max(0, this.hearts - 1);
     this.mercy = MERCY;
@@ -519,6 +521,7 @@ export class Explorer {
 
   step(dt: number, gravity: number, input: MoveInput & { attackPressed?: boolean; weaponPressed?: boolean; skillPressed?: boolean; masterPressed?: boolean }, effects = true): void {
     this.mercy = Math.max(0, this.mercy - dt);
+    this.guarded = Math.max(0, this.guarded - dt);
     this.shockwave = false;
     // The Master Stroke: she spins in place (untouchable), the shockwave goes out partway through.
     if (input.masterPressed) this.strike();

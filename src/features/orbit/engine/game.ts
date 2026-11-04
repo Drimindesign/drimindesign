@@ -1,6 +1,7 @@
+import { drawMinimap } from "../minimap";
 import { writeRouteMap } from "../route-map-state";
 import { MAX_HEARTS } from "../actors/explorer";
-import { Party } from "../actors/party";
+import { PERK_IDS, Party, type PerkId } from "../actors/party";
 import { Combo, POINTS, Score } from "../actors/score";
 import { Painter } from "../pixel/painter";
 import { Particles } from "../pixel/particles";
@@ -14,7 +15,7 @@ import { ART, MAX_STEPS, SIM_HZ, VIEW_MIN } from "./config";
 import { Input, type InputSnapshot } from "./input";
 
 export type Phase = "title" | "intro" | "play" | "paused" | "complete" | "finished";
-export type Command = "start" | "continue" | "again" | "resume" | "restart-stage" | "quit" | "continue-level" | "skip";
+export type Command = "perk-volley" | "perk-mending" | "perk-quake" | "start" | "continue" | "again" | "resume" | "restart-stage" | "quit" | "continue-level" | "skip";
 
 /** DOM the game writes to directly (never React state per frame). */
 export interface Hud {
@@ -99,6 +100,8 @@ export class Game {
   private readonly figures: Fighters3D | null;
   private look: ExplorerId = "female";
   private phase: Phase = "title";
+  /** Upgrades on offer at the end of the stage just cleared. */
+  private perkChoices: PerkId[] = [];
   private phaseTime = 0;
   private runTime = 0;
   private totals = { collected: 0, available: 0, landings: 0 };
@@ -251,6 +254,11 @@ export class Game {
   command(command: Command): void {
     this.audio.unlock();
     switch (command) {
+      case "perk-volley":
+      case "perk-mending":
+      case "perk-quake":
+        this.choosePerk(command.slice(5) as PerkId);
+        break;
       case "start":
         if (this.phase === "title") this.beginStage(1);
         break;
@@ -404,6 +412,10 @@ export class Game {
     this.text("stage-goal", info.goal);
     if (phase === "intro") this.cinemaLeft = Math.max(this.cinemaLeft, INTRO_TIME);
     if (phase === "complete") {
+      // An upgrade to choose (one of those not yet taken), before the next stage begins.
+      this.perkChoices = PERK_IDS.filter((p) => !this.party.perks.has(p));
+      root.dataset.perks = this.perkChoices.length > 0 ? "on" : "off";
+      root.dataset.owned = [...this.party.perks].join(" ");
       this.audio.sting("victory", 9);
       this.score.total += POINTS.stageClear;
       this.text("stage-found", `${this.stage.collected} / ${this.stage.available}`);
@@ -434,6 +446,8 @@ export class Game {
     this.totals.collected += stage.collected;
     this.totals.available += stage.available;
     this.totals.landings += stage.cleanLandings;
+    // Everyone who made it through grows stronger for the next stage.
+    this.party.levelUp();
     this.score.total += POINTS.stageClear;
     this.audio.sting("victory", 5);
     const carry = stage.momentum?.() ?? 0;
@@ -515,12 +529,24 @@ export class Game {
         if (input.pausePressed || (advance && this.phaseTime > 0.2)) this.setPhase("play");
         break;
       case "complete":
-        if (this.phaseTime > COMPLETE_DELAY + TRANSITION.out) this.next();
+        if (this.perkChoices.length > 0) {
+          if (input.interactPressed && this.phaseTime > 0.5) this.choosePerk(this.perkChoices[0]);
+        } else if (this.phaseTime > COMPLETE_DELAY + TRANSITION.out) this.next();
         break;
       case "finished":
         if (input.interactPressed && this.phaseTime > 1) this.command("again");
         break;
     }
+  }
+
+  /** An upgrade picked: kept for the rest of the run, and on to the next stage. */
+  private choosePerk(perk: PerkId): void {
+    if (this.phase !== "complete" || !this.perkChoices.includes(perk)) return;
+    this.party.perks.add(perk);
+    this.perkChoices = [];
+    this.hud.root.dataset.perks = "off";
+    this.audio.complete();
+    this.next();
   }
 
   private finish(): void {
@@ -615,6 +641,10 @@ export class Game {
     const hud = this.stage.hud();
     const root = this.hud.root;
     if (hud.routeMap) writeRouteMap(root, hud.routeMap);
+    if (hud.tactical && this.phase === "play") {
+      const minimap = root.querySelector<HTMLCanvasElement>("[data-minimap]");
+      if (minimap) drawMinimap(minimap, hud.tactical);
+    }
     this.text("prompt", this.phase === "play" ? (this.touch ? touchPrompt(hud.prompt) : hud.prompt) : "");
     // The subtitle: the speaker's name and their line, while it's being said.
     this.set("line", hud.line ? "on" : "off");

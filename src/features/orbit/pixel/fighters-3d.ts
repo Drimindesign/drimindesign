@@ -9,7 +9,9 @@ import { PPM } from "../engine/config";
 import type { Joint, Ragdoll } from "../engine/ragdoll";
 
 type ThreeModule = typeof Three;
-type Kind = "hero" | "raider" | "brute" | "chief" | "giant";
+type Kind = "hero" | "raider" | "brute" | "chief" | "giant" | "knight" | "barbarian" | "mage" | "ranger" | "rogue";
+/** The squad (Mixamo characters), loaded after the fighters. */
+const SQUAD = ["knight", "barbarian", "mage", "ranger", "rogue", "giant"] as const;
 
 /** Where the 3D figures are drawn: a canvas of their own over the game's, at the screen's full resolution. */
 export interface FigureLayer {
@@ -47,22 +49,28 @@ export interface Framing {
  */
 const MODEL_BASE = "/game/fighters-hd/";
 const CLIP_BASE = "/game/fighters/";
-const MODELS: Record<Kind, string> = { hero: "hero.glb", raider: "knight.glb", brute: "brute.glb", chief: "brute.glb", giant: "brute.glb" };
+const MODELS: Record<Kind, string> = {
+  hero: "hero.glb", raider: "knight.glb", brute: "brute.glb", chief: "brute.glb",
+  // The squad: Knight D Pelegrini, the Paladin, Nightshade, Erika Archer, Arissa, and Warrok as Gorr.
+  knight: "../squad/knight.glb", barbarian: "../squad/barbarian.glb", mage: "../squad/mage.glb",
+  ranger: "../squad/ranger.glb", rogue: "../squad/rogue.glb", giant: "../squad/giant.glb",
+};
 /** Bodies shared by more than one kind load once. */
-const BODY: Record<Kind, Exclude<Kind, "chief" | "giant">> = { hero: "hero", raider: "raider", brute: "brute", chief: "brute", giant: "brute" };
+const BODY: Record<Kind, Exclude<Kind, "chief">> = { hero: "hero", raider: "raider", brute: "brute", chief: "brute", giant: "giant", knight: "knight", barbarian: "barbarian", mage: "mage", ranger: "ranger", rogue: "rogue" };
 /** Gorr's hide and Grey's chief: the brute's body, tinted (multiplied into its colours) so they read as someone else. */
-const TINT: Partial<Record<Kind, [number, number, number]>> = { giant: [0.72, 0.62, 0.52], chief: [0.85, 0.55, 0.5] };
+const TINT: Partial<Record<Kind, [number, number, number]>> = { chief: [0.85, 0.55, 0.5] };
 const CLIPS = [
   "hero_idle", "hero_walk", "hero_run", "hero_slash1", "hero_slash2", "hero_kick", "hero_spin", "hero_hit1", "hero_hit2", "hero_jump",
   "foe_idle", "foe_walk", "foe_run", "foe_slash1", "foe_slash2", "foe_heavy", "foe_block", "foe_blockhit", "foe_hit1", "foe_hit2", "foe_strafe",
   "getup", "sit_to_stand", "stand_to_sit", "hero_swing", "hero_rope_climb", "hero_climb", "hero_master", "foe_death",
+  "mate_bow", "mate_cast",
 ] as const;
 type Clip = (typeof CLIPS)[number];
 /** One-shot clips: they play once and hold their last frame. */
 const ONCE = new Set<string>([
   "hero_slash1", "hero_slash2", "hero_kick", "hero_spin", "hero_hit1", "hero_hit2",
   "foe_slash1", "foe_slash2", "foe_heavy", "foe_blockhit", "foe_hit1", "foe_hit2",
-  "getup", "sit_to_stand", "stand_to_sit", "hero_master", "foe_death",
+  "getup", "sit_to_stand", "stand_to_sit", "hero_master", "foe_death", "mate_bow", "mate_cast",
 ]);
 /** The hero's combo, blow by blow: two cuts, a kick that breaks a guard, a spinning finisher. */
 const HERO_COMBO: readonly Clip[] = ["hero_slash1", "hero_slash2", "hero_kick", "hero_spin"];
@@ -71,7 +79,7 @@ const ENEMY_SWING = 1.18;
 /** Getting up blends out of the ragdoll's pose over this long (s). */
 const GETUP_BLEND = 0.4;
 /** Standing height of each in the world (m). */
-const HEIGHT: Record<Kind, number> = { hero: 1.75, raider: 1.9, brute: 2.3, chief: 2.75, giant: 2.45 };
+const HEIGHT: Record<Kind, number> = { hero: 1.75, raider: 1.9, brute: 2.3, chief: 2.75, giant: 2.45, knight: 1.82, barbarian: 1.86, mage: 1.72, ranger: 1.7, rogue: 1.68 };
 /** Skin and cloth are matte; the knight's plate has a dull metal sheen; the brute's hide is rough. */
 const SURFACE: Record<Kind, { roughness: number; metalness: number }> = {
   hero: { roughness: 0.72, metalness: 0 },
@@ -79,12 +87,21 @@ const SURFACE: Record<Kind, { roughness: number; metalness: number }> = {
   brute: { roughness: 0.8, metalness: 0.05 },
   chief: { roughness: 0.75, metalness: 0.1 },
   giant: { roughness: 0.85, metalness: 0 },
+  knight: { roughness: 0.45, metalness: 0.4 },
+  barbarian: { roughness: 0.5, metalness: 0.3 },
+  mage: { roughness: 0.75, metalness: 0 },
+  ranger: { roughness: 0.72, metalness: 0 },
+  rogue: { roughness: 0.7, metalness: 0.05 },
 };
 /**
  * What each one holds (KayKit CC0 props), in which hand, and how long it is (m). Props are modelled
  * with the grip at the origin and the blade up +y; `grip` slides it along the fingers into the fist.
  */
-const WEAPONS: Record<Kind, readonly { file: string; hand: "Right" | "Left"; length: number; shield?: boolean }[]> = {
+/**
+ * `authored`: a weapon modelled for the squad in Blender (wood, brass, a glowing crystal) keeps
+ * its own materials instead of the steel finish given to the KayKit props.
+ */
+const WEAPONS: Record<Kind, readonly { file: string; hand: "Right" | "Left"; length: number; shield?: boolean; authored?: boolean }[]> = {
   hero: [{ file: "sword_2handed.gltf", hand: "Right", length: 1.25 }],
   raider: [
     { file: "sword_1handed.gltf", hand: "Right", length: 0.95 },
@@ -92,7 +109,16 @@ const WEAPONS: Record<Kind, readonly { file: string; hand: "Right" | "Left"; len
   ],
   brute: [{ file: "axe_2handed.gltf", hand: "Right", length: 1.3 }],
   chief: [{ file: "axe_2handed.gltf", hand: "Right", length: 1.6 }],
-  giant: [],
+  // The Paladin, Erika and Arissa carry what their models were made with; the others are armed here.
+  giant: [{ file: "gorr_club.glb", hand: "Right", length: 1.5, authored: true }],
+  knight: [
+    { file: "longsword.glb", hand: "Right", length: 1.15, authored: true },
+    { file: "kite_shield.glb", hand: "Left", length: 0.85, shield: true, authored: true },
+  ],
+  barbarian: [],
+  mage: [{ file: "crystal_staff.glb", hand: "Right", length: 1.6, authored: true }],
+  ranger: [],
+  rogue: [],
 };
 /**
  * Bones the ragdoll drives, parent before child: each follows the segment between two ragdoll
@@ -117,22 +143,44 @@ const bone = (name: string): string => `mixamorig${name}`;
 type AnimalKind = "wolf" | "dog";
 const ANIMALS = { wolf: "/game/animals/wolf.glb", dog: "/game/animals/husky.glb" } as const;
 const ANIMAL_HEIGHT: Record<AnimalKind, number> = { wolf: 0.95, dog: 0.7 };
+/**
+ * Animals catch the light too: their fur glows faintly with its own colours (emissive from the
+ * texture), so a wolf reads in the dark instead of a black shape; a blow flashes it brighter.
+ */
+const ANIMAL_GLOW = { rest: 0.38, flash: 0.75 } as const;
+/**
+ * Gaits matched to the ground covered (m/s each clip looks right at): a walk below `trot`, a
+ * gallop above it, the playback held within `min`…`max` so legs never blur or crawl.
+ */
+const GAIT = { trot: 2.4, walk: 1.5, gallop: 7, min: 0.7, max: 1.15 } as const;
+/**
+ * Depth lanes: bodies on the same side stand a little nearer or further from the camera, so
+ * passing one another they go in front or behind (lower, larger, drawn over) instead of melting
+ * into one figure. Lane offsets: down the screen (m), toward the camera (m), and scale per lane.
+ */
+const LANES = { count: 3, drop: 0.09, near: 0.22, grow: 0.035 } as const;
+const laneOf = new WeakMap<object, number>();
+/** Each body's own walking pace (±8%) and where in a loop it starts, kept for its life. */
+const gaits = new WeakMap<object, { pace: number; phase: number }>();
+function gait(body: object): { pace: number; phase: number } {
+  let g = gaits.get(body);
+  if (!g) {
+    g = { pace: 0.92 + Math.random() * 0.16, phase: Math.random() };
+    gaits.set(body, g);
+  }
+  return g;
+}
+let lanesGiven = 0;
+function lane(body: object): number {
+  let l = laneOf.get(body);
+  if (l === undefined) {
+    l = lanesGiven++ % LANES.count;
+    laneOf.set(body, l);
+  }
+  return l;
+}
 /** Turned this far from side-on toward the camera (rad): a three-quarter view reads better than a profile. */
 const THREE_QUARTER = 0.4;
-/**
- * The toys (KayKit Adventurers, CC0): each body, what it holds in which hand slot, and the clips
- * they share (one file). The dog is the husky from the animals.
- */
-const TOYS: Record<Exclude<MateKind, "dog" | "giant">, { model: string; right?: string; left?: string }> = {
-  knight: { model: "knight.glb", right: "sword_1handed.gltf", left: "shield_round_color.gltf" },
-  barbarian: { model: "barbarian.glb", right: "axe_2handed.gltf" },
-  mage: { model: "mage.glb", right: "staff.gltf" },
-  ranger: { model: "ranger.glb", left: "bow_withString.gltf" },
-  rogue: { model: "rogue.glb", right: "dagger.gltf" },
-};
-const TOY_CLIPS = "/game/toys/toy_clips.glb";
-/** Each mate's standing height (m). */
-const MATE_HEIGHT: Record<Exclude<MateKind, "dog" | "giant">, number> = { knight: 0.95, barbarian: 1, mage: 0.95, ranger: 0.95, rogue: 0.9 };
 /** The hero's longsword, built in code: slim and long (m), its steel bright and hard. */
 const LONGSWORD = { blade: 1.02, width: 0.034, thick: 0.006, guard: 0.17, grip: 0.21 } as const;
 /** Scene lights (torches, fires) that fall on the figures at once: the nearest few. */
@@ -249,6 +297,8 @@ export class Fighters3D {
     scene: Three.Scene;
     camera: Three.OrthographicCamera;
     make: (kind: Kind) => Actor;
+    /** Adds a body loaded later (the squad). */
+    addBody: (kind: Kind, gltf: { scene: Three.Group }) => void;
     makeAnimal: (kind: AnimalKind) => Actor;
     headlight: Three.PointLight;
     torch: Three.PointLight;
@@ -496,7 +546,9 @@ export class Fighters3D {
         actor.state = beast.state;
         continue;
       }
-      actor.root.position.set(beast.x, beast.y, -0.5);
+      const l = lane(beast);
+      actor.root.position.set(beast.x, beast.y - l * LANES.drop, -0.5 + l * LANES.near);
+      actor.root.scale.setScalar(1 + l * LANES.grow);
       actor.root.rotation.set(0, pose.facing > 0 ? Math.PI / 2 - THREE_QUARTER : -Math.PI / 2 + THREE_QUARTER, pose.angle);
       if (beast.state === "getup" && actor.state !== "getup") startGetup(t.THREE, actor, GETUP_TIME);
       else if (beast.state !== "getup") this.animateEnemy(actor, beast);
@@ -680,11 +732,20 @@ export class Fighters3D {
     }
     actor.root.visible = true;
     setOpacity(actor, mate.alpha);
-    actor.root.position.set(mate.x, mate.y, 0.35);
+    const l = lane(mate);
+    actor.root.position.set(mate.x, mate.y - l * LANES.drop, 0.35 + l * LANES.near);
+    actor.root.scale.setScalar(1 + l * LANES.grow);
     actor.root.rotation.set(0, mate.facing > 0 ? Math.PI / 2 - THREE_QUARTER : -Math.PI / 2 + THREE_QUARTER, 0);
     const clip = mate.clip;
+    // Nobody moves in lockstep: each has its own pace, and starts a looping clip at its own point in it.
+    const own = gait(mate);
+    const was = actor.current;
     // A one-shot clip plays from the top when it starts, and again for a fresh hit.
-    play(actor, clip.name, clip.speed, clip.once && (actor.current !== clip.name || mate.hitSerial !== actor.reflex.serial));
+    play(actor, clip.name, clip.speed * (clip.once ? 1 : own.pace), clip.once && (actor.current !== clip.name || mate.hitSerial !== actor.reflex.serial));
+    if (!clip.once && actor.current !== was) {
+      const action = actor.actions.get(clip.name);
+      if (action) action.time = own.phase * action.getClip().duration;
+    }
     actor.reflex.serial = mate.hitSerial;
     actor.mixer.update(dt);
     return true;
@@ -712,11 +773,13 @@ export class Fighters3D {
     const step = Math.min(dt, 1 / 30);
     r.vb += (-REFLEX.omega * REFLEX.omega * r.bend - 2 * REFLEX.damping * REFLEX.omega * r.vb) * step;
     r.bend += r.vb * step;
-    actor.root.position.set(beast.x, beast.y, -0.3);
+    const l = lane(beast);
+    actor.root.position.set(beast.x, beast.y - l * LANES.drop, -0.3 + l * LANES.near);
     actor.root.rotation.set(0, pose.facing > 0 ? Math.PI / 2 - THREE_QUARTER * 0.6 : -Math.PI / 2 + THREE_QUARTER * 0.6, pose.angle + r.bend * 0.35 * pose.facing);
     setOpacity(actor, pose.alpha);
-    for (const m of actor.materials) m.emissiveIntensity = pose.flash ? 0.15 : 0;
+    for (const m of actor.materials) m.emissiveIntensity = pose.flash ? ANIMAL_GLOW.flash : ANIMAL_GLOW.rest;
     const speed = Math.abs(beast.vx);
+    const pace = (rate: number): number => Math.min(GAIT.max, Math.max(GAIT.min, rate));
     switch (beast.state) {
       case "down":
       case "blasted":
@@ -731,8 +794,8 @@ export class Fighters3D {
       default:
         if (!beast.grounded) play(actor, "Gallop_Jump");
         else if (beast.dangerous && speed < 1) play(actor, "Attack");
-        else if (speed > 3) play(actor, "Gallop", speed / 6);
-        else if (speed > 0.3) play(actor, "Walk", speed / 1.6);
+        else if (speed > GAIT.trot) play(actor, "Gallop", pace(speed / GAIT.gallop));
+        else if (speed > 0.3) play(actor, "Walk", pace(speed / GAIT.walk));
         else play(actor, "Idle");
     }
     actor.mixer.update(dt);
@@ -851,105 +914,44 @@ export class Fighters3D {
   }
 
   /*
-   * The toys, loaded once the fighters are in: five KayKit bodies sharing one file of clips, each
-   * with what it carries in its hand slots; scaled to toy size and lit like everyone else.
+   * The squad, loaded once the fighters are in (they're only needed once one is found): Mixamo
+   * characters on the fighters' skeleton, so they play the same motion-captured clips.
    */
-  private async loadToys(THREE: ThreeModule, loader: { loadAsync(url: string): Promise<{ scene: Three.Group; animations: Three.AnimationClip[] }> }, clone: (o: Three.Object3D) => Three.Object3D, scene: Three.Scene, makeAnimal: (kind: AnimalKind) => Actor): Promise<void> {
+  private async loadSquad(loader: { loadAsync(url: string): Promise<{ scene: Three.Group; animations: Three.AnimationClip[] }> }, makeAnimal: (kind: AnimalKind) => Actor): Promise<void> {
     try {
-      const kinds = Object.keys(TOYS) as (keyof typeof TOYS)[];
-      const files = [...new Set(kinds.flatMap((k) => [TOYS[k].right, TOYS[k].left].filter((f): f is string => f !== undefined)))];
-      const [bodies, clips, props] = await Promise.all([
-        Promise.all(kinds.map(async (k) => [k, await loader.loadAsync(`/game/toys/${TOYS[k].model}`)] as const)),
-        loader.loadAsync(TOY_CLIPS),
-        Promise.all(files.map(async (f) => [f, await loader.loadAsync(`/game/kaykit/${f}`)] as const)),
-      ]);
+      const bodies = await Promise.all(SQUAD.map(async (kind) => [kind, await loader.loadAsync(MODEL_BASE + MODELS[kind])] as const));
       const t = this.three;
       if (this.disposed || !t) return;
-      const sources = new Map(bodies);
-      const held = new Map(props);
-      const makeMate = (kind: MateKind): Actor => {
-        if (kind === "dog") return makeAnimal("dog");
-        if (kind === "giant") return t.make("giant");
-        const source = sources.get(kind);
-        if (!source) throw new Error(`Missing toy ${kind}`);
-        const model = clone(source.scene);
-        const materials: Three.MeshStandardMaterial[] = [];
-        const finish = (node: Three.Object3D): void => {
-          const mesh = node as Three.Mesh;
-          if (!mesh.isMesh) return;
-          // Painted plastic: a soft sheen, never metal.
-          const m = (mesh.material as Three.MeshStandardMaterial).clone();
-          m.roughness = 0.55;
-          m.metalness = 0;
-          m.emissiveIntensity = 0;
-          mesh.material = m;
-          mesh.frustumCulled = false;
-          materials.push(m);
-        };
-        model.traverse(finish);
-        // What it holds goes straight into its hand slots (KayKit props fit them as they are).
-        for (const [slot, file] of [["handslotr", TOYS[kind].right], ["handslotl", TOYS[kind].left]] as const) {
-          const bone = model.getObjectByName(slot);
-          const prop = file ? held.get(file) : undefined;
-          if (!bone || !prop) continue;
-          const item = prop.scene.clone();
-          item.traverse(finish);
-          bone.add(item);
-        }
-        const box = new THREE.Box3().setFromObject(source.scene);
-        const scale = MATE_HEIGHT[kind] / Math.max(0.01, box.max.y - box.min.y);
-        model.scale.setScalar(scale);
-        model.position.y = -box.min.y * scale;
-        const root = new THREE.Group();
-        root.rotation.order = "ZYX";
-        root.add(model);
-        scene.add(root);
-        const mixer = new THREE.AnimationMixer(model);
-        const actions = new Map<string, Three.AnimationAction>();
-        for (const clip of clips.animations) {
-          const action = mixer.clipAction(clip);
-          if (["Sit_Floor_StandUp", "Cheering", "Hit_A", "Death_A", "Melee_1H_Attack_Chop", "Melee_2H_Attack_Chop", "Ranged_Magic_Shoot", "Ranged_Bow_Release"].includes(clip.name)) {
-            action.setLoop(THREE.LoopOnce, 1);
-            action.clampWhenFinished = true;
-          }
-          actions.set(clip.name, action);
-        }
-        const trunk = { spine: null, spine1: null, spine2: null, neck: null, head: null };
-        const actor: Actor = { kind, root, model, mixer, actions, current: "", materials, swing: -1, cut: 0, drives: [], trunk, reflex: newReflex(), state: "", blend: null };
-        play(actor, "Idle_A");
-        return actor;
-      };
-      // Prepare each companion outside draw(): first appearance must not compile its shaders mid-fight.
+      for (const [kind, gltf] of bodies) t.addBody(kind, gltf);
+      // Prepare each one outside draw(): a first appearance must not compile shaders mid-fight.
       const prepared = new Map<MateKind, Actor>();
-      for (const kind of kinds) {
+      for (const kind of SQUAD) {
         if (this.disposed) return;
-        const actor = makeMate(kind);
+        const actor = t.make(kind);
         actor.root.visible = false;
         for (const material of actor.materials) material.transparent = true;
-        await t.renderer.compileAsync(actor.root, t.camera, scene);
+        await t.renderer.compileAsync(actor.root, t.camera, t.scene);
         if (this.disposed) return;
         for (const material of actor.materials) material.transparent = false;
-        await t.renderer.compileAsync(actor.root, t.camera, scene);
+        await t.renderer.compileAsync(actor.root, t.camera, t.scene);
         if (this.disposed) return;
-        actor.root.traverse((node) => {
-          const map = ((node as Three.Mesh).material as Three.MeshStandardMaterial | undefined)?.map;
-          if (map) t.renderer.initTexture(map);
-        });
         prepared.set(kind, actor);
-        // Yield between figures so decoding and setup cannot monopolise the input thread.
+        // Yield between figures so setup never holds up input.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
       if (this.disposed) return;
       t.makeMate = (kind) => {
-        const reused = t.spare.get(kind)?.pop();
-        if (reused) return reused;
-        if (kind === "giant") return t.make("giant");
-        const actor = prepared.get(kind);
-        if (actor) { prepared.delete(kind); return actor; }
-        return makeMate(kind);
+        if (kind === "dog") return t.spare.get("dog")?.pop() ?? makeAnimal("dog");
+        const ready = prepared.get(kind);
+        if (ready) {
+          prepared.delete(kind);
+          ready.root.visible = true;
+          return ready;
+        }
+        return t.make(kind);
       };
     } catch {
-      // No toys: the team just isn't drawn.
+      // No squad bodies: the team just isn't drawn.
     }
   }
 
@@ -966,7 +968,7 @@ export class Fighters3D {
       const loader = new GLTFLoader();
       loader.setMeshoptDecoder(MeshoptDecoder);
       const kinds = Object.keys(MODELS) as Kind[];
-      const bodies = [...new Set(kinds.map((kind) => BODY[kind]))];
+      const bodies = [...new Set(kinds.filter((kind) => !(SQUAD as readonly Kind[]).includes(kind)).map((kind) => BODY[kind]))];
       const animalKinds: AnimalKind[] = ["wolf", "dog"];
       const heroProps = Object.values(ARSENAL).flatMap((w) => (w.look.kind === "prop" ? [w.look.file] : []));
       const props = [...new Set([...kinds.flatMap((kind) => WEAPONS[kind].map((w) => w.file)), ...heroProps])];
@@ -1066,7 +1068,7 @@ export class Fighters3D {
         for (const w of kind === "hero" ? [] : WEAPONS[kind]) {
           const hand = model.getObjectByName(bone(`${w.hand}Hand`));
           const prop = weaponScenes.get(w.file);
-          if (hand && prop) arm(THREE, hand, prop.scene.clone(), w.length, w.shield === true, materials);
+          if (hand && prop) arm(THREE, hand, prop.scene.clone(), w.length, w.shield === true, materials, true, w.authored === true);
         }
         // Rest data for the ragdoll, measured with the body unturned (its frame = the world here).
         const drives: Actor["drives"] = [];
@@ -1110,8 +1112,10 @@ export class Fighters3D {
           // Fur: no sheen at all.
           m.roughness = 0.9;
           m.metalness = 0;
-          if (!m.emissiveMap) m.emissive.setRGB(1, 0.92, 0.85);
-          m.emissiveIntensity = 0;
+          // Self-lit by its own fur colours (see ANIMAL_GLOW).
+          if (!m.emissiveMap && m.map) m.emissiveMap = m.map;
+          m.emissive.setRGB(1, 0.95, 0.9);
+          m.emissiveIntensity = ANIMAL_GLOW.rest;
           mesh.material = m;
           mesh.frustumCulled = false;
           materials.push(m);
@@ -1143,7 +1147,7 @@ export class Fighters3D {
       // fading) and its textures uploaded, so the first knight, brute or animal to come on screen
       // doesn't freeze a frame. They wait hidden and are handed out first.
       const spare = new Map<string, Actor[]>();
-      const warm: [string, Actor][] = [...(["raider", "brute", "chief", "giant"] as const).map((k): [string, Actor] => [k, make(k)]), ...animalKinds.map((k): [string, Actor] => [k, makeAnimal(k)])];
+      const warm: [string, Actor][] = [...(["raider", "brute", "chief"] as const).map((k): [string, Actor] => [k, make(k)]), ...animalKinds.map((k): [string, Actor] => [k, makeAnimal(k)])];
       const fading = (on: boolean): void => {
         for (const [, actor] of [["hero", hero] as const, ...warm]) for (const m of actor.materials) m.transparent = on;
       };
@@ -1180,6 +1184,11 @@ export class Fighters3D {
         renderer,
         scene,
         camera,
+        addBody: (kind, gltf) => {
+          const box = new THREE.Box3().setFromObject(gltf.scene);
+          heights.set(kind, { height: Math.max(0.01, box.max.y - box.min.y), floor: box.min.y });
+          sources.set(BODY[kind], gltf as (typeof models)[number][1]);
+        },
         make: (kind) => {
           const actor = spare.get(kind)?.pop() ?? make(kind);
           actor.root.visible = true;
@@ -1202,8 +1211,8 @@ export class Fighters3D {
         lamps,
         scratch,
       };
-      // The toys come after the fighters (they're only needed once one is found).
-      void this.loadToys(THREE, loader, clone, scene, makeAnimal);
+      // The squad comes after the fighters (it's only needed once one is found).
+      void this.loadSquad(loader, makeAnimal);
     } catch {
       this.release?.();
       this.release = null;
@@ -1459,7 +1468,7 @@ function named(gltf: { animations: Three.AnimationClip[] }, name: string): Three
  * slid a little along the fingers, and the whole thing scaled to its real length. Steel gets a
  * metal finish.
  */
-function arm(THREE: ThreeModule, hand: Three.Object3D, prop: Three.Object3D, length: number, shield: boolean, materials: Three.MeshStandardMaterial[], finish = true): void {
+function arm(THREE: ThreeModule, hand: Three.Object3D, prop: Three.Object3D, length: number, shield: boolean, materials: Three.MeshStandardMaterial[], finish = true, authored = false): void {
   const handQ = hand.getWorldQuaternion(new THREE.Quaternion());
   const handScale = hand.getWorldScale(new THREE.Vector3()).x;
   const size = new THREE.Box3().setFromObject(prop).getSize(new THREE.Vector3());
@@ -1477,12 +1486,17 @@ function arm(THREE: ThreeModule, hand: Three.Object3D, prop: Three.Object3D, len
     const mesh = node as Three.Mesh;
     if (!mesh.isMesh) return;
     const m = (mesh.material as Three.MeshStandardMaterial).clone();
+    mesh.frustumCulled = false;
+    mesh.material = m;
+    if (authored) {
+      // Its own finish; a glowing part (the crystal) keeps its glow through hit flashes.
+      if (m.emissiveIntensity === 0 || m.emissive.getHex() === 0) materials.push(m);
+      return;
+    }
     m.roughness = 0.38;
     m.metalness = shield ? 0.4 : 0.75;
     m.emissive.setRGB(1, 0.92, 0.85);
     m.emissiveIntensity = 0;
-    mesh.material = m;
-    mesh.frustumCulled = false;
     materials.push(m);
   });
   hand.add(prop);

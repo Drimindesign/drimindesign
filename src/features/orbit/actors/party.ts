@@ -9,7 +9,7 @@ export type MateKind = "knight" | "barbarian" | "mage" | "ranger" | "rogue" | "d
 
 export interface MateSpec {
   name: string;
-  /** Standing height (m): the toys stand about knee to waist high; Gorr towers over her. */
+  /** Standing height (m): people, and Gorr towering over them. */
   height: number;
   /** Role skill determines endurance: recruits take ~3 ordinary hits, trained guards 5–6, Gorr 9. */
   health: number;
@@ -35,14 +35,32 @@ export interface MateSpec {
  * Gorr the giant carries her.
  */
 export const MATES: Record<MateKind, MateSpec> = {
-  knight: { name: "Knight", height: 0.95, health: 10, attack: "melee", range: 1.2, every: 1.4, power: 1.6, speed: 4.6, leaper: false, freed: "A real hero! My shield is yours, Kachujin.", warns: "Shields up! Here they come!" },
-  barbarian: { name: "Barbarian", height: 1, health: 12, attack: "melee", range: 1.3, every: 1.9, power: 2.6, speed: 4.4, leaper: false, unlocks: { weapon: "axe" }, freed: "Free! Take my spare axe. Hit them like you mean it.", warns: "More of them. Good. I was bored." },
-  mage: { name: "Mage", height: 0.95, health: 6, attack: "magic", range: 7, every: 3.2, power: 2.2, speed: 4.4, leaper: false, unlocks: { fire: true }, freed: "Your blade... let me give it fire. Press V when you need it.", warns: "I feel them in the dark. Careful." },
-  ranger: { name: "Ranger", height: 0.95, health: 7, attack: "arrow", range: 11, every: 1.7, power: 1.4, speed: 4.8, leaper: false, freed: "Thank you. I never miss. Well. Almost never.", warns: "Movement ahead. I have them in my sights." },
-  rogue: { name: "Rogue", height: 0.9, health: 6, attack: "melee", range: 1.1, every: 0.9, power: 1, speed: 5, leaper: false, freed: "I'd have picked that lock myself. Eventually. Thanks.", warns: "Shh. Something's coming." },
+  knight: { name: "Knight", height: 1.82, health: 10, attack: "melee", range: 1.2, every: 1.4, power: 1.6, speed: 4.6, leaper: false, freed: "A real hero! My shield is yours, Kachujin.", warns: "Shields up! Here they come!" },
+  barbarian: { name: "Barbarian", height: 1.86, health: 12, attack: "melee", range: 1.3, every: 1.9, power: 2.6, speed: 4.4, leaper: false, unlocks: { weapon: "axe" }, freed: "Free! Take my spare axe. Hit them like you mean it.", warns: "More of them. Good. I was bored." },
+  mage: { name: "Mage", height: 1.72, health: 6, attack: "magic", range: 7, every: 3.2, power: 2.2, speed: 4.4, leaper: false, unlocks: { fire: true }, freed: "Your blade... let me give it fire. Press V when you need it.", warns: "I feel them in the dark. Careful." },
+  ranger: { name: "Ranger", height: 1.7, health: 7, attack: "arrow", range: 11, every: 1.7, power: 1.4, speed: 4.8, leaper: false, freed: "Thank you. I never miss. Well. Almost never.", warns: "Movement ahead. I have them in my sights." },
+  rogue: { name: "Rogue", height: 1.68, health: 6, attack: "melee", range: 1.1, every: 0.9, power: 1, speed: 5, leaper: false, freed: "I'd have picked that lock myself. Eventually. Thanks.", warns: "Shh. Something's coming." },
   dog: { name: "Dog", height: 0.62, health: 5, attack: "bite", range: 1, every: 1.1, power: 1, speed: 5.2, leaper: true, freed: "Thank you! I'm coming with you!", warns: "Wolves. Many. That way." },
   giant: { name: "Gorr", height: 2.45, health: 22, attack: "melee", range: 2.2, every: 1.5, power: 4.5, speed: 4.6, leaper: true, freed: "Gorr is free. Gorr carries you now, small queen. Press E.", warns: "Gorr smells them. Many." },
 };
+
+/** Upgrades picked after each stage (one of three), kept for the rest of the run. */
+export type PerkId = "volley" | "mending" | "quake";
+
+/**
+ * Each teammate's signature skill: its name (called out when used), and how long it recharges (s).
+ * The stage decides when the moment is right, or fires them all together on Call team.
+ */
+export const SKILLS: Record<MateKind, { name: string; every: number }> = {
+  knight: { name: "Shield wall!", every: 14 },
+  barbarian: { name: "Shield bash!", every: 10 },
+  mage: { name: "Fire nova!", every: 15 },
+  ranger: { name: "Arrow rain!", every: 12 },
+  rogue: { name: "Shadow step!", every: 9 },
+  dog: { name: "Woof! Woof!", every: 20 },
+  giant: { name: "Gorr throws!", every: 11 },
+};
+export const PERK_IDS: readonly PerkId[] = ["volley", "mending", "quake"];
 
 /** A member of the team over the whole run: carried from level to level, alive or lost. */
 export interface Member {
@@ -52,6 +70,16 @@ export interface Member {
   alive: boolean;
   /** Its place in the order freed (0 the first): each one freed after another comes in stronger. */
   rank?: number;
+  /** Stages survived with her: each makes it tougher and harder-hitting (see GROWTH). */
+  level?: number;
+}
+
+/** Each stage a teammate survives: +15% health and +12% power, for the rest of the run. */
+export const GROWTH = { health: 0.15, power: 0.12 } as const;
+
+/** Full health for a member at its level. */
+export function maxHealth(member: Member): number {
+  return Math.round(MATES[member.kind].health * (1 + GROWTH.health * (member.level ?? 0)));
 }
 
 /** Base share of a teammate's kind power its blows carry. */
@@ -82,6 +110,8 @@ export class Party {
   /** Spark Hearts in hand (each brings one taken teammate straight back), the Mage's revive recharging (s). */
   hearts = 0;
   reviveRecharge = 0;
+  /** Upgrades chosen so far. */
+  readonly perks = new Set<PerkId>();
 
   /** A freed prisoner joins (the same member its body carries, so its health is the team's). */
   join(member: Member): void {
@@ -106,9 +136,18 @@ export class Party {
   /** A taken teammate back with her, at full strength. */
   restore(member: Member): void {
     member.alive = true;
-    member.hearts = MATES[member.kind].health;
+    member.hearts = maxHealth(member);
     const i = this.taken.indexOf(member);
     if (i >= 0) this.taken.splice(i, 1);
+  }
+
+  /** A stage cleared: everyone still with her grows stronger and starts the next one healed. */
+  levelUp(): void {
+    for (const m of this.members) {
+      if (!m.alive) continue;
+      m.level = (m.level ?? 0) + 1;
+      m.hearts = maxHealth(m);
+    }
   }
 
   /** A new member, at full health. */
@@ -127,6 +166,8 @@ const SPOT = { melee: 7, ranged: 10 } as const;
 
 /** A step up it hops (m); a leaper bounds up this much, and across a gap this wide (m). */
 const HOP = { climb: 2.3, leap: 2.6, gap: 7, time: 0.5 } as const;
+/** An enemy this close (m) is "on it": even holding a post, it fights back. */
+const ON_IT = 2.6;
 /** Hurt: it flinches this long (s), and can't be hurt again for this long (s). */
 const FLINCH = 0.45;
 const MERCY = 0.9;
@@ -172,6 +213,19 @@ export class Mate {
   /** Riding on another's back (a toy on the dog), or null. */
   rider: Mate | null = null;
   carrier: Mate | null = null;
+  /** Seconds until its signature skill is ready again (it starts ready). */
+  skillIn = 0;
+  /** Under the Knight's Shield Wall: blows don't land this long (s). */
+  guarded = 0;
+  /** Blows struck so far (each kind picks its next move from this, never repeating the last). */
+  private swings = 0;
+  /**
+   * Set by the stage each step: this target is one it already started on (it chases it down, up
+   * to 20 m, instead of walking away from a half-finished fight), and where the nearest threat it
+   * has noticed is (it turns to face it, ready, before it comes).
+   */
+  committed = false;
+  alertAt: number | null = null;
   /** Teammates fighting alongside right now (set by the stage each step): the bigger, the stronger. */
   squad = 1;
   readonly spec: MateSpec;
@@ -210,7 +264,12 @@ export class Mate {
   /** How hard its blows land: its kind’s power scaled for a supporting role. */
   get power(): number {
     const bonus = Math.min(SQUAD.powerCap, 1 + SQUAD.power * Math.max(0, this.squad - 1));
-    return this.spec.power * SUPPORT_POWER * bonus;
+    return this.spec.power * SUPPORT_POWER * bonus * (1 + GROWTH.power * (this.member.level ?? 0));
+  }
+
+  /** Full health at its level. */
+  get maxHealth(): number {
+    return maxHealth(this.member);
   }
 
   /** Share of a blow it actually takes: the bigger the squad, the better they cover each other. */
@@ -220,12 +279,12 @@ export class Mate {
 
   /** Healing right now (left alone a while, not at full health). */
   get healing(): boolean {
-    return this.active && this.calm > REGEN.after && this.member.hearts < this.spec.health;
+    return this.active && this.calm > REGEN.after && this.member.hearts < this.maxHealth;
   }
 
   /** Health left, 0 … 1 (for the bar over its head). */
   get health(): number {
-    return this.member.hearts / this.spec.health;
+    return this.member.hearts / this.maxHealth;
   }
 
   /** Down and waiting for her: seconds left before it's lost (0 when not down). */
@@ -242,14 +301,14 @@ export class Mate {
   /** She reached it in time: back on its feet with half its health. */
   revive(): void {
     if (this.state !== "wounded") return;
-    this.member.hearts = Math.ceil(this.spec.health * WOUND.back);
+    this.member.hearts = Math.ceil(this.maxHealth * WOUND.back);
     this.mercy = 2;
     this.set("follow");
   }
 
   /** A blow from `fromX` costing `damage`. Returns true if this one put it down. */
   hurt(fromX: number, damage = 1): boolean {
-    if (!this.open) return false;
+    if (!this.open || this.guarded > 0) return false;
     this.member.hearts = Math.max(0, this.member.hearts - damage * this.guard);
     if (this.member.hearts < 0.05) this.member.hearts = 0;
     this.hitSerial++;
@@ -267,6 +326,16 @@ export class Mate {
     return false;
   }
 
+  /** Its signature skill, used now: it plays its strongest move, and the skill recharges. */
+  useSkill(facing: number): void {
+    this.skillIn = SKILLS[this.kind].every;
+    this.facing = facing || this.facing;
+    this.swings = this.kind === "barbarian" || this.kind === "giant" ? 0 : this.swings + 1;
+    this.reload = Math.max(this.reload, 0.8);
+    this.attackTarget = null;
+    this.set("attack");
+  }
+
   /** Stands at `x` (a rider's place on its carrier's back is set from outside). */
   place(x: number): void {
     this.navigator?.reset(this);
@@ -282,6 +351,8 @@ export class Mate {
   update(dt: number, hero: { x: number; facing: number; viewHalf?: number; trouble?: boolean }, slot: number, foe: Boar | null, lost?: () => void, order: MateOrder = this.order): Boar | null {
     this.timer += dt;
     this.reload = Math.max(0, this.reload - dt);
+    this.skillIn = Math.max(0, this.skillIn - dt);
+    this.guarded = Math.max(0, this.guarded - dt);
     this.mercy = Math.max(0, this.mercy - dt);
     // Left alone a while, it heals: a point of health at a time.
     this.calm += dt;
@@ -289,7 +360,7 @@ export class Mate {
       this.mending += dt;
       if (this.mending >= REGEN.every) {
         this.mending = 0;
-        this.member.hearts = Math.min(this.spec.health, this.member.hearts + 1);
+        this.member.hearts = Math.min(this.maxHealth, this.member.hearts + 1);
       }
     } else {
       this.mending = 0;
@@ -369,8 +440,9 @@ export class Mate {
           : order.kind === "regroup" || rally
             ? hero.x - hero.facing * Math.min(1.8, 0.7 + slot * 0.12)
             : hero.x + formationOffset(slot, this.kind) * hero.facing;
-        if (foe && (Math.abs(foe.x - this.x) < spot || rally)) {
-          if (order.kind === "hold" || (order.kind === "regroup" && Math.abs(foe.x - hero.x) > 1.6)) {
+        if (foe && (Math.abs(foe.x - this.x) < spot || rally || this.committed)) {
+          // Holding or regrouping, it keeps its place, but still fights back at whatever is on it.
+          if ((order.kind === "hold" || (order.kind === "regroup" && Math.abs(foe.x - hero.x) > 1.6)) && Math.abs(foe.x - this.x) > ON_IT) {
             const gap = target - this.x;
             const want = Math.abs(gap) < 0.25 ? 0 : Math.sign(gap) * Math.min(spec.speed, Math.abs(gap) * 2.4);
             this.vx = approach(this.vx, want, 12 * dt);
@@ -383,7 +455,16 @@ export class Mate {
           if (Math.abs(d) <= spec.range && this.reload === 0) {
             this.attackTarget = foe;
             this.reload = spec.every;
+            this.swings++;
             this.set("attack");
+            return null;
+          }
+          // Holding a post, it keeps making for the post between blows (and fights from there).
+          if (order.kind === "hold" || order.kind === "scout") {
+            const gap = target - this.x;
+            const back = Math.abs(gap) < 0.25 ? 0 : Math.sign(gap) * Math.min(spec.speed, Math.abs(gap) * 2.4);
+            this.vx = approach(this.vx, back, 12 * dt);
+            this.move(dt, target);
             return null;
           }
           const closing = spec.attack === "melee" || spec.attack === "bite" ? spec.range * 0.8 : spec.range * 0.9;
@@ -397,7 +478,8 @@ export class Mate {
         const want = Math.abs(gap) < 0.25 ? 0 : Math.sign(gap) * Math.min(speed, Math.abs(gap) * 2.4);
         this.vx = approach(this.vx, want, 12 * dt);
         if (Math.abs(this.vx) > 0.2) this.facing = Math.sign(this.vx);
-        else this.facing = hero.facing;
+        // Standing: it watches the threat it has noticed, otherwise looks where she looks.
+        else this.facing = this.alertAt !== null ? Math.sign(this.alertAt - this.x) || this.facing : hero.facing;
         this.move(dt, target);
         return null;
       }
@@ -466,50 +548,74 @@ export class Mate {
 
   /** The motion-captured clip its body plays now, and how fast. */
   get clip(): { name: string; speed: number; once: boolean } {
-    const dog = this.kind === "dog";
-    const giant = this.kind === "giant";
     const speed = Math.abs(this.vx);
-    if (this.carrier) return { name: "Sit_Floor_Idle", speed: 1, once: false };
-    if (this.hop) return dog ? { name: "Gallop_Jump", speed: 1.2, once: false } : giant ? { name: "foe_run", speed: 1, once: false } : { name: "Jump_Full_Short", speed: 1.3, once: true };
-    if (giant) {
-      switch (this.state) {
-        case "caged":
-          return { name: "stand_to_sit", speed: 1, once: true };
-        case "freeing":
-          return { name: "sit_to_stand", speed: 1, once: true };
-        case "hurt":
-          return { name: "foe_hit1", speed: 1, once: true };
-        case "wounded":
-        case "dead":
-          return { name: "foe_death", speed: 1, once: true };
-        case "attack":
-          return { name: "foe_heavy", speed: 1.4, once: true };
-        default:
-          return speed > 2.6 ? { name: "foe_run", speed: speed / 5, once: false } : speed > 0.3 ? { name: "foe_walk", speed: speed / 1.6, once: false } : { name: "foe_idle", speed: 1, once: false };
-      }
+    if (this.kind === "dog") return this.dogClip(speed);
+    if (this.carrier) return { name: "stand_to_sit", speed: 1, once: true };
+    if (this.hop) return { name: "foe_run", speed: 1, once: false };
+    switch (this.state) {
+      case "caged":
+        return { name: "stand_to_sit", speed: 1, once: true };
+      case "freeing":
+        return { name: "sit_to_stand", speed: 1, once: true };
+      case "hurt":
+        return { name: this.hitSerial % 2 ? "foe_hit1" : "foe_hit2", speed: 1, once: true };
+      case "wounded":
+      case "dead":
+        return { name: "foe_death", speed: 1, once: true };
+      case "leaving":
+        return { name: "foe_run", speed: 1, once: false };
+      case "attack":
+        return this.attackClip();
+      default:
+        return speed > 2.6
+          ? { name: "foe_run", speed: speed / (this.kind === "giant" ? 5 : 5.5), once: false }
+          : speed > 0.3
+            ? { name: "foe_walk", speed: speed / 1.6, once: false }
+            : { name: "foe_idle", speed: 1, once: false };
     }
+  }
+
+  /*
+   * Each fights in its own way, and never the same blow twice running: the Knight alternates his
+   * cuts, the Barbarian and Gorr swing heavy, the Rogue mixes quick cuts with a kick, the Ranger
+   * draws and looses, the Mage casts.
+   */
+  private attackClip(): { name: string; speed: number; once: boolean } {
+    const n = this.swings;
+    switch (this.kind) {
+      case "ranger":
+        return { name: "mate_bow", speed: 1.4, once: true };
+      case "mage":
+        return { name: "mate_cast", speed: 1.3, once: true };
+      case "rogue":
+        return { name: ["hero_slash1", "hero_slash2", "hero_kick"][n % 3], speed: 1.3, once: true };
+      case "barbarian":
+      case "giant":
+        return { name: n % 3 === 2 ? "foe_slash2" : "foe_heavy", speed: 1.2, once: true };
+      default:
+        return { name: n % 2 ? "foe_slash2" : "foe_slash1", speed: 1.2, once: true };
+    }
+  }
+
+  private dogClip(speed: number): { name: string; speed: number; once: boolean } {
+    if (this.hop) return { name: "Gallop_Jump", speed: 1.2, once: false };
     switch (this.state) {
       case "leaving":
-        return dog ? { name: "Gallop", speed: 1, once: false } : { name: "Running_A", speed: 1, once: false };
+        return { name: "Gallop", speed: 1, once: false };
       case "caged":
-        return dog ? { name: "Idle", speed: 0.6, once: false } : { name: "Sit_Floor_Idle", speed: 1, once: false };
-      case "freeing":
-        return dog ? { name: "Walk", speed: 1, once: false } : { name: "Sit_Floor_StandUp", speed: 1, once: true };
       case "cheering":
-        return dog ? { name: "Idle", speed: 1.4, once: false } : { name: "Cheering", speed: 1, once: true };
+        return { name: "Idle", speed: 1, once: false };
+      case "freeing":
+        return { name: "Walk", speed: 1, once: false };
       case "hurt":
-        return dog ? { name: "Idle_HitReact1", speed: 1, once: true } : { name: "Hit_A", speed: 1, once: true };
+        return { name: "Idle_HitReact1", speed: 1, once: true };
       case "wounded":
-        return dog ? { name: "Death", speed: 0.6, once: true } : { name: "Lie_Idle", speed: 1, once: false };
       case "dead":
-        return dog ? { name: "Death", speed: 1, once: true } : { name: "Death_A", speed: 1, once: true };
-      case "attack": {
-        const name = dog ? "Attack" : { knight: "Melee_1H_Attack_Chop", barbarian: "Melee_2H_Attack_Chop", mage: "Ranged_Magic_Shoot", ranger: "Ranged_Bow_Release", rogue: "Melee_1H_Attack_Chop", dog: "Attack", giant: "foe_heavy" }[this.kind];
-        return { name, speed: 1.3, once: true };
-      }
+        return { name: "Death", speed: 0.8, once: true };
+      case "attack":
+        return { name: "Attack", speed: 1.3, once: true };
       default:
-        if (dog) return speed > 3 ? { name: "Gallop", speed: speed / 6, once: false } : speed > 0.3 ? { name: "Walk", speed: speed / 1.6, once: false } : { name: "Idle", speed: 1, once: false };
-        return speed > 2.6 ? { name: "Running_A", speed: speed / 4.5, once: false } : speed > 0.3 ? { name: "Walking_A", speed: speed / 1.6, once: false } : { name: "Idle_A", speed: 1, once: false };
+        return speed > 3 ? { name: "Gallop", speed: Math.min(1.15, speed / 7), once: false } : speed > 0.3 ? { name: "Walk", speed: speed / 1.6, once: false } : { name: "Idle", speed: 1, once: false };
     }
   }
 }

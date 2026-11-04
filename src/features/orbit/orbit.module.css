@@ -616,6 +616,81 @@
     animation: toast-in 450ms var(--ease-out-expo) both;
   }
 
+  /* The minimap: a square in the top-right corner, below the sound and pause buttons, in play only. */
+  .minimap {
+    position: absolute;
+    z-index: 8;
+    top: max(4.4rem, calc(env(safe-area-inset-top) + 4rem));
+    right: max(var(--gutter), env(safe-area-inset-right));
+    display: none;
+    width: clamp(6.5rem, 14vw, 9.5rem);
+    aspect-ratio: 1;
+    border: 1px solid rgb(255 246 220 / 0.22);
+    border-radius: 0.6rem;
+    pointer-events: none;
+  }
+
+  .root[data-phase="play"] .minimap {
+    display: block;
+  }
+
+  /* The upgrade choice: centred, shown only while one is on offer. */
+  .perkCard {
+    display: none;
+  }
+
+  .root[data-phase="complete"][data-perks="on"] .perkCard {
+    display: grid;
+    gap: 0.8rem;
+    justify-items: center;
+    width: min(40rem, calc(100% - var(--gutter) * 2));
+    pointer-events: auto;
+    animation: perk-in 450ms var(--ease-out-expo) both;
+  }
+
+  @keyframes perk-in {
+    from {
+      opacity: 0.01;
+    }
+  }
+
+  .perks {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem;
+  }
+
+  .perk {
+    display: grid;
+    gap: 0.25rem;
+    width: min(12rem, 80vw);
+    min-height: 44px;
+    padding: 0.8rem;
+    border: 1px solid rgb(255 255 255 / 0.25);
+    border-radius: 0.8rem;
+    background: rgb(255 255 255 / 0.08);
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .perk:hover,
+  .perk:focus-visible {
+    border-color: rgb(255 210 120 / 0.9);
+    background: rgb(255 210 120 / 0.14);
+  }
+
+  .perkTitle {
+    font-weight: 700;
+  }
+
+  .root[data-owned~="volley"] .perk[data-perk="volley"],
+  .root[data-owned~="mending"] .perk[data-perk="mending"],
+  .root[data-owned~="quake"] .perk[data-perk="quake"] {
+    display: none;
+  }
+
   .rewardCard {
     top: max(3.6rem, calc(env(safe-area-inset-top) + 3rem));
     right: max(var(--gutter), env(safe-area-inset-right));

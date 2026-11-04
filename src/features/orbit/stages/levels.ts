@@ -39,7 +39,12 @@ const OPENING: Record<Biome, string> = {
  * A prisoner every level, in this order round and round (one already on her team is held as a
  * villager instead: freeing them still pays). Gorr waits at the top of every hill level.
  */
-const PRISONERS: readonly MateKind[] = ["ranger", "rogue", "dog", "mage", "barbarian", "knight"];
+/**
+ * One recruit a level, light troops first and the heavy hitters later (level 1 the Knight, 2 the
+ * Ranger); from level 8 the cages hold extra copies of the light troops for a bigger army.
+ */
+const RECRUITS: Partial<Record<number, MateKind>> = { 3: "rogue", 4: "mage", 5: "barbarian", 6: "giant", 7: "dog" };
+const COPIES: readonly MateKind[] = ["rogue", "ranger", "knight"];
 
 export interface Level {
   config: RoadConfig;
@@ -80,6 +85,9 @@ export function level(n: number): Level {
   const biome = CHAIN[(n - 3) % CHAIN.length];
   const place = PLACES[biome];
   const rand = random(n * 977 + 13);
+  // The ground is the same every time; who comes at her, how many and in what mix is rolled per play.
+  const play = random((Math.random() * 2 ** 31) | 0);
+  const pickFoe = <T,>(items: readonly T[]): T => items[Math.floor(play() * items.length)];
   const pick = <T,>(items: readonly T[]): T => items[Math.floor(rand() * items.length)];
   const hard = Math.min(1, (n - 3) / 40);
 
@@ -118,7 +126,7 @@ export function level(n: number): Level {
   while (plan.filter((p) => p === "ambush").length < 2) plan.splice(1 + Math.floor(rand() * (plan.length - 1)), 0, "ambush");
   plan.splice(Math.floor(plan.length / 2), 0, "camp");
   if (n >= 6) plan.push("camp");
-  const prisoner = PRISONERS[(n - 3) % PRISONERS.length];
+  const prisoner = RECRUITS[n] ?? COPIES[(n - 8) % COPIES.length];
   plan.splice(Math.min(plan.length, 2), 0, "cage");
 
   for (const section of plan) {
@@ -173,11 +181,6 @@ export function level(n: number): Level {
         boulders.push({ x0: x - faces * 6, x1: x + 4, every: Math.max(2.2, 4.5 - hard * 2) });
         cells.push([x + 2, 1.2]);
         x += 6;
-        // Gorr is held at the top of the hill.
-        if (!cages.some(([, k]) => k === "giant")) {
-          cages.push([x, "giant"]);
-          x += 6;
-        }
         x += 8;
         break;
       }
@@ -187,8 +190,9 @@ export function level(n: number): Level {
         const boss = n % 5 === 0 && !stops.some((s) => s.kinds.includes("chief"));
         stops.push({
           x,
-          enemies: crowd,
-          together,
+          // Each play a different camp: a few more or fewer, coming one at a time or in a rush.
+          enemies: Math.max(2, crowd + Math.floor(play() * 3) - 1),
+          together: Math.max(1, together + (play() < 0.3 ? 1 : play() < 0.3 ? -1 : 0)),
           kinds: boss ? ["chief", ...place.gang] : place.gang,
           dialogue: boss ? [{ who: "Grey's chief", clip: "", text: "Grey sent me to bring back that Spark. And your head.", at: 0.3 }, { who: "Kachujin", clip: "", text: "He'll get neither.", at: 3.2 }] : undefined,
         });
@@ -198,8 +202,10 @@ export function level(n: number): Level {
       }
       case "ambush": {
         // A pack out of the dark; from level 4 Copycats run in with them sometimes.
-        const kinds = n >= 4 && rand() < 0.4 ? [...place.animals, ...place.gang] : place.animals;
-        ambushes.push({ x: x + 6, count: Math.min(7, 3 + Math.floor(n / 3)), kinds });
+        // The mix changes every play: a pure pack, Copycats with it (from level 4), or Copycats alone (from 6).
+        const roll = play();
+        const kinds = n >= 6 && roll < 0.25 ? place.gang : n >= 4 && roll < 0.6 ? [...place.animals, ...place.gang] : place.animals;
+        ambushes.push({ x: x + 6 + play() * 6, count: Math.min(8, 3 + Math.floor(n / 3) + Math.floor(play() * 2)), kinds });
         x += 26;
         break;
       }
@@ -221,7 +227,7 @@ export function level(n: number): Level {
         // Grey's men on watch along the way: they see her coming and come at her.
         const count2 = Math.min(4, 2 + Math.floor(n / 8));
         x += 10;
-        for (let i = 0; i < count2; i++) guards.push([x + i * 3.5, pick(place.gang)]);
+        for (let i = 0; i < count2; i++) guards.push([x + i * (2.5 + play() * 2.5), pickFoe(place.gang)]);
         torches.push(x - 2);
         x += count2 * 3.5 + 14;
         break;
@@ -230,7 +236,7 @@ export function level(n: number): Level {
         // A guard or two on the cage, too.
         x += 10;
         cages.push([x, prisoner]);
-        guards.push([x + 4, pick(place.gang)]);
+        guards.push([x + 4, pickFoe(place.gang)]);
         x += 14;
         break;
       }

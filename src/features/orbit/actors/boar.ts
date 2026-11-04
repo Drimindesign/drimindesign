@@ -30,9 +30,9 @@ interface BeastSpec {
 const SPECS: Record<BeastKind, BeastSpec> = {
   boar: { speed: 6.2, accel: 10, notice: 20, leapRange: 0, leap: 0, health: 2, mass: 90, scale: 1, filter: "none" },
   // Wolves: lighter and faster, and they spring at you from a few metres out.
-  wolf: { speed: 9, accel: 16, notice: 26, leapRange: 5, leap: 6.5, health: 1, mass: 45, scale: 0.85, filter: "grayscale(1) brightness(0.75) contrast(1.3)" },
+  wolf: { speed: 7.6, accel: 8, notice: 26, leapRange: 3, leap: 4.2, health: 1, mass: 45, scale: 0.85, filter: "grayscale(1) brightness(0.75) contrast(1.3)" },
   // Village dogs: chase the car barking, too light to hurt it; a fright sends them running.
-  dog: { speed: 8.5, accel: 14, notice: 22, leapRange: 0, leap: 0, health: 1, mass: 25, scale: 0.62, filter: "sepia(1) saturate(1.4) brightness(0.8)" },
+  dog: { speed: 7.4, accel: 8, notice: 22, leapRange: 0, leap: 0, health: 1, mass: 25, scale: 0.62, filter: "sepia(1) saturate(1.4) brightness(0.8)" },
   // Fighters on foot (drawn as 3D models): they walk up, wind up and strike; they don't run off.
   raider: { speed: 2.8, accel: 10, notice: 16, leapRange: 0, leap: 0, health: 3, mass: 90, scale: 1, filter: "none" },
   brute: { speed: 2.1, accel: 7, notice: 16, leapRange: 0, leap: 0, health: 4, mass: 125, scale: 1, filter: "none" },

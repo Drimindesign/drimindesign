@@ -423,5 +423,45 @@
     "speaker": "Kachujin",
     "clip": "voice-85",
     "text": "Easy... easy. You're one of us now."
+  },
+  {
+    "speaker": "Kachujin",
+    "clip": "hero-rally",
+    "text": "To me! All of you!"
+  },
+  {
+    "speaker": "Knight",
+    "clip": "skill-knight",
+    "text": "Shield wall!"
+  },
+  {
+    "speaker": "Barbarian",
+    "clip": "skill-barbarian",
+    "text": "Shield bash!"
+  },
+  {
+    "speaker": "Mage",
+    "clip": "skill-mage",
+    "text": "Fire nova!"
+  },
+  {
+    "speaker": "Ranger",
+    "clip": "skill-ranger",
+    "text": "Arrow rain!"
+  },
+  {
+    "speaker": "Rogue",
+    "clip": "skill-rogue",
+    "text": "Shadow step!"
+  },
+  {
+    "speaker": "Dog",
+    "clip": "skill-dog",
+    "text": "Woof! Woof!"
+  },
+  {
+    "speaker": "Gorr",
+    "clip": "skill-gorr",
+    "text": "Gorr throws!"
   }
 ]

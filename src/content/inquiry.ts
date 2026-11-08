@@ -23,5 +23,5 @@ export const inquiryCopy = {
   successTitle: (name: string): string => `Thanks, ${name}.`,
   successBody: "Your note is with us. We'll reply within one working day.",
   again: "Send another",
-  email: "hello@drimindesigns.co.in",
+  email: "drimindesign@gmail.com",
 } as const;

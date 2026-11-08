@@ -37,7 +37,7 @@ export function Hero(): React.ReactElement {
 
         {/* Spacing lives on a wrapper: the wordmark's own margins trim its line box. */}
         <div className="mt-[clamp(1.25rem,5svh,3.5rem)]">
-          <Wordmark id="hero-title" name={site.name} word={hero.wordmark} widthEm={hero.wordmarkWidthEm} />
+          <Wordmark id="hero-title" name={site.heading} word={hero.wordmark} widthEm={hero.wordmarkWidthEm} />
         </div>
 
         <FallingWords

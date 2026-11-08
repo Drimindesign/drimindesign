@@ -30,6 +30,14 @@
   "images": {
     "binding": "IMAGES"
   },
+  // Form submissions are emailed to the studio inbox (src/server/email/studio-email.ts).
+  // Locked to one verified address; setup steps in docs/form-email-setup.md.
+  "send_email": [
+    {
+      "name": "STUDIO_EMAIL",
+      "destination_address": "drimindesign@gmail.com"
+    }
+  ],
   "observability": {
     "enabled": true
   }

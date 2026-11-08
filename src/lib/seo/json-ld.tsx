@@ -1,4 +1,4 @@
-import { site } from "@/content/site";
+import { footer, site } from "@/content/site";
 
 type JsonLdObject = Record<string, unknown>;
 
@@ -20,8 +20,21 @@ export function organizationSchema(): JsonLdObject {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: site.name,
+    alternateName: ["Drimin Design", "Drimin Designs", "Drimindesigns"],
     url: site.url,
+    logo: new URL("/icon-512.png", site.url).toString(),
     description: site.description,
+    email: footer.email,
+    foundingDate: "2023",
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: site.location.city,
+      addressRegion: site.location.region,
+      addressCountry: site.location.country,
+    },
+    areaServed: [{ "@type": "City", name: site.location.city }, { "@type": "Country", name: "India" }, "Worldwide"],
+    knowsAbout: site.services,
+    contactPoint: { "@type": "ContactPoint", contactType: "sales", email: footer.email, availableLanguage: ["English", "Hindi"] },
   };
 }
 

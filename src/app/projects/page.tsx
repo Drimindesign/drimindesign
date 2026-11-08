@@ -5,9 +5,9 @@ import { ProjectGrid } from "@/features/project-grid";
 import { breadcrumbSchema, JsonLd } from "@/lib/seo/json-ld";
 
 export const metadata: Metadata = {
-  title: "Projects",
+  title: "Projects: Branding, Website and App Design Portfolio",
   description:
-    "Selected brand identity, print and app design by Drimindesign: logos, stationery, signage and mobile apps made to feel physical and be remembered.",
+    "Branding, packaging, website and app projects by Drimindesign, Pune: brand identities, logos, e-commerce sites and mobile apps for clients in India and abroad.",
   alternates: { canonical: "/projects" },
 };
 

@@ -19,7 +19,25 @@ export const site = {
   /* PLACEHOLDER: replace with the real domain before launch. */
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   description:
-    "Drimindesign turns vision and creativity into reality: a brand, web and motion studio designing identities and websites that move with intent and get remembered.",
+    "Drimindesign is a branding, website and app design agency in Pune, India: brand identity, logos, packaging, UI/UX and e-commerce websites for businesses.",
+  /*
+   * SEO (docs/seo-strategy.md): the home page title and the H1's hidden text name what the
+   * studio does, in the words clients search for ("branding agency", "web design").
+   */
+  homeTitle: "Drimindesign — Branding, Web & App Design Agency in Pune",
+  heading: "Drimindesign, a branding, website and app design agency in Pune",
+  /** What the studio offers, for structured data (schema.org knowsAbout). */
+  services: [
+    "Brand identity design",
+    "Logo design",
+    "Packaging design",
+    "Website design and development",
+    "E-commerce website development",
+    "UI/UX and app design",
+    "Admin dashboard design",
+  ],
+  /** Where the studio is based (structured data and local search). */
+  location: { city: "Pune", region: "Maharashtra", country: "IN" },
   themeColor: "#FA2E00",
 } as const;
 
@@ -63,7 +81,7 @@ export const hero = {
 export const footer = {
   eyebrow: "Have an idea?",
   title: "Let's make it real.",
-  email: "hello@drimindesigns.co.in",
+  email: "drimindesign@gmail.com",
   action: { label: "Book a call", href: "/appointment" },
   navTitle: "Explore",
   contactTitle: "Say hello",
@@ -71,5 +89,6 @@ export const footer = {
   legal: [
     { label: "Privacy Policy", href: "/privacy" },
     { label: "Terms of Use", href: "/terms" },
+    { label: "Sitemap", href: "/sitemap.html" },
   ] satisfies NavItem[],
 } as const;

@@ -19,5 +19,5 @@ export const contactCopy = {
   replyLabel: "Reply time",
   reply: "Within one working day",
   locationLabel: "Where we work",
-  location: "From India, with clients worldwide",
+  location: "Based in Pune, with clients across India and worldwide",
 } as const;

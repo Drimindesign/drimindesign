@@ -14,7 +14,7 @@ import { manrope, outrun } from "./fonts/fonts";
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
   title: {
-    default: `${site.name} — ${site.tagline}`,
+    default: site.homeTitle,
     template: `%s — ${site.name}`,
   },
   description: site.description,
@@ -24,12 +24,12 @@ export const metadata: Metadata = {
     siteName: site.name,
     locale: "en",
     url: "/",
-    title: site.name,
+    title: site.homeTitle,
     description: site.description,
   },
   twitter: {
     card: "summary_large_image",
-    title: site.name,
+    title: site.homeTitle,
     description: site.description,
   },
 };

@@ -23,12 +23,14 @@ export async function generateMetadata({ params }: PageProps<"/projects/[slug]">
   if (!project) return {};
   const description = describe(slug);
   const image = projectImageUrl(project, 1400);
+  // "House of Diams: Web development · Admin design" names the work as clients search for it.
+  const title = `${project.title}: ${project.category}`;
   return {
-    title: project.title,
+    title,
     description,
     alternates: { canonical: `/projects/${slug}` },
-    openGraph: { type: "article", title: project.title, description, url: `/projects/${slug}`, images: [{ url: image, alt: project.alt }] },
-    twitter: { card: "summary_large_image", title: project.title, description, images: [image] },
+    openGraph: { type: "article", title, description, url: `/projects/${slug}`, images: [{ url: image, alt: project.alt }] },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
   };
 }
 

@@ -4,10 +4,10 @@ import { ContactPage } from "@/features/contact";
 import { contactPageSchema, JsonLd } from "@/lib/seo/json-ld";
 
 const description =
-  "Tell Drimindesign about your brand, website or motion project. Share a few details and the studio team will get back to you personally.";
+  "Contact Drimindesign, a branding, website and app design agency in Pune, India. Tell us about your project and we'll reply personally within one working day.";
 
 export const metadata: Metadata = {
-  title: "Contact",
+  title: "Contact: Start a Branding, Website or App Project",
   description,
   alternates: { canonical: "/contact" },
 };

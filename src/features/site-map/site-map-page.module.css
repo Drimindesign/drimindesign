@@ -1,0 +1,94 @@
+/* Components layer: Tailwind utilities on the same element still win. */
+@layer components {
+  .page {
+    min-height: 100svh;
+    padding: calc(var(--header-offset) + var(--control-height) + clamp(3rem, 10svh, 7rem)) var(--gutter)
+      clamp(4rem, 12svh, 8rem);
+    background: #fff;
+    color: var(--color-ink-950);
+  }
+
+  .inner {
+    max-width: 72rem;
+    margin-inline: auto;
+  }
+
+  .title {
+    max-width: 14ch;
+    font-size: clamp(2.5rem, 6vw, 5.5rem);
+    line-height: 0.95;
+  }
+
+  .groups {
+    display: grid;
+    gap: clamp(2.5rem, 6svh, 3.5rem);
+    margin-top: clamp(3rem, 8svh, 5rem);
+  }
+
+  @media (min-width: 64rem) {
+    .groups {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .heading {
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-ink-200);
+    font-size: var(--text-label);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-500);
+  }
+
+  .list {
+    display: grid;
+    gap: 0.25rem;
+    margin-top: 0.75rem;
+  }
+
+  .list li {
+    display: grid;
+  }
+
+  .link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: var(--text-body-lg);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 0.25em;
+    transition: text-decoration-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .link:focus-visible {
+    text-decoration-color: currentColor;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .link:hover {
+      text-decoration-color: currentColor;
+    }
+  }
+
+  .note {
+    margin-top: -0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: var(--text-body-sm);
+    color: var(--color-ink-500);
+  }
+
+  .xml {
+    margin-top: clamp(3rem, 8svh, 5rem);
+    font-size: var(--text-body-sm);
+    color: var(--color-ink-500);
+  }
+
+  .xml a {
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+}

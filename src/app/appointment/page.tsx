@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { AppointmentPage } from "@/features/appointment";
 
 export const metadata: Metadata = {
-  title: "Appointment",
+  title: "Book a Call With a Branding and Web Design Agency",
   description:
-    "Book a call with Drimindesign. Pick a time that suits you to talk through your brand, website or motion project with the studio team.",
+    "Book a 30-minute call with Drimindesign to talk through your branding, website or app project. Pick a time that suits you and meet the people who'd design it.",
   alternates: { canonical: "/appointment" },
 };
 

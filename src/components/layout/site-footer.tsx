@@ -5,10 +5,14 @@ import { Button } from "@/components/ui/button";
 import { BendingWord } from "@/features/hero";
 import styles from "./site-footer.module.css";
 
-/* The year, cached for a day: Cache Components keeps `new Date()` out of the static shell. */
+/*
+ * The year, cached: Cache Components keeps `new Date()` out of the static shell. `max` (1 year
+ * expiry) because the Cloudflare cache is read-only: once an entry expires, every page has to
+ * regenerate it at request time, can't store it, and fails. Each deploy refreshes the year.
+ */
 async function CopyrightYear(): Promise<React.ReactElement> {
   "use cache";
-  cacheLife("days");
+  cacheLife("max");
   return <>{new Date().getFullYear()}</>;
 }
 

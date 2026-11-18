@@ -12,7 +12,10 @@
     // Node.js APIs for the Next.js server (Server Actions, headers(), crypto).
     "nodejs_compat",
     // fetch() from the Worker may only reach public URLs.
-    "global_fetch_strictly_public"
+    "global_fetch_strictly_public",
+    // OpenNext's in-memory cache shares promises across requests; Cloudflare's newer default
+    // rejects that and took every page down (Nov 2026).
+    "no_handle_cross_request_promise_resolution"
   ],
   // Every page is prerendered: HTML, RSC payloads, /_next/static and /public are served
   // straight from Cloudflare's edge as static assets.

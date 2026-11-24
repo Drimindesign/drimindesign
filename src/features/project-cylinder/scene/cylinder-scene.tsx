@@ -4,6 +4,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import { NoToneMapping } from "three";
 import type { Project } from "@/content/projects";
+import { reportGraphicsContext } from "@/lib/device/capabilities";
 import type { DeviceTier } from "@/lib/device/use-device-tier";
 import type { CylinderStore } from "../store";
 import { CameraRig } from "./camera-rig";
@@ -52,6 +53,7 @@ export default function CylinderScene({ projects, tier, store, onReady }: Cylind
       camera={{ fov: 35, near: 0.1, far: 200, position: [0, 20, 20] }}
       gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
       onCreated={({ gl }) => {
+        reportGraphicsContext(gl.getContext());
         gl.toneMapping = NoToneMapping;
         requestAnimationFrame(() => requestAnimationFrame(() => onReady?.()));
       }}

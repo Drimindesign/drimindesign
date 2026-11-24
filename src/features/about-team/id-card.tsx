@@ -26,7 +26,7 @@ export function IdCard({ member, index }: IdCardProps): React.ReactElement {
         </div>
         <div className={styles.portrait}>
           {/* Same file the 3D card prints (scene/card-art.ts): one download serves both. */}
-          <Image src={member.photo} alt="" fill unoptimized className="object-cover" />
+          <Image src={member.photo} alt="" fill sizes="(min-width: 1024px) 250px, 44vw" unoptimized className="object-cover" />
         </div>
         <p className="mt-3 text-heading-md font-semibold tracking-tight">{member.name}</p>
         <p className="text-body-sm font-medium text-ink-500">{member.role}</p>

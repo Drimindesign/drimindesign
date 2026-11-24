@@ -19,17 +19,17 @@ export const duration = {
 export const intro = {
   /** Panel scale relative to the framed state at t=0 (unitless). */
   popFrom: 0.9,
-  popMs: 520,
-  holdMs: 60,
-  expandMs: 1000,
-  letterDelayMs: 120,
-  letterStaggerMs: 55,
-  letterMs: 950,
+  popMs: 360,
+  holdMs: 40,
+  expandMs: 650,
+  letterDelayMs: 70,
+  letterStaggerMs: 35,
+  letterMs: 700,
   /** Letters lean back as they rise, then straighten (deg). */
   letterTiltDeg: 7,
-  itemsDelayMs: 1080,
-  itemStaggerMs: 70,
-  itemMs: 850,
+  itemsDelayMs: 180,
+  itemStaggerMs: 45,
+  itemMs: 600,
   /** Frame width around the panel before it expands (px, clamped to viewport). */
   insetMinPx: 8,
   insetMaxPx: 24,

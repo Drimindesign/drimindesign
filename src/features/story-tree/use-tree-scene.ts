@@ -4,8 +4,8 @@ import { useEffect, useState, type RefObject } from "react";
 import { damp } from "@/lib/motion/damp";
 import { easeOutQuart, onLenis } from "@/lib/motion/smooth-scroll";
 import { scroll, storyTree } from "@/lib/motion/tokens";
-import { warmUp } from "@/lib/motion/warm-up";
-import { growthFromScroll, stageOf, loadTreeData, loadTreeModel, type TreeModel } from "./tree-model";
+import { afterIntro, whenIdle } from "@/lib/motion/after-intro";
+import { growthFromScroll, stageOf, loadTreeModel, type TreeModel } from "./tree-model";
 import { TreeRenderer, type Leader, type TreeLayout } from "./tree-renderer";
 
 /* Tree content bounds in tree units (crown top to root tips), used to fit it on screen. */
@@ -91,13 +91,12 @@ export function useTreeScene({ stageRef, canvasRef, milestones }: TreeSceneOptio
   useEffect(() => {
     const section = stageRef.current?.closest("section");
     if (!section) return;
-    warmUp(loadTreeData);
     let cancelled = false;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry.isIntersecting) return;
         observer.disconnect();
-        void loadTreeModel()
+        void afterIntro().then(() => whenIdle()).then(loadTreeModel)
           .then((loaded) => !cancelled && setModel(loaded))
           .catch(() => undefined);
       },

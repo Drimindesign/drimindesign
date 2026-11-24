@@ -7,10 +7,11 @@ import type { TeamMember } from "@/content/team";
 import type { DeviceTier } from "@/lib/device/use-device-tier";
 import { lanyard as tune } from "@/lib/motion/tokens";
 import type { LanyardControl } from "../store";
-import { createCardArt, type CardArt } from "./card-art";
+import type { CardArt } from "./card-art";
+import { loadCardArt } from "./prebuilt-card-art";
 import { createCardGeometry } from "./card-geometry";
 import { CARD, LanyardBody, layoutLanyards } from "./lanyard-physics";
-import { STRAP_WIDTH, StrapRibbon } from "./strap-ribbon";
+import { StrapRibbon } from "./strap-ribbon";
 
 interface LanyardsProps {
   team: readonly TeamMember[];
@@ -53,11 +54,6 @@ const LAMINATE = {
 } as const;
 /** Direction the key light comes from (upper left, in front), for the per-frame face shading. */
 const KEY_DIRECTION = new Vector3(-0.3, 0.55, 1).normalize();
-
-/* One texel per screen pixel: the card's on-screen width x device pixel ratio, in steps. */
-function printResolution(widthPx: number, designWidth: number, dpr: number): number {
-  return Math.min(2.4, Math.max(0.5, Math.ceil(((widthPx * dpr) / designWidth) * 10) / 10));
-}
 
 function useMaterials(): { body: MeshPhysicalMaterial; metal: MeshStandardMaterial; strap: MeshStandardMaterial } {
   const [materials] = useState(() => ({
@@ -115,33 +111,40 @@ export function Lanyards({ team, tier, control, onReady }: LanyardsProps): React
     invalidate();
   }, [team.length, stageWidth, stageHeight, railY, control, invalidate, artReady]);
 
-  // Print the cards at the size they are shown at (redrawn if the card size changes).
-  const dpr = useThree((state) => state.viewport.dpr);
-  const resolution = printResolution(cardPx, 640, dpr);
-  const strapResolution = printResolution(cardPx * STRAP_WIDTH, 64, dpr);
+  // Fixed, sharp artwork survives mobile URL-bar resizes without redrawing or re-uploading.
+  const [artFailed, setArtFailed] = useState(false);
   useEffect(() => {
     let cancelled = false;
     let created: CardArt | null = null;
-    const anisotropy = get().gl.capabilities.getMaxAnisotropy();
-    void createCardArt(team, anisotropy, resolution, strapResolution).then((result) => {
+    void loadCardArt(get().gl, tier === "low", () => cancelled).then((result) => {
+      if (!result) return;
       if (cancelled) return result.dispose();
       created = result;
       materials.strap.emissiveMap = result.strap;
       materials.strap.needsUpdate = true;
       setArt(result);
-    });
+    }).catch(() => { if (!cancelled) setArtFailed(true); });
     return () => {
       cancelled = true;
       created?.dispose();
     };
-  }, [team, get, materials, resolution, strapResolution]);
+  }, [get, materials, tier]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!art) return;
-    invalidate();
-    const frame = requestAnimationFrame(() => requestAnimationFrame(() => onReady?.()));
-    return () => cancelAnimationFrame(frame);
-  }, [art, invalidate, onReady]);
+    let cancelled = false;
+    let frame = 0;
+    const { gl, scene, camera, setFrameloop } = get();
+    // Let KHR_parallel_shader_compile finish before the first visible material draw.
+    setFrameloop("never");
+    void gl.compileAsync(scene, camera).then(() => {
+      if (cancelled) return;
+      setFrameloop("demand");
+      invalidate();
+      frame = requestAnimationFrame(() => { frame = requestAnimationFrame(() => onReady?.()); });
+    }).catch(() => { if (!cancelled) setArtFailed(true); });
+    return () => { cancelled = true; cancelAnimationFrame(frame); setFrameloop("demand"); };
+  }, [art, get, invalidate, onReady]);
 
   useEffect(() => control.subscribe(() => invalidate()), [control, invalidate]);
   useEffect(() => () => {
@@ -266,6 +269,8 @@ export function Lanyards({ team, tier, control, onReady }: LanyardsProps): React
     brush.current = { x: event.point.x, y: event.point.y, at: now };
   };
 
+  // Throw in render so the stage boundary restores the readable HTML cards.
+  if (artFailed) throw new Error("Team artwork could not load");
   if (!art) return null;
   const shadowSize = tier === "high" ? 2048 : 1024;
   const reach = Math.max(viewport.width, viewport.height) * 0.75;

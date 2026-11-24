@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { displacementMapDataUrl } from "@/lib/glass/displacement-map";
+import { renderDisplacementMap } from "@/lib/glass/displacement-renderer";
 import { afterIntro, whenIdle } from "@/lib/motion/after-intro";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -13,6 +13,8 @@ const DEFAULT_ANGLE = 135;
 interface GlassEntry {
   filter: SVGFilterElement | null;
   angle: number;
+  visible: boolean;
+  size: string;
 }
 
 /** Feature-detects backdrop refraction. Only Chromium renders SVG filters in backdrop-filter. */
@@ -47,18 +49,21 @@ export function LiquidGlassEnhancer(): React.ReactElement {
     let frame = 0;
     let pointer: { x: number; y: number } | null = null;
 
-    const buildFilter = (el: HTMLElement, entry: GlassEntry): void => {
+    const buildFilter = async (el: HTMLElement, entry: GlassEntry): Promise<void> => {
       const width = el.offsetWidth;
       const height = el.offsetHeight;
-      entry.filter?.remove();
-      entry.filter = null;
       if (width < 2 || height < 2) return;
 
       const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+      const size = `${width}:${height}:${radius}`;
+      if (entry.size === size) return;
+      entry.size = size;
       // Thin controls get a thin lens; large cards cap out so text stays undistorted.
       const bevel = Math.max(6, Math.min(18, Math.min(width, height) * 0.32));
-      const href = displacementMapDataUrl({ width, height, radius, bevel });
-      if (!href) return;
+      const href = await renderDisplacementMap({ width, height, radius, bevel });
+      if (!href || cancelled || entry.size !== size) return;
+      entry.filter?.remove();
+      entry.filter = null;
 
       // A fresh id per build: Chromium caches backdrop filters by reference.
       const id = `lg-${++filterCount}`;
@@ -95,12 +100,28 @@ export function LiquidGlassEnhancer(): React.ReactElement {
       el.style.setProperty("--lg-filter", `url(#${id})`);
     };
 
+    let pendingFilter = Promise.resolve();
+    const prepareFilter = (el: HTMLElement, entry: GlassEntry): void => {
+      pendingFilter = pendingFilter.then(() => whenIdle(200)).then(() => {
+        if (!cancelled && entry.visible) return buildFilter(el, entry);
+      });
+    };
+    const nearby = new IntersectionObserver((records) => {
+      for (const record of records) {
+        const el = record.target as HTMLElement;
+        const entry = entries.get(el);
+        if (!entry) continue;
+        entry.visible = record.isIntersecting;
+        if (refract && entry.visible) prepareFilter(el, entry);
+      }
+    }, { rootMargin: "100px" });
+
     const resizeObserver = refract
       ? new ResizeObserver((records) => {
           for (const record of records) {
             const el = record.target as HTMLElement;
             const entry = entries.get(el);
-            if (entry) buildFilter(el, entry);
+            if (entry?.visible) prepareFilter(el, entry);
           }
         })
       : null;
@@ -136,7 +157,8 @@ export function LiquidGlassEnhancer(): React.ReactElement {
       .then(() => {
         if (cancelled) return;
         for (const el of document.querySelectorAll<HTMLElement>(".liquid-glass")) {
-          entries.set(el, { filter: null, angle: DEFAULT_ANGLE });
+          entries.set(el, { filter: null, angle: DEFAULT_ANGLE, visible: false, size: "" });
+          nearby.observe(el);
           resizeObserver?.observe(el);
         }
         if (followPointer) window.addEventListener("pointermove", onPointerMove, { passive: true });
@@ -146,6 +168,7 @@ export function LiquidGlassEnhancer(): React.ReactElement {
       cancelled = true;
       cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
+      nearby.disconnect();
       window.removeEventListener("pointermove", onPointerMove);
       for (const [el, entry] of entries) {
         entry.filter?.remove();

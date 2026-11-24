@@ -1,5 +1,6 @@
 // Global CSS first: it declares Tailwind's layer order before any component CSS loads.
 import "@/styles/globals.css";
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { site } from "@/content/site";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -45,11 +46,11 @@ export default function RootLayout({ children }: LayoutProps<"/">): React.ReactE
     <html lang="en" className={`${outrun.variable} ${manrope.variable}`} suppressHydrationWarning>
       <body id="top">
         <IntroRevealScript />
-        <SiteHeader />
+        <Suspense fallback={null}><SiteHeader /></Suspense>
         {/* The page wrapper: the mobile menu presses it back as one card (globals.css). */}
         <div data-page>
           {children}
-          <SiteFooter />
+          <Suspense fallback={null}><SiteFooter /></Suspense>
         </div>
         <TransitionLayer />
         <LiquidGlassEnhancer />

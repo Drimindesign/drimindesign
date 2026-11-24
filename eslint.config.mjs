@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     ".open-next/**",
     ".wrangler/**",
     "cloudflare-env.d.ts",
+    // Standalone promotional projects are not part of this Next.js application.
+    "promo-film/**",
   ]),
 ]);
 

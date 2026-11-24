@@ -1,12 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Component, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { WebglBoundary } from "@/components/ui/webgl-boundary";
 import type { TeamMember } from "@/content/team";
 import { useDeviceTier } from "@/lib/device/use-device-tier";
 import { useWebgl } from "@/lib/device/use-webgl";
 import { afterIntro, whenIdle } from "@/lib/motion/after-intro";
-import { warmUp } from "@/lib/motion/warm-up";
 import { retryImport } from "@/lib/utils/retry-import";
 import styles from "./about-team.module.css";
 import { createLanyardControl, type LanyardControl } from "./store";
@@ -19,23 +19,6 @@ interface LanyardStageProps {
   hint: string;
   /** The HTML cards: shown until the 3D cards are ready, and instead of them without WebGL. */
   children: ReactNode;
-}
-
-/* If the 3D scene throws (lost GPU, failed download), the HTML cards take over for good. */
-class SceneBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true };
-  }
-
-  componentDidCatch(): void {
-    this.props.onError();
-  }
-
-  render(): ReactNode {
-    return this.state.failed ? null : this.props.children;
-  }
 }
 
 const reducedQuery = "(prefers-reduced-motion: reduce)";
@@ -71,7 +54,6 @@ export function LanyardStage({ team, hint, children }: LanyardStageProps): React
     const stage = stageRef.current;
     if (!stage || !enhance) return;
     let cancelled = false;
-    warmUp(loadScene);
 
     const nearby = new IntersectionObserver(
       ([entry]) => {
@@ -79,7 +61,9 @@ export function LanyardStage({ team, hint, children }: LanyardStageProps): React
         nearby.disconnect();
         void afterIntro()
           .then(() => whenIdle())
-          .then(() => !cancelled && setNear(true));
+          .then(loadScene)
+          .then(() => !cancelled && setNear(true))
+          .catch(() => !cancelled && setFailed(true));
       },
       { rootMargin: "300% 0px" },
     );
@@ -121,9 +105,9 @@ export function LanyardStage({ team, hint, children }: LanyardStageProps): React
     >
       {enhance && near && !failed && (
         <div className={styles.canvas}>
-          <SceneBoundary onError={onFailed}>
+          <WebglBoundary onError={onFailed}>
             <LanyardScene team={team} tier={tier} control={control} onReady={onReady} />
-          </SceneBoundary>
+          </WebglBoundary>
         </div>
       )}
       {children}

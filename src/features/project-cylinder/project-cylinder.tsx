@@ -33,7 +33,7 @@ export function ProjectCylinder(): React.ReactElement {
         <ol>
           {projects.map((project) => (
             <li key={project.slug}>
-              <Link href={projectHref(project)}>
+              <Link prefetch={false} href={projectHref(project)}>
                 {project.playHref ? "Play " : ""}{project.title}: {project.category}
               </Link>
               . {project.description ?? project.alt}.

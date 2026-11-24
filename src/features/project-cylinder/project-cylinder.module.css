@@ -75,11 +75,6 @@
 
     .copy {
       width: min(25vw, 26rem);
-      /* The rotating band can cross this column; a solid surface keeps copy and Play legible. */
-      padding: clamp(1rem, 1.8vw, 1.5rem);
-      border-radius: var(--radius-md);
-      background: var(--color-brand-500);
-      border: 1px solid var(--surface-border);
     }
   }
 

@@ -5,11 +5,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { WebglBoundary } from "@/components/ui/webgl-boundary";
 import { projectHref, projectImageUrl, type Project } from "@/content/projects";
 import { useDeviceTier } from "@/lib/device/use-device-tier";
 import { useWebgl } from "@/lib/device/use-webgl";
 import { easeOutQuart, onLenis } from "@/lib/motion/smooth-scroll";
 import { scroll } from "@/lib/motion/tokens";
+import { afterIntro, whenIdle } from "@/lib/motion/after-intro";
 import { warmUp } from "@/lib/motion/warm-up";
 import { retryImport } from "@/lib/utils/retry-import";
 import { flyArrow } from "./arrow-flight";
@@ -38,6 +40,7 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
   const [near, setNear] = useState(false);
   const renderer = useWebgl();
   const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
   const project = projects[index];
@@ -61,12 +64,51 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
       .finally(() => (flying.current = false));
   };
 
-  // Project pages are prefetched (static shells) once the intro is over, so a click on a
-  // panel can navigate the moment the tissue pull covers the screen.
+  // Prefetch the current and next project, without competing with scene preparation.
   useEffect(() => {
-    if (!near) return;
-    warmUp(async () => projects.forEach((item) => router.prefetch(projectHref(item))));
-  }, [near, projects, router]);
+    if (!ready) return;
+    warmUp(async () => {
+      router.prefetch(projectHref(projects[index]));
+      router.prefetch(projectHref(projects[(index + 1) % projects.length]));
+    });
+  }, [ready, index, projects, router]);
+
+  // Prepare below the fold on user intent, so GPU setup can finish before the first scroll.
+  useEffect(() => {
+    const section = stageRef.current?.closest("section");
+    if (!section || renderer !== "webgl") return;
+    let cancelled = false;
+    let nearby = false;
+    let preparing = false;
+    let prepared = false;
+    let mounting = false;
+    let intent = window.scrollY > 0;
+    const mount = (): void => {
+      if (!prepared || mounting) return;
+      mounting = true;
+      void whenIdle().then(() => { if (!cancelled) setNear(true); });
+    };
+    const prepare = (): void => {
+      if (!intent || !nearby || preparing) return;
+      preparing = true;
+      void afterIntro().then(() => whenIdle()).then(loadScene).then(() => {
+        prepared = true;
+        mount();
+      }).catch(() => { if (!cancelled) setFailed(true); });
+    };
+    const onIntent = (): void => { intent = true; prepare(); mount(); };
+    const observer = new IntersectionObserver(([entry]) => {
+      nearby = entry.isIntersecting;
+      if (nearby) prepare();
+    }, { rootMargin: "100% 0px" });
+    observer.observe(section);
+    for (const event of ["pointermove", "pointerdown", "keydown", "scroll"]) window.addEventListener(event, onIntent, { passive: true });
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+      for (const event of ["pointermove", "pointerdown", "keydown", "scroll"]) window.removeEventListener(event, onIntent);
+    };
+  }, [renderer]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -93,16 +135,6 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
       if (!frame) frame = requestAnimationFrame(update);
     };
 
-    // Defer the scene and route-prefetch work until this section enters view. Eager setup
-    // competes with hero hydration on slower devices; the descent gives the scene time to load.
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && entry.intersectionRatio > 0) setNear(true);
-      },
-      { rootMargin: "0px", threshold: 0.001 },
-    );
-    observer.observe(section);
-
     // On screen (and the tab visible): lets the scene run its idle animation.
     const onScreen = { value: false };
     const syncVisible = (): void => store.setVisible(onScreen.value && document.visibilityState === "visible");
@@ -113,6 +145,25 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
     visibility.observe(section);
     document.addEventListener("visibilitychange", syncVisible);
 
+    // First read on the next frame: back from a project page this runs before the browser has
+    // restored the scroll position, and reading it now would send the camera back up.
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      visibility.disconnect();
+      document.removeEventListener("visibilitychange", syncVisible);
+      store.setVisible(false);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [projects.length, store]);
+
+  useEffect(() => {
+    if (!near) return;
+    const section = stageRef.current?.closest("section");
+    if (!section) return;
     // Soft snap (Lenis): a scroll that comes to rest near the landing or a project glides
     // the last stretch and settles there. Free scrolling is never blocked.
     let destroySnap: (() => void) | undefined;
@@ -132,36 +183,22 @@ export function CylinderStage({ projects }: CylinderStageProps): React.ReactElem
       });
     });
 
-    // First read on the next frame: back from a project page this runs before the browser has
-    // restored the scroll position, and reading it now would send the camera back up.
-    schedule();
-    window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule, { passive: true });
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      visibility.disconnect();
-      document.removeEventListener("visibilitychange", syncVisible);
-      store.setVisible(false);
-      disposed = true;
-      stopWaiting();
-      destroySnap?.();
-      window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
-    };
-  }, [projects.length, store]);
+    return () => { disposed = true; stopWaiting(); destroySnap?.(); };
+  }, [near]);
 
   return (
     <div ref={stageRef} className={styles.stage}>
-      {renderer === "webgl" && near && (
+      {renderer === "webgl" && near && !failed && (
         <div className={styles.canvas} data-ready={ready ? "" : undefined}>
-          <CylinderScene projects={projects} tier={tier} store={store} onReady={() => setReady(true)} />
+          <WebglBoundary onError={() => setFailed(true)}>
+            <CylinderScene projects={projects} tier={tier} store={store} onReady={() => setReady(true)} />
+          </WebglBoundary>
         </div>
       )}
 
-      {renderer === "fallback" && (
+      {(renderer === "fallback" || failed) && (
         // Opens the project like a ring panel; keyboard and screen readers use the section's real links.
-        <Link key={project.slug} href={projectHref(project)} tabIndex={-1} className={`${styles.fallbackImage} ${styles.caption}`}>
+        <Link prefetch={false} key={project.slug} href={projectHref(project)} tabIndex={-1} className={`${styles.fallbackImage} ${styles.caption}`}>
           <Image src={projectImageUrl(project, 1400)} alt={project.alt} fill sizes="(min-width: 64rem) 64rem, 78vw" />
         </Link>
       )}

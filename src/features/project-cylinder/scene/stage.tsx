@@ -1,6 +1,6 @@
 "use client";
 
-import { MeshReflectorMaterial } from "@react-three/drei";
+import { MeshReflectorMaterial } from "@react-three/drei/core/MeshReflectorMaterial";
 import { useEffect, useMemo } from "react";
 import type { DeviceTier } from "@/lib/device/use-device-tier";
 import type { CylinderStore } from "../store";

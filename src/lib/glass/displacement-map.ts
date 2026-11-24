@@ -14,25 +14,32 @@ export interface DisplacementMapSpec {
   bevel: number;
 }
 
-/** Signed distance from (px, py) (relative to the centre) to a rounded rect; negative inside. */
-function roundedRectSdf(px: number, py: number, hw: number, hh: number, r: number): number {
-  const qx = Math.abs(px) - (hw - r);
-  const qy = Math.abs(py) - (hh - r);
-  const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
-  return outside + Math.min(Math.max(qx, qy), 0) - r;
-}
-
 /** Fills RGBA pixels for the map. Pure, so it can be unit tested without a canvas. */
 export function fillDisplacementMap(
   data: Uint8ClampedArray,
   { width, height, radius, bevel }: DisplacementMapSpec,
 ): void {
+  /** Signed distance from (px, py) (relative to the centre) to a rounded rect; negative inside. */
+  function roundedRectSdf(px: number, py: number, hw: number, hh: number, r: number): number {
+    const qx = Math.abs(px) - (hw - r);
+    const qy = Math.abs(py) - (hh - r);
+    const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
+    return outside + Math.min(Math.max(qx, qy), 0) - r;
+  }
+
   const hw = width / 2;
   const hh = height / 2;
   const r = Math.min(radius, hw, hh);
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
+      // Flat interior pixels are neutral. Avoid four distance/normal evaluations per pixel.
+      if (x >= r + bevel && x < width - r - bevel && y >= bevel && y < height - bevel) {
+        const i = (y * width + x) * 4;
+        data[i] = data[i + 1] = data[i + 2] = 128;
+        data[i + 3] = 255;
+        continue;
+      }
       const px = x + 0.5 - hw;
       const py = y + 0.5 - hh;
       const depth = -roundedRectSdf(px, py, hw, hh, r);

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { AboutTeam } from "@/features/about-team";
 import { Hero } from "@/features/hero";
@@ -12,11 +13,11 @@ export const metadata: Metadata = {
 export default function HomePage(): React.ReactElement {
   return (
     <main>
-      <Hero />
-      <ProjectCylinder />
-      <StoryTree />
-      <AboutTeam />
-      <Inquiry />
+      <Suspense fallback={null}><Hero /></Suspense>
+      <Suspense fallback={null}><ProjectCylinder /></Suspense>
+      <Suspense fallback={null}><StoryTree /></Suspense>
+      <Suspense fallback={null}><AboutTeam /></Suspense>
+      <Suspense fallback={null}><Inquiry /></Suspense>
     </main>
   );
 }

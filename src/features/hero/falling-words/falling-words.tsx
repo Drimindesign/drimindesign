@@ -46,8 +46,21 @@ export function FallingWords({ sentences, floorSelector, className, style }: Fal
   const [animateIn, setAnimateIn] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
   const [armed, setArmed] = useState(false);
+  const [demoIntent, setDemoIntent] = useState(false);
   const [inView, setInView] = useState(true);
   const [fallen, setFallen] = useState(0);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onIntent = (): void => setDemoIntent(true);
+    root.addEventListener("pointerenter", onIntent, { once: true, passive: true });
+    root.addEventListener("pointerdown", onIntent, { once: true, passive: true });
+    return () => {
+      root.removeEventListener("pointerenter", onIntent);
+      root.removeEventListener("pointerdown", onIntent);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,10 +127,10 @@ export function FallingWords({ sentences, floorSelector, className, style }: Fal
     [current],
   );
 
-  // Teaser, once per session: one loose word wobbles, falls, and glides back, so visitors
+  // Teaser on pointer intent, once per session: one loose word wobbles, falls, and glides back, so visitors
   // learn the sentence is playable before they ever click it.
   useEffect(() => {
-    if (!armed || !inView || demoRef.current !== "pending" || prefersReducedMotion()) return;
+    if (!armed || !demoIntent || !inView || demoRef.current !== "pending" || prefersReducedMotion()) return;
     try {
       if (sessionStorage.getItem(DEMO_STORAGE_KEY)) {
         demoRef.current = "done";
@@ -153,7 +166,7 @@ export function FallingWords({ sentences, floorSelector, className, style }: Fal
     })();
 
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [armed, inView, current, drop, putBack]);
+  }, [armed, demoIntent, inView, current, drop, putBack]);
 
   // A width change moves the floor, walls and line breaks: put everything back. Height-only
   // changes (mobile address bar showing/hiding while scrolling) must not reset the pile.

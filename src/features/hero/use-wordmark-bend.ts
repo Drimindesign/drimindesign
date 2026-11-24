@@ -38,16 +38,23 @@ export function useWordmarkBend(containerRef: RefObject<HTMLElement | null>): bo
 
   useEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const container = containerRef.current;
+    if (!container) return;
     let cancelled = false;
-    afterIntro()
-      .then(() => whenIdle())
-      .then(() => {
-        if (!cancelled) setArmed(true);
-      });
+    const arm = (): void => {
+      container.removeEventListener("pointermove", arm);
+      container.removeEventListener("pointerdown", arm);
+      void afterIntro().then(() => whenIdle()).then(() => { if (!cancelled) setArmed(true); });
+    };
+    // At rest the real glyph already looks identical. Build bending strips only on intent.
+    container.addEventListener("pointermove", arm, { passive: true });
+    container.addEventListener("pointerdown", arm, { passive: true });
     return () => {
       cancelled = true;
+      container.removeEventListener("pointermove", arm);
+      container.removeEventListener("pointerdown", arm);
     };
-  }, []);
+  }, [containerRef]);
 
   useEffect(() => {
     const container = containerRef.current;

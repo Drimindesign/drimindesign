@@ -1,11 +1,10 @@
 /*
- * About & Team copy. Values marked PLACEHOLDER are waiting on the client (PRD.md §9):
- * real names and bios. Portraits are built from the photos in public/team/ by
+ * About & Team copy. Bios remain draft copy pending client review.
+ * Portraits are built from the photos in public/team/ by
  * scripts/prepare-team-images.py (cropped to the card's photo window, tones untouched).
  */
 
 export interface TeamMember {
-  /** PLACEHOLDER until the client sends real names. */
   name: string;
   role: string;
   /** One or two sentences for the back of the ID card. */
@@ -24,8 +23,7 @@ export const aboutIntro = {
 } as const;
 
 /*
- * PLACEHOLDER: the QA tester's and software engineer's names (their role shows in the name
- * slot until then), and all bios.
+ * Bios are draft copy pending client review.
  */
 export const team: readonly TeamMember[] = [
   {
@@ -43,18 +41,18 @@ export const team: readonly TeamMember[] = [
     photo: "/team/brand-designer.webp",
   },
   {
-    name: "QA Tester",
-    role: "Quality assurance",
+    name: "Vedant",
+    role: "QA Tester",
     bio: "Tests every page, flow and device before launch, so nothing ships broken.",
     since: "2024",
     photo: "/team/developer.webp",
   },
   {
-    name: "Software Engineer",
-    role: "Web & apps",
+    name: "Tejas Dhamankar",
+    role: "Software Engineer",
     bio: "Turns designs into fast, accessible websites and apps that feel as good as they look.",
     since: "2025",
-    photo: "/team/motion-designer.webp",
+    photo: "/team/tejas-dhamankar.webp",
   },
 ];
 

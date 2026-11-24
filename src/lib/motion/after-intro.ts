@@ -4,6 +4,10 @@
  */
 
 export function afterIntro(): Promise<void> {
+  // Enhancements must not compete with the initial document and font requests.
+  if (document.readyState !== "complete") {
+    return new Promise<void>((resolve) => window.addEventListener("load", () => resolve(), { once: true })).then(afterIntro);
+  }
   const root = document.documentElement;
   if (root.dataset.intro !== "play") return Promise.resolve();
   return new Promise((resolve) => {

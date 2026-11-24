@@ -1,0 +1,57 @@
+{
+  "sourceHash": "852f5f12fff6",
+  "team": [
+    {
+      "name": "Dhruval Patel",
+      "role": "Designer & developer",
+      "photo": "/team/founder.webp"
+    },
+    {
+      "name": "Krupa Patel",
+      "role": "Application designer",
+      "photo": "/team/brand-designer.webp"
+    },
+    {
+      "name": "Vedant",
+      "role": "QA Tester",
+      "photo": "/team/developer.webp"
+    },
+    {
+      "name": "Tejas Dhamankar",
+      "role": "Software Engineer",
+      "photo": "/team/tejas-dhamankar.webp"
+    }
+  ],
+  "variants": {
+    "320": {
+      "fronts": [
+        "/team/artwork/fronts-0-320-3c7468203a.webp",
+        "/team/artwork/fronts-1-320-3b58847108.webp",
+        "/team/artwork/fronts-2-320-cb82aadb10.webp",
+        "/team/artwork/fronts-3-320-82c60f9cf8.webp"
+      ],
+      "backs": [
+        "/team/artwork/backs-0-320-9d90c0ad20.webp",
+        "/team/artwork/backs-1-320-07e9d349bc.webp",
+        "/team/artwork/backs-2-320-02cb6c4adf.webp",
+        "/team/artwork/backs-3-320-1b9e003f09.webp"
+      ],
+      "strap": "/team/artwork/strap-1b7db9de73.webp"
+    },
+    "640": {
+      "fronts": [
+        "/team/artwork/fronts-0-640-cb66a11f64.webp",
+        "/team/artwork/fronts-1-640-1667d6b729.webp",
+        "/team/artwork/fronts-2-640-c3d734425e.webp",
+        "/team/artwork/fronts-3-640-c804449f21.webp"
+      ],
+      "backs": [
+        "/team/artwork/backs-0-640-2c27b564af.webp",
+        "/team/artwork/backs-1-640-b2bb97c293.webp",
+        "/team/artwork/backs-2-640-203985d909.webp",
+        "/team/artwork/backs-3-640-d6ddfa5742.webp"
+      ],
+      "strap": "/team/artwork/strap-1b7db9de73.webp"
+    }
+  }
+}

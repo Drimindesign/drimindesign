@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
 @import "./tokens.css";
 
 /* Light direction for the glass rim; LiquidGlassEnhancer eases it toward the pointer. */
